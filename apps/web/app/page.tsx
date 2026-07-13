@@ -1,4 +1,5 @@
 import { ContextPreview } from "@/components/ContextPreview";
+import { ContextTravel } from "@/components/ContextTravel";
 import { CopyCommand } from "@/components/CopyCommand";
 import { HeroTilt } from "@/components/HeroTilt";
 import { Reveal } from "@/components/Reveal";
@@ -171,9 +172,9 @@ export default function Home() {
               <span className="grad-text">every AI agent.</span>
             </h1>
             <p className="hero-sub enter" style={{ animationDelay: "140ms" }}>
-              ctxfile snapshots your working state (plan, files, git, sessions) into one context file any AI
-              agent can load. Claude Code, Cursor, Codex, local models. <strong>New agent, zero
-              re-onboarding. On your machine or across every device. Local-first. Open source.</strong>
+              You spend hours in Cursor, switch to Claude for a hard problem, come back and&hellip; start
+              over. <strong>ctxfile makes your context travel with you:</strong> plan, files, git, sessions,
+              loaded by any agent, any model. <strong>All local. Open source.</strong>
             </p>
             <div className="hero-ctas enter" style={{ animationDelay: "210ms" }}>
               <CopyCommand command={INSTALL} />
@@ -189,7 +190,7 @@ export default function Home() {
           </div>
           <div className="enter" style={{ animationDelay: "180ms" }}>
             <HeroTilt>
-              <SnapshotDemo />
+              <ContextTravel />
             </HeroTilt>
           </div>
         </section>
@@ -247,6 +248,11 @@ export default function Home() {
               ))}
               <div className="steps-flow" aria-hidden="true" />
             </div>
+            <Reveal delay={220}>
+              <div className="steps-demo">
+                <SnapshotDemo />
+              </div>
+            </Reveal>
           </div>
         </section>
 

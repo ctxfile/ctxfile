@@ -861,6 +861,12 @@ section {
   gap: 40px;
 }
 
+/* The snapshot replay, relocated from the hero: proof under the three moves. */
+.steps-demo {
+  max-width: 640px;
+  margin: 48px auto 0;
+}
+
 .steps-flow {
   position: absolute;
   top: 15px;
