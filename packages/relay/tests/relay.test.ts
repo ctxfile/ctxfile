@@ -413,4 +413,77 @@ describe("the relay (M3-M5 + federation), end to end", () => {
     });
     expect(res.status).toBe(403);
   });
+
+  it("serves web-chatbot connectors: search finds threads and sessions, fetch returns full content", async () => {
+    // A Grok/ChatGPT-style connector: same bearer, only the search/fetch pair.
+    const connector = await connectMcp(hubA.running.publicUrl, vaultA.token, "grok-connector");
+
+    // Empty query lists every thread in the vault.
+    const all = await connector.callTool({ name: "search", arguments: { query: "" } });
+    expect(all.isError ?? false).toBe(false);
+    const allResults = (JSON.parse(text(all)) as { results: { id: string; title: string; url: string }[] }).results;
+    const allIds = allResults.map((r) => r.id);
+    expect(allIds).toContain("thread:Q3 campaign");
+    expect(allIds).toContain("thread:Billing bug");
+    for (const r of allResults) expect(r.url).toMatch(/^https?:\/\//);
+
+    // A term query matches threads AND session digests.
+    const hits = await connector.callTool({ name: "search", arguments: { query: "campaign" } });
+    const hitResults = (JSON.parse(text(hits)) as { results: { id: string }[] }).results;
+    expect(hitResults.some((r) => r.id === "thread:Q3 campaign")).toBe(true);
+    expect(hitResults.some((r) => r.id.startsWith("session:"))).toBe(true);
+    expect(hitResults.some((r) => r.id === "thread:Billing bug")).toBe(false);
+
+    // fetch(thread:...) returns the same merged history continue_thread renders.
+    const thread = await connector.callTool({ name: "fetch", arguments: { id: "thread:Q3 campaign" } });
+    expect(thread.isError ?? false).toBe(false);
+    const threadDoc = JSON.parse(text(thread)) as {
+      id: string;
+      title: string;
+      text: string;
+      url: string;
+      metadata: { sessions: number };
+    };
+    expect(threadDoc.id).toBe("thread:Q3 campaign");
+    expect(threadDoc.text).toContain('Resuming "Q3 campaign"');
+    expect(threadDoc.text).toContain("social copy");
+    expect(threadDoc.metadata.sessions).toBeGreaterThanOrEqual(2);
+
+    // fetch(session:...) returns one digest.
+    const session = await connector.callTool({ name: "fetch", arguments: { id: "session:desk-1" } });
+    expect(session.isError ?? false).toBe(false);
+    const sessionDoc = JSON.parse(text(session)) as { text: string };
+    expect(sessionDoc.text).toContain("campaign brief");
+
+    // A malformed id fails with guidance instead of leaking anything.
+    const bad = await connector.callTool({ name: "fetch", arguments: { id: "blob:whatever" } });
+    expect(bad.isError).toBe(true);
+    expect(text(bad)).toContain("call search first");
+    await connector.close();
+
+    // The reads are audited like every other tool.
+    const actions = hubA.ctx.db.auditRows(vaultA.vaultId).map((r) => r.action);
+    expect(actions).toContain("mcp.search");
+    expect(actions).toContain("mcp.fetch");
+  });
+
+  it("scopes search/fetch to a handoff grant's thread, like the rest of the surface", async () => {
+    const grantResponse = await fetch(`${hubA.running.publicUrl}/v1/grants`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${vaultA.token}`, "content-type": "application/json" },
+      body: JSON.stringify({ thread: "Q3 campaign", days: 7 }),
+    });
+    const { grant_token } = (await grantResponse.json()) as { grant_token: string };
+    const contractor = await connectMcp(hubA.running.publicUrl, grant_token, "contractor-connector");
+
+    const listed = await contractor.callTool({ name: "search", arguments: { query: "" } });
+    const ids = (JSON.parse(text(listed)) as { results: { id: string }[] }).results.map((r) => r.id);
+    expect(ids).toContain("thread:Q3 campaign");
+    expect(ids.some((id) => id.includes("Billing"))).toBe(false);
+
+    // Fetching outside the granted thread is refused, not partially served.
+    const denied = await contractor.callTool({ name: "fetch", arguments: { id: "thread:Billing bug" } });
+    expect(denied.isError).toBe(true);
+    await contractor.close();
+  });
 });

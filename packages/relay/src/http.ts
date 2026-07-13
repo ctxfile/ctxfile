@@ -526,6 +526,7 @@ export async function startRelay(ctx: RelayContext): Promise<RunningRelay> {
           actor: token.name,
           grant,
           version: VERSION,
+          publicUrl: ctx.publicUrl,
           // Rate-limit writes per bearer token, not per session, so opening
           // fresh sessions cannot reset the budget.
           overWriteLimit: (now) => !withinWindow(mcpWriteTimestamps, token.id, now, 60_000, WRITE_MAX_PER_MINUTE, false),

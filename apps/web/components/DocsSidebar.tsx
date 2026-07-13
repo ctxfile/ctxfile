@@ -13,6 +13,7 @@ const DOCS_NAV = [
   { href: "/docs/ingest", label: "Session sync" },
   { href: "/docs/threads", label: "Threads & handoff" },
   { href: "/docs/sync", label: "Sync & roaming" },
+  { href: "/docs/webchat", label: "Web chatbots" },
   { href: "/docs/dashboard", label: "Dashboard" },
   { href: "/docs/export", label: "Cloud agents" },
   { href: "/docs/privacy", label: "Privacy" },
