@@ -43,6 +43,26 @@ export default function Clients() {
       </pre>
       <p>ctxfile exposes a handful of tools, far under Cursor&apos;s 40-tool cap.</p>
 
+      <h2>OpenCode</h2>
+      <p>
+        Add to <code>opencode.json</code> in the project (or the global config):
+      </p>
+      <pre>
+        <code>{`{
+  "mcp": {
+    "ctxfile": {
+      "type": "local",
+      "command": ["ctxfile", "--root", "."],
+      "enabled": true
+    }
+  }
+}`}</code>
+      </pre>
+      <p>
+        Pro also reads OpenCode&apos;s own session history through the session connectors, so context saved
+        there follows you to every other client.
+      </p>
+
       <h2>Claude Desktop</h2>
       <p>
         Download <code>ctxfile.mcpb</code> from the releases page and drag it into Settings → Extensions, or add

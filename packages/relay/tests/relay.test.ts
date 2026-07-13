@@ -486,4 +486,51 @@ describe("the relay (M3-M5 + federation), end to end", () => {
     expect(denied.isError).toBe(true);
     await contractor.close();
   });
+
+  it("serves headerless connector UIs via the tokened URL: /mcp/t/<token>", async () => {
+    // claude.ai custom connectors cannot send an Authorization header; the
+    // token rides in the URL instead. No headers at all on this transport.
+    const transport = new StreamableHTTPClientTransport(
+      new URL(`${hubA.running.publicUrl}/mcp/t/${encodeURIComponent(vaultA.token)}`)
+    );
+    const client = new Client({ name: "claude-web-connector", version: "0.0.0" });
+    await client.connect(transport);
+    const listed = await client.callTool({ name: "list_threads", arguments: {} });
+    expect(text(listed)).toContain("Q3 campaign");
+    const searched = await client.callTool({ name: "search", arguments: { query: "campaign" } });
+    expect(text(searched)).toContain("thread:Q3 campaign");
+    await client.close();
+
+    // A bogus URL token is rejected outright.
+    const badTransport = new StreamableHTTPClientTransport(new URL(`${hubA.running.publicUrl}/mcp/t/ctx_not-real`));
+    const badClient = new Client({ name: "bad-connector", version: "0.0.0" });
+    await expect(badClient.connect(badTransport)).rejects.toThrow();
+
+    // The URL form buys /mcp only: no REST route accepts it (secret-in-URL
+    // must never unlock key material, blobs, grants, or audit).
+    for (const route of ["/v1/vaults/me", "/v1/blobs", "/v1/grants", "/v1/audit"]) {
+      const res = await fetch(`${hubA.running.publicUrl}${route}/t/${encodeURIComponent(vaultA.token)}`);
+      expect(res.status, `${route} must not accept URL tokens`).toBe(401);
+    }
+  });
+
+  it("keeps handoff grants thread-scoped through the tokened URL too", async () => {
+    const grantResponse = await fetch(`${hubA.running.publicUrl}/v1/grants`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${vaultA.token}`, "content-type": "application/json" },
+      body: JSON.stringify({ thread: "Q3 campaign", days: 7 }),
+    });
+    const { grant_token } = (await grantResponse.json()) as { grant_token: string };
+    const transport = new StreamableHTTPClientTransport(
+      new URL(`${hubA.running.publicUrl}/mcp/t/${encodeURIComponent(grant_token)}`)
+    );
+    const client = new Client({ name: "contractor-claude-web", version: "0.0.0" });
+    await client.connect(transport);
+    const listed = await client.callTool({ name: "list_threads", arguments: {} });
+    expect(text(listed)).toContain("Q3 campaign");
+    expect(text(listed)).not.toContain("Billing bug");
+    const write = await client.callTool({ name: "save_session", arguments: { summary: "nope" } });
+    expect(write.isError).toBe(true);
+    await client.close();
+  });
 });

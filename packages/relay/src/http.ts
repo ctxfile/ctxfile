@@ -135,10 +135,14 @@ export async function startRelay(ctx: RelayContext): Promise<RunningRelay> {
     return true;
   };
 
-  const authenticate = (req: http.IncomingMessage): AuthedRequest | null => {
-    const header = req.headers.authorization;
-    if (typeof header !== "string" || !header.startsWith("Bearer ")) return null;
-    const token = db.resolveToken(header.slice("Bearer ".length).trim());
+  const authenticate = (req: http.IncomingMessage, presented?: string): AuthedRequest | null => {
+    let raw = presented;
+    if (raw === undefined) {
+      const header = req.headers.authorization;
+      if (typeof header !== "string" || !header.startsWith("Bearer ")) return null;
+      raw = header.slice("Bearer ".length).trim();
+    }
+    const token = db.resolveToken(raw);
     if (!token) return null;
     const vault = db.getVault(token.vault_id);
     if (!vault) return null;
@@ -167,8 +171,18 @@ export async function startRelay(ctx: RelayContext): Promise<RunningRelay> {
   sweeper.unref();
 
   async function handle(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
-    const pathname = (req.url ?? "/").split("?")[0] ?? "/";
+    const rawPath = (req.url ?? "/").split("?")[0] ?? "/";
     const method = req.method ?? "GET";
+
+    // Tokened connector path: /mcp/t/<token>, for connector UIs (claude.ai
+    // custom connectors) that cannot send an Authorization header. Same token
+    // store, same session flow, same scopes. The secret rides in the URL, so
+    // this shape resolves ONLY to /mcp — every REST route below matches the
+    // raw path and therefore stays header-authenticated — and the relay never
+    // logs request URLs.
+    const urlTokenMatch = rawPath.match(/^\/mcp\/t\/([^/]+)$/);
+    const urlToken = urlTokenMatch?.[1] !== undefined ? decodeURIComponent(urlTokenMatch[1]) : undefined;
+    const pathname = urlToken !== undefined ? "/mcp" : rawPath;
 
     if (pathname === "/healthz") {
       json(res, 200, { ok: true, org: ctx.org.orgId, version: VERSION });
@@ -223,8 +237,8 @@ export async function startRelay(ctx: RelayContext): Promise<RunningRelay> {
       return;
     }
 
-    // Everything below requires a bearer token.
-    const auth = authenticate(req);
+    // Everything below requires a token: bearer header, or the URL form on /mcp.
+    const auth = authenticate(req, urlToken);
     if (!auth) {
       res.setHeader("www-authenticate", 'Bearer realm="ctxfile-relay"');
       json(res, 401, { error: "invalid, expired, or missing bearer token" });

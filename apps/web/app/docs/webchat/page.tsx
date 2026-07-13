@@ -44,8 +44,7 @@ export default function WebChatbotsPage() {
           </tr>
           <tr>
             <td>Claude (claude.ai)</td>
-            <td>Custom connectors use OAuth or open servers. Bearer-token relays connect from Claude Code and
-            Claude Desktop today; claude.ai web support is on our list</td>
+            <td>Yes: custom connectors via the tokened URL (steps below)</td>
             <td>Paste; the 1M-token window fits whole exports</td>
           </tr>
           <tr>
@@ -82,6 +81,12 @@ export default function WebChatbotsPage() {
           URL and token. Ask it to <em>search</em> your project and it will use the connector.
         </li>
         <li>
+          <strong>Claude (claude.ai):</strong> Settings → Connectors → Add custom connector. Claude&apos;s
+          connector form has no API-key field, so use the tokened URL instead:{" "}
+          <code>https://your-relay/mcp/t/&lt;your-vault-token&gt;</code>. Treat that URL like a password;
+          revoke the token to kill the link.
+        </li>
+        <li>
           Then just talk: &quot;search my ctxfile for the checkout thread and pick up where I left off.&quot;
         </li>
       </ol>
@@ -104,6 +109,15 @@ export default function WebChatbotsPage() {
         directly (Gemini takes up to 10 files; Grok up to 25MB each). The export is the{" "}
         <a href="/convention">.ctxfile convention</a> envelope: versioned, self-describing, and re-redacted on
         every export, so pasting it into a third-party model leaks no secrets.
+      </p>
+
+      <h2>Every other AI tool</h2>
+      <p>
+        Video generators, image tools, writing apps, anything with a prompt box (Higgsfield, Luma, and
+        whatever launches next week): if it accepts text, it accepts your context. Export, paste the
+        envelope (or just the <code>plan</code> section for creative tools), and the tool knows your
+        project. There is nothing to integrate and nothing to wait for; that is the point of keeping the
+        artifact plain.
       </p>
 
       <h2>Comparing models on the same problem</h2>
