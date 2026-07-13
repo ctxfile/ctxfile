@@ -1,9 +1,22 @@
-// Structural sanity check for a license key. Core cannot verify the Ed25519
-// signature (that needs Pro's embedded public key), but it can reject garbage
-// and report expiry so `activate` gives immediate feedback rather than a
-// silent-until-startup failure.
+// A durable subscription credential (activated once, exchanged for a short-lived
+// license by Pro at startup) is opaque to core — it carries no expiry of its own.
+// Core only recognizes the prefix and structural shape; Pro verifies and refreshes it.
+const CREDENTIAL_PREFIX = "ctxsub_";
+
+// Structural sanity check for an activation token (a license key or a subscription
+// credential). Core cannot verify the Ed25519 signature (that needs Pro's embedded
+// public key), but it can reject garbage and report expiry so `activate` gives
+// immediate feedback rather than a silent-until-startup failure.
 export function inspectLicenseKey(key: string, now = new Date()): { ok: boolean; detail: string } {
-  const parts = key.trim().split(".");
+  const trimmed = key.trim();
+  if (trimmed.startsWith(CREDENTIAL_PREFIX)) {
+    const body = trimmed.slice(CREDENTIAL_PREFIX.length).split(".");
+    if (body.length !== 2 || !body[0] || !body[1]) {
+      return { ok: false, detail: "malformed subscription credential" };
+    }
+    return { ok: true, detail: "subscription credential (license auto-refreshes while your plan is active)" };
+  }
+  const parts = trimmed.split(".");
   if (parts.length !== 2 || !parts[0] || !parts[1]) {
     return { ok: false, detail: "malformed key (expected <payload>.<signature>)" };
   }

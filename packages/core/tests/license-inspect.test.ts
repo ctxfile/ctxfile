@@ -35,4 +35,16 @@ describe("inspectLicenseKey", () => {
     expect(result.ok).toBe(false);
     expect(result.detail).toContain("expired");
   });
+
+  it("accepts a subscription credential without requiring an expiry", () => {
+    const cred = `ctxsub_${Buffer.from(JSON.stringify({ subscriptionId: "sub_1" })).toString("base64url")}.c2ln`;
+    const result = inspectLicenseKey(cred, NOW);
+    expect(result.ok).toBe(true);
+    expect(result.detail).toMatch(/credential/i);
+  });
+
+  it("rejects a malformed subscription credential", () => {
+    expect(inspectLicenseKey("ctxsub_onlyonepart", NOW).ok).toBe(false);
+    expect(inspectLicenseKey("ctxsub_.sig", NOW).ok).toBe(false);
+  });
 });
