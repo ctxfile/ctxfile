@@ -1,0 +1,11 @@
+{
+  "name": "@ctxfile/ui-kit",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Shared design tokens and UI primitives for ctxfile surfaces (consumed as source).",
+  "exports": {
+    "./tokens.css": "./src/tokens.css",
+    "./*": "./src/*"
+  }
+}

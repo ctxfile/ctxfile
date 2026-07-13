@@ -1,0 +1,7 @@
+# The behavior spec and its committed renders must stay LF on every platform:
+# the render drift-guard compares them byte-for-byte against the renderer's LF
+# output, and the published skill files should be identical everywhere.
+packages/core/behaviors/** text eol=lf
+
+# Shell scripts are LF (they run under sh, including Git Bash on Windows).
+*.sh text eol=lf

@@ -1,0 +1,41 @@
+name: Harness report
+description: How ctxfile behaves in a specific MCP client (quirks, wins, breakage)
+title: "[harness]: "
+labels: ["harness"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        These reports are gold. ctxfile aims to work in every MCP client, including ones that did not exist when it shipped.
+  - type: input
+    id: harness
+    attributes:
+      label: Client / harness + version
+      placeholder: "OpenClaw x.y / Windsurf x.y / custom SDK client"
+    validations:
+      required: true
+  - type: dropdown
+    id: status
+    attributes:
+      label: Overall status
+      options:
+        - Works fully
+        - Works with quirks (describe below)
+        - Partially broken
+        - Does not work
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: What works, what does not
+      description: Tool calls, resources, prompts, ingest_context via prompt snippet. Include exact error text where possible.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: ctxfile version
+      placeholder: "npx ctxfile --version"
+    validations:
+      required: true

@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Questions & show-and-tell
+    url: https://github.com/ctxfile/ctxfile/discussions
+    about: Ask anything, or show how you wired ctxfile into your workflow.
+  - name: Security report (private)
+    url: https://github.com/ctxfile/ctxfile/security/advisories/new
+    about: Vulnerabilities and redaction gaps. Please never file these as public issues.
+  - name: Docs
+    url: https://ctxfile.dev/docs
+    about: CLI, MCP surface, configuration, connectors, privacy.

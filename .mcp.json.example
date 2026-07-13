@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "ctxfile": {
+      "command": "npx",
+      "args": ["-y", "ctxfile"],
+      "env": {}
+    }
+  }
+}

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="512" height="512">
+  <!-- Full-bleed orange so any platform's circle/rounded crop looks right. -->
+  <rect width="32" height="32" fill="#f55300" />
+  <!-- File-with-corner glyph, scaled up ~18% and centered for avatar use. -->
+  <g transform="translate(16 16) scale(1.18) translate(-16 -16)">
+    <path d="M11 8.5h7l3.5 3.5v11.5h-10.5z" fill="none" stroke="#1c0b02" stroke-width="2" stroke-linejoin="round" />
+    <path d="M18 8.5v3.5h3.5" fill="none" stroke="#1c0b02" stroke-width="2" stroke-linejoin="round" />
+    <circle cx="16" cy="18" r="2.1" fill="#1c0b02" />
+  </g>
+</svg>

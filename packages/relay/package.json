@@ -1,0 +1,67 @@
+{
+  "name": "@ctxfile/relay",
+  "version": "0.1.0",
+  "description": "The ctxfile relay: an always-on MCP endpoint over an encrypted vault. Hosted it is Sync; self-hosted it is the Team/Enterprise hub. Stores ciphertext, serves the five ctxfile tools, issues grants, keeps an append-only audit log.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "sync",
+    "relay",
+    "encrypted",
+    "e2ee",
+    "self-hosted",
+    "ctxfile"
+  ],
+  "author": {
+    "name": "ctxfile"
+  },
+  "homepage": "https://ctxfile.dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ctxfile/ctxfile.git",
+    "directory": "packages/relay"
+  },
+  "bugs": {
+    "url": "https://github.com/ctxfile/ctxfile/issues"
+  },
+  "bin": {
+    "ctxfile-relay": "dist/cli.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src tests",
+    "prepublishOnly": "npm run typecheck && npm run build && node ../../scripts/check-public-safe.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "better-sqlite3": "^12.11.1",
+    "ctxfile": "0.1.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.11"
+  }
+}

@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        node: [20, 22, 24]
+        exclude:
+          # better-sqlite3 ships no Node 20 Windows prebuild, and Node 20's
+          # bundled node-gyp cannot detect the runner's newer Visual Studio, so
+          # it can neither download nor compile. Windows is supported on Node
+          # 22+ (both have prebuilds); Node 20 stays covered on Linux + macOS.
+          - os: windows-latest
+            node: 20
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      # better-sqlite3 occasionally falls back to a source build on Windows and
+      # node-gyp's VS detection can flake (ERR_CHILD_PROCESS_STDIO_MAXBUFFER);
+      # retry so a transient install failure doesn't red the matrix.
+      - name: install
+        shell: bash
+        run: for i in 1 2 3; do npm ci && exit 0; echo "npm ci attempt $i failed; retrying"; sleep 5; done; exit 1
+      - run: npm run build
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - name: stdio smoke test
+        shell: bash
+        run: |
+          (printf '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"ci","version":"0"}}}\n'; sleep 3) \
+            | node packages/core/dist/cli.js --root . 1>smoke.out 2>smoke.err || true
+          echo "--- stderr ---"; cat smoke.err
+          echo "--- stdout ---"; head -1 smoke.out
+          grep -q '"name":"ctxfile"' smoke.out

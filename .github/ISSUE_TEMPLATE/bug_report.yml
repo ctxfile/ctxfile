@@ -1,0 +1,51 @@
+name: Bug report
+description: Something broke, degraded, or surprised you
+title: "[bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Security issues (including redaction gaps) should NOT be filed here: see [SECURITY.md](https://github.com/ctxfile/ctxfile/blob/main/SECURITY.md).
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, what happened instead?
+      placeholder: I called save_session from Cursor and ...
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Smallest reproduction
+      description: Steps or a minimal repo/config that reproduces it.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: ctxfile version
+      placeholder: "npx ctxfile --version"
+    validations:
+      required: true
+  - type: input
+    id: client
+    attributes:
+      label: MCP client + version
+      placeholder: "Claude Code 2.x / Cursor 1.x / Claude Desktop / other"
+    validations:
+      required: true
+  - type: input
+    id: os-node
+    attributes:
+      label: OS + Node version
+      placeholder: "macOS 15 / Node 22.4"
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant output
+      description: stderr output, connector error entries, or dashboard state. Redact anything sensitive.
+      render: shell

@@ -1,0 +1,30 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
+  "name": "dev.ctxfile/ctxfile",
+  "description": "Local-first MCP server that snapshots your project's working state into one context object.",
+  "version": "0.1.0",
+  "websiteUrl": "https://ctxfile.dev",
+  "repository": {
+    "url": "https://github.com/ctxfile/ctxfile",
+    "source": "github"
+  },
+  "packages": [
+    {
+      "registryType": "npm",
+      "registryBaseUrl": "https://registry.npmjs.org",
+      "identifier": "ctxfile",
+      "version": "0.1.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "NOTION_TOKEN",
+          "description": "Optional Notion internal integration token (enables the Notion connector)",
+          "isRequired": false,
+          "isSecret": true
+        }
+      ]
+    }
+  ]
+}

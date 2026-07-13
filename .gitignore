@@ -1,0 +1,17 @@
+node_modules/
+dist/
+packages/core/ui-dist/
+*.mcpb
+.mcpb-staging/
+.env
+.env.*
+*.log
+.DS_Store
+coverage/
+apps/web/.next/
+apps/web/out/
+
+# Private, local-only founder docs — never committed, never public.
+FOUNDER-ACTIONS.md
+TESTING.md
+STATUS.md

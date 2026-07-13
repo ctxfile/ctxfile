@@ -1,0 +1,36 @@
+{
+  "manifest_version": "0.2",
+  "name": "ctxfile",
+  "display_name": "ctxfile",
+  "version": "0.1.0",
+  "description": "Local-first MCP server that snapshots your project's working state (files, git, Notion, local-LLM summary) into a structured context object.",
+  "long_description": "ctxfile assembles a structured snapshot of a project — plan documents, key files (gitignore-aware, secret-redacted, token-budgeted), git state, and optionally Notion pages and a local Ollama summary — and serves it over stdio as MCP resources (context://current, context://plan, context://git), a get_context tool, and a load-context prompt. Nothing leaves your machine by default.",
+  "author": {
+    "name": "ctxfile"
+  },
+  "license": "Apache-2.0",
+  "keywords": ["context", "local-first", "git", "notion", "ollama"],
+  "server": {
+    "type": "node",
+    "entry_point": "dist/cli.js",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/dist/cli.js", "--root", "${user_config.project_root}"],
+      "env": {}
+    }
+  },
+  "user_config": {
+    "project_root": {
+      "type": "directory",
+      "title": "Project root",
+      "description": "The project directory ctxfile is allowed to read.",
+      "required": true
+    }
+  },
+  "compatibility": {
+    "platforms": ["darwin", "linux", "win32"],
+    "runtimes": {
+      "node": ">=20"
+    }
+  }
+}

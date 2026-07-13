@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "ctxfile": {
+      "command": "node",
+      "args": ["packages/core/dist/cli.js"]
+    }
+  }
+}

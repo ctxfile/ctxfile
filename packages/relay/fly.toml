@@ -1,0 +1,41 @@
+# Fly.io deployment for the hosted relay (sync.ctxfile.dev). The Dockerfile
+# needs the REPO ROOT as its build context (it COPYs packages/core), so deploy
+# from the repo root with an explicit context and Dockerfile path:
+#   fly deploy . --config packages/relay/fly.toml --dockerfile packages/relay/Dockerfile
+# Prereqs (FOUNDER-ACTIONS §2.1): fly app + volume, then
+#   fly secrets set CTXFILE_RELAY_ORG=org-ctxfile
+# Registration is closed here in [env] AND belongs in secrets: hosted vaults are
+# provisioned by the Sync subscription flow, never open signup.
+
+app = "ctxfile-relay"
+primary_region = "iad"
+
+[build]
+  # Relative to the repo-root build context above.
+  dockerfile = "packages/relay/Dockerfile"
+
+[env]
+  CTXFILE_RELAY_HOST = "0.0.0.0"
+  CTXFILE_RELAY_PORT = "5959"
+  CTXFILE_RELAY_DATA = "/data"
+  CTXFILE_RELAY_PUBLIC_URL = "https://sync.ctxfile.dev"
+  # Belt-and-suspenders: closed by config so a forgotten secret cannot leave
+  # public vault creation open on the hosted relay.
+  CTXFILE_RELAY_REGISTRATION = "closed"
+
+[[mounts]]
+  source = "relay_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 5959
+  force_https = true
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[http_service.checks]]
+  interval = "30s"
+  timeout = "5s"
+  method = "GET"
+  path = "/healthz"

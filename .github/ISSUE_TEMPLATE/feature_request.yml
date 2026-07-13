@@ -1,0 +1,31 @@
+name: Feature request
+description: An idea that would make ctxfile better
+title: "[feat]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the workflow friction, not just the feature.
+      placeholder: When I hand off work from agent A to agent B, I ...
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered
+  - type: checkboxes
+    id: invariants
+    attributes:
+      label: Fit with the project invariants
+      description: ctxfile is local-first and read-only over user data by design.
+      options:
+        - label: This feature makes no network calls in the default path (or is an explicit opt-in)
+        - label: This feature does not require core to write to the user's project

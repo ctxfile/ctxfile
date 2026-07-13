@@ -1,0 +1,120 @@
+/* ctxfile design tokens: "hardware instrument" material system.
+   Two materials everywhere:
+   - chassis: the physical device body (theme-dependent: black field / silver)
+   - screen:  dark LCD display windows where data renders (constant across themes)
+   Signal colors are LED-grade and stay vivid; text-grade variants adapt per theme. */
+
+:root {
+  /* desk the device sits on (page background, both themes) */
+  --desk: #0b0b0a;
+
+  /* chassis: black "field" edition */
+  --face: #191916;
+  --face-2: #201f1c;
+  --well: #121210;
+  --line: rgba(255, 255, 255, 0.09);
+  --line-strong: rgba(255, 255, 255, 0.2);
+  --text: #ebe9e1;
+  --text-2: #a6a396;
+  --text-3: #767263;
+
+  /* screens: constant, slightly green-black like an LCD at rest */
+  --screen: #0c0e0d;
+  --screen-2: #121514;
+  --screen-text: #dbe5d8;
+  --screen-dim: #7d887a;
+  --screen-line: rgba(214, 232, 208, 0.12);
+  --screen-green: #56df88;
+  --screen-amber: #ffc555;
+  --screen-red: #ff6b5e;
+
+  /* signals: text-grade (readable on chassis face) */
+  --accent: #ff5714;
+  --accent-dim: rgba(255, 87, 20, 0.14);
+  --ok: #3fd77e;
+  --ok-dim: rgba(63, 215, 126, 0.13);
+  --warn: #ffb02e;
+  --warn-dim: rgba(255, 176, 46, 0.13);
+  --err: #ff5c50;
+  --err-dim: rgba(255, 92, 80, 0.13);
+  --redact: #b892ff;
+  --redact-dim: rgba(184, 146, 255, 0.15);
+  --pro: #d9a23c;
+  --pro-dim: rgba(217, 162, 60, 0.14);
+
+  /* LED lamps: physical light, identical in both themes */
+  --lamp-ok: #2ee27b;
+  --lamp-warn: #ffb000;
+  --lamp-err: #ff4b3e;
+  --lamp-accent: #ff5714;
+  --lamp-pro: #ffc043;
+  --lamp-redact: #b892ff;
+  --lamp-off: rgba(128, 128, 118, 0.45);
+
+  /* keys (tactile buttons) */
+  --key-bg: linear-gradient(180deg, #26251f, #1c1b17);
+  --key-border: rgba(255, 255, 255, 0.16);
+  --key-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 1px 2px rgba(0, 0, 0, 0.5);
+  --key-shadow-down: inset 0 2px 3px rgba(0, 0, 0, 0.45);
+
+  --radius: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 18px;
+
+  --font-sans: "Archivo", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --font-led: "Doto", "IBM Plex Mono", ui-monospace, monospace;
+
+  --ease: cubic-bezier(0.3, 0.1, 0.2, 1);
+  --dur-fast: 100ms;
+  --dur: 150ms;
+  --dur-slow: 220ms;
+
+  --shadow-device: 0 40px 90px rgba(0, 0, 0, 0.6), 0 4px 14px rgba(0, 0, 0, 0.45);
+  --shadow-sheet: 0 24px 64px rgba(0, 0, 0, 0.6);
+
+  color-scheme: dark;
+}
+
+[data-theme="light"] {
+  /* chassis: silver edition (the desk stays dark; the device is the light) */
+  --face: #d5d4cc;
+  --face-2: #e0dfd8;
+  --well: #c6c5bc;
+  --line: rgba(32, 31, 25, 0.16);
+  --line-strong: rgba(32, 31, 25, 0.32);
+  --text: #201f1a;
+  --text-2: #55534a;
+  --text-3: #676458;
+
+  --accent: #e04a00;
+  --accent-dim: rgba(224, 74, 0, 0.13);
+  --ok: #12813f;
+  --ok-dim: rgba(18, 129, 63, 0.13);
+  --warn: #94660a;
+  --warn-dim: rgba(148, 102, 10, 0.15);
+  --err: #bf2f24;
+  --err-dim: rgba(191, 47, 36, 0.12);
+  --redact: #6a3ecb;
+  --redact-dim: rgba(106, 62, 203, 0.12);
+  --pro: #8a6210;
+  --pro-dim: rgba(138, 98, 16, 0.15);
+
+  --key-bg: linear-gradient(180deg, #f2f1ea, #dddcd4);
+  --key-border: rgba(32, 31, 25, 0.3);
+  --key-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85), 0 1px 2px rgba(32, 31, 25, 0.25);
+  --key-shadow-down: inset 0 2px 3px rgba(32, 31, 25, 0.28);
+
+  --shadow-device: 0 40px 90px rgba(0, 0, 0, 0.55), 0 4px 14px rgba(0, 0, 0, 0.4);
+  --shadow-sheet: 0 24px 64px rgba(10, 10, 9, 0.5);
+
+  color-scheme: light;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-fast: 0ms;
+    --dur: 0ms;
+    --dur-slow: 0ms;
+  }
+}

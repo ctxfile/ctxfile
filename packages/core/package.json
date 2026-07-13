@@ -1,0 +1,73 @@
+{
+  "name": "ctxfile",
+  "version": "0.1.0",
+  "description": "Local-first MCP server that snapshots your project's working state (files, git, Notion, local-LLM summary) into a structured context object for any MCP client.",
+  "mcpName": "dev.ctxfile/ctxfile",
+  "type": "module",
+  "license": "Apache-2.0",
+  "author": {
+    "name": "ctxfile"
+  },
+  "homepage": "https://ctxfile.dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ctxfile/ctxfile.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ctxfile/ctxfile/issues"
+  },
+  "bin": {
+    "ctxfile": "dist/cli.js"
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "ui-dist",
+    "behaviors",
+    "README.md",
+    "LICENSE",
+    "manifest.json"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "context",
+    "ai",
+    "claude",
+    "cursor",
+    "local-first"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src tests",
+    "prepack": "(cd ../.. && npm run build -w @ctxfile/dashboard) && node ../../scripts/check-core-assets.mjs && node ../../scripts/check-public-safe.mjs",
+    "prepublishOnly": "npm run typecheck && npm run build && npm test"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "better-sqlite3": "^12.11.1",
+    "ignore": "^7.0.0",
+    "libsodium-wrappers-sumo": "^0.8.4",
+    "simple-git": "^3.36.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.11",
+    "@types/libsodium-wrappers-sumo": "^0.7.8"
+  }
+}
