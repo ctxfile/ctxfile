@@ -1,0 +1,45 @@
+{
+  "name": "ctxfile",
+  "tagline": "Your context belongs to you — not to your chatbot.",
+  "version": 2,
+  "updated": "2026-07-13",
+  "canonicalBase": "https://ctxfile.dev/brand/",
+  "sourceOfTruth": "apps/web/public/brand/ in github.com/ctxfile/ctxfile (deployed to ctxfile.dev on every site deploy)",
+  "colors": {
+    "chip": { "hex": "#f55300", "use": "logo chip background (theme-invariant)" },
+    "ink": { "hex": "#1c0b02", "use": "glyph on chip; wordmark text on light backgrounds" },
+    "accentDark": { "hex": "#ff5714", "use": "accent on dark theme (LED orange)" },
+    "accentLight": { "hex": "#e04a00", "use": "accent on light theme" },
+    "textDark": { "hex": "#ece9e1", "use": "primary text on dark theme; wordmark text on dark backgrounds" },
+    "textLight": { "hex": "#201f1a", "use": "primary text on light theme" },
+    "proGold": { "hex": "#d9a23c", "use": "Pro tier" },
+    "syncCyanDark": { "hex": "#4ec4e6", "use": "Sync tier on dark theme" },
+    "syncCyanLight": { "hex": "#0d7fa6", "use": "Sync tier on light theme" },
+    "warn": { "hex": "#ffb02e", "use": "warning lamp (dark theme)" }
+  },
+  "fonts": {
+    "sans": "Archivo (variable)",
+    "mono": "IBM Plex Mono (400/500/600) — wordmark + LCD text",
+    "display": "Doto (variable) — instrument numerals"
+  },
+  "assets": [
+    { "file": "logo-mark.svg", "use": "square mark, orange chip — works on light and dark" },
+    { "file": "logo-mark-256.png", "use": "square mark raster, 256×256" },
+    { "file": "logo-mark-mono-light.svg", "use": "monochrome glyph (no chip) for LIGHT backgrounds" },
+    { "file": "logo-mark-mono-dark.svg", "use": "monochrome glyph (no chip) for DARK backgrounds" },
+    { "file": "logo-wordmark.svg", "use": "chip + 'ctxfile' wordmark for LIGHT backgrounds" },
+    { "file": "logo-wordmark.png", "use": "light-background wordmark raster, 600×128" },
+    { "file": "logo-wordmark-dark.svg", "use": "chip + 'ctxfile' wordmark for DARK backgrounds" },
+    { "file": "logo-wordmark-dark.png", "use": "dark-background wordmark raster, 600×128" },
+    { "file": "avatar.svg", "use": "full-bleed chip for platform avatars (survives circle crops)" },
+    { "file": "avatar-512.png", "use": "avatar raster 512×512" },
+    { "file": "avatar-1024.png", "use": "avatar raster 1024×1024" }
+  ],
+  "rules": [
+    "Brand as ctxfile, lowercase, always — never personal names.",
+    "Use logo-wordmark-dark.* on dark backgrounds; logo-wordmark.* on light. Never place the light-background wordmark on dark surfaces.",
+    "The chip color #f55300 does not change with theme.",
+    "No em-dashes in user-facing copy.",
+    "Minimum clear space: half the chip width on all sides. Do not recolor, skew, or add effects to the mark."
+  ]
+}
