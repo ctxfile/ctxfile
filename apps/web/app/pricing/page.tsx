@@ -8,9 +8,10 @@ export const metadata: Metadata = {
   description: "Free open-source core. Pro at $12/month, Sync at $6/month via Polar. Team tier for shared context.",
 };
 
-// Replace with the live Polar product checkout link at launch; Polar (merchant of
-// record) hosts checkout, receipts, and subscription management. No auth on our side.
-const POLAR_CHECKOUT_URL = "https://polar.sh/ctxfile";
+// Live Polar checkout link (all plans; buyer picks Pro, Sync, or Pro+Sync).
+// Polar (merchant of record) hosts checkout, receipts, and subscription
+// management. No auth on our side.
+const POLAR_CHECKOUT_URL = "https://buy.polar.sh/polar_cl_vEMwjSGXNDEtTjVU0T1qaTwK9cathT7x6cuHF3GMrzx";
 
 // The PRD §6.1 inquiry "form", zero-infrastructure edition: a mail template
 // carrying the three qualification questions straight to the founder.
