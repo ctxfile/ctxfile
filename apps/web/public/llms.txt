@@ -1,0 +1,25 @@
+# ctxfile
+
+> ctxfile is a local-first, open-source MCP server that snapshots a project's working state (plan, key files, git state, session digests) into one structured context object any AI agent can load. Threads give work a durable identity across providers; an encrypted Sync vault carries the same context to web chatbots (Grok, ChatGPT, Claude, Perplexity) via MCP connectors. Free core is Apache-2.0 on npm as `ctxfile`; Pro adds session connectors for 8 coding agents, encrypted memory, multi-provider consult, AI-distilled prompt playbooks, and voice. Nothing leaves the machine by default; everything ingested is secret-redacted at write.
+
+Key facts: install with `npm install -g ctxfile`; works with any MCP client (Claude Code, Cursor, Codex CLI, OpenCode, Gemini CLI, Aider, OpenClaw, Hermes); listed on the MCP Registry as `dev.ctxfile/ctxfile`; the exported artifact follows the versioned `.ctxfile/context.json` convention any tool can read; the Sync relay is open source and self-hostable.
+
+## Docs
+
+- [Quickstart](https://ctxfile.dev/docs): install, connect a client, first snapshot
+- [Client setup](https://ctxfile.dev/docs/clients): Claude Code, Cursor, OpenCode, Claude Desktop, generic MCP config
+- [Web chatbots](https://ctxfile.dev/docs/webchat): connect Grok, ChatGPT, Claude web, Perplexity via MCP connectors; export and paste for Gemini and any prompt box
+- [Local models](https://ctxfile.dev/docs/local-models): Ollama setup, local summaries and consult, a fully local agent with OpenCode, which models support tool calling
+- [Playbooks](https://ctxfile.dev/docs/playbooks): reusable prompts an AI distills from your own sessions (Pro)
+- [Threads and handoff](https://ctxfile.dev/docs/threads): durable cross-provider work identity, handoff packages, grants
+- [Sync and roaming](https://ctxfile.dev/docs/sync): the encrypted vault, standard vs strict mode, self-hosting the relay
+- [The .ctxfile convention](https://ctxfile.dev/convention): the versioned context artifact for tool authors
+- [Privacy](https://ctxfile.dev/docs/privacy): zero network by default, secret redaction, denied paths
+- [Security overview](https://ctxfile.dev/security): the CISO one-pager
+- [Pricing](https://ctxfile.dev/pricing): Free (Apache-2.0), Pro $12/mo, Sync $6/mo, Team
+
+## Source
+
+- [GitHub](https://github.com/ctxfile/ctxfile): the open-source core, relay, and dashboard
+- [npm: ctxfile](https://www.npmjs.com/package/ctxfile)
+- [npm: @ctxfile/relay](https://www.npmjs.com/package/@ctxfile/relay)
