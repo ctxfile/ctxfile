@@ -195,7 +195,9 @@ export function createVaultMcpServer(options: VaultServerOptions): McpServer {
         result.threadTitle
           ? `Saved session ${result.sessionId} (rev ${result.revision}) to thread "${result.threadTitle}" in the vault.`
           : `Saved session ${result.sessionId} (rev ${result.revision}) to the vault.`,
-        result.threadTitle ? `Any client surface can resume it: continue_thread("${result.threadTitle}").` : null,
+        result.threadTitle
+          ? `Any client surface can resume it: continue_thread("${result.threadTitle}").`
+          : `No thread was named, so this session is not resumable by name. Tell the user: give me a thread name and I will file it (save again with session_id "${result.sessionId}" and thread: "<name>").`,
       ]
         .filter(Boolean)
         .join("\n");

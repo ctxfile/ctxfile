@@ -487,6 +487,18 @@ describe("the relay (M3-M5 + federation), end to end", () => {
     await contractor.close();
   });
 
+  it("coaches thread naming: a thread-less save returns the retro-threading hint", async () => {
+    const device = await connectMcp(hubA.running.publicUrl, vaultA.token, "hint-check");
+    const saved = await device.callTool({
+      name: "save_session",
+      arguments: { summary: "loose session for the hint test", harness: "grok", session_id: "hint-1" },
+    });
+    expect(saved.isError ?? false).toBe(false);
+    expect(text(saved)).toContain("No thread was named");
+    expect(text(saved)).toContain('session_id "hint-1"');
+    await device.close();
+  });
+
   it("serves headerless connector UIs via the tokened URL: /mcp/t/<token>", async () => {
     // claude.ai custom connectors cannot send an Authorization header; the
     // token rides in the URL instead. No headers at all on this transport.
