@@ -128,6 +128,23 @@ export default function WebChatbotsPage() {
         connector reads the same vault.
       </p>
 
+      <h2>Saving the whole conversation</h2>
+      <p>
+        Saves are <strong>digests by design</strong>: a structured briefing (summary, decisions, open items),
+        not a chat log. That keeps every future agent fast and focused. When you genuinely want the raw
+        conversation too, opt in: say <em>&quot;save this session and include the full transcript&quot;</em>.
+        The transcript is stored alongside the digest (redacted like everything else), never auto-loaded
+        into any context, and retrieved only on demand: ask any connected agent to{" "}
+        <em>fetch the transcript of that session</em>.
+      </p>
+      <p>
+        Honest physics: the agent must write the transcript out through the tool call, so fidelity is
+        bounded by what the model can faithfully reproduce; each save holds up to 150k characters, so ask
+        for very long conversations in parts (&quot;save the transcript, part 1 of 2&quot;). For a lossless
+        record of a marathon chat, the provider&apos;s own export remains the right tool; ctxfile&apos;s job
+        is carrying the working state.
+      </p>
+
       <h2>Bringing the answer back</h2>
       <p>
         From a connected surface, just say &quot;save this session to ctxfile&quot; and the connector&apos;s{" "}

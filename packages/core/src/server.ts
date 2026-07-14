@@ -149,6 +149,14 @@ export function createServerForRuntime(
           .optional()
           .describe("Handoff: files/docs/links with a one-line role each"),
         suggested_first_prompt: z.string().optional().describe("Handoff: the prompt the next agent should start from"),
+        transcript: z
+          .string()
+          .max(150_000)
+          .optional()
+          .describe(
+            "OPT-IN: the full conversation text, verbatim, when the user asks to save the whole conversation. " +
+              "Never auto-loaded into digests or contexts; chunk very long conversations across sessions."
+          ),
         trigger: z
           .enum(["auto", "manual"])
           .optional()

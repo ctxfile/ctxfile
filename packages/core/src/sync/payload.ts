@@ -27,6 +27,8 @@ export interface SessionSyncPayload {
   gotchas: string[];
   artifacts: IngestArtifact[];
   suggested_first_prompt: string | null;
+  /** Opt-in full conversation text; absent in pre-transcript payloads. */
+  transcript?: string | null;
   /** Behavior-layer provenance; absent in pre-v1 payloads means manual. */
   trigger?: "auto" | "manual";
   ingested_at: number;
@@ -87,6 +89,7 @@ export function sessionPayloadToIngestedSession(payload: SessionSyncPayload, id:
     gotchas: payload.gotchas,
     artifacts: payload.artifacts,
     suggestedFirstPrompt: payload.suggested_first_prompt,
+    transcript: payload.transcript ?? null,
     ingestedAt: new Date(payload.ingested_at).toISOString(),
     updatedAt: new Date(payload.updated_at).toISOString(),
     revision: payload.revision,

@@ -1,6 +1,6 @@
 {
   "name": "ctxfile",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Local-first MCP server that snapshots your project's working state (files, git, Notion, local-LLM summary) into a structured context object for any MCP client.",
   "mcpName": "dev.ctxfile/ctxfile",
   "type": "module",

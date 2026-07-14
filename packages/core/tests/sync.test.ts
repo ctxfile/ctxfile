@@ -96,6 +96,60 @@ function input(sessionId: string, summary: string, harness = "chatgpt", thread?:
   });
 }
 
+describe("transcript storage (opt-in full-conversation capture)", () => {
+  it("stores redacted, survives thread-only revisions, and rides sync entries", () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), "cb-transcript-"));
+    const store = new IngestStore(path.join(dir, "ingest.db"));
+    const root = "/t/project";
+    try {
+      const input: IngestInput = ingestInputSchema.parse({
+        ctxfile_ingest_schema: "2",
+        source: { harness: "grok" },
+        session: {
+          session_id: "tr-1",
+          summary: "Digest only.",
+          transcript: "USER: token sk-abc123def456ghi789jkl012mno345pqr\nASSISTANT: noted.",
+        },
+      });
+      store.ingest(root, input, 1_000, "save_session");
+      const stored = store.list(root)[0];
+      expect(stored?.transcript).toContain("USER:");
+      // Redaction ran on the transcript like all ingested content.
+      expect(stored?.transcript).not.toContain("sk-abc123def456ghi789jkl012mno345pqr");
+
+      // A revision without a transcript keeps the stored one (COALESCE).
+      store.ingest(
+        root,
+        ingestInputSchema.parse({
+          ctxfile_ingest_schema: "2",
+          source: { harness: "grok" },
+          session: { session_id: "tr-1", summary: "Rethreaded.", thread: "T" },
+        }),
+        2_000,
+        "save_session"
+      );
+      const after = store.list(root)[0];
+      expect(after?.revision).toBe(2);
+      expect(after?.transcript).toContain("USER:");
+
+      // The sync entry carries it, and a fresh store imports it intact.
+      const entries = store.exportSyncEntries(root);
+      const dir2 = mkdtempSync(path.join(os.tmpdir(), "cb-transcript-b-"));
+      const store2 = new IngestStore(path.join(dir2, "ingest.db"));
+      try {
+        store2.importSyncEntries(root, entries);
+        expect(store2.list(root)[0]?.transcript).toContain("USER:");
+      } finally {
+        store2.close();
+        rmSync(dir2, { recursive: true, force: true });
+      }
+    } finally {
+      store.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("sync client E2E (M2: two stores converge through a stub relay)", () => {
   let dirA: string;
   let dirB: string;

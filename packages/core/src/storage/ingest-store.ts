@@ -58,6 +58,7 @@ interface Row {
   gotchas: string;
   artifacts: string;
   suggested_first_prompt: string | null;
+  transcript: string | null;
   ingested_at: number;
   updated_at: number;
   revision: number;
@@ -125,6 +126,7 @@ function rowToSession(row: Row): IngestedSession {
     gotchas: parseList(row.gotchas),
     artifacts: parseArtifacts(row.artifacts),
     suggestedFirstPrompt: row.suggested_first_prompt,
+    transcript: row.transcript,
     ingestedAt: new Date(row.ingested_at).toISOString(),
     updatedAt: new Date(row.updated_at).toISOString(),
     revision: row.revision,
@@ -218,6 +220,8 @@ export class IngestStore {
     addColumn("org_id", "org_id TEXT");
     // Behavior layer: auto vs manual checkpoint provenance.
     addColumn("capture_trigger", "capture_trigger TEXT NOT NULL DEFAULT 'manual'");
+    // Opt-in full-conversation capture; excluded from every digest render.
+    addColumn("transcript", "transcript TEXT");
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS threads (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -301,6 +305,9 @@ export class IngestStore {
       (session.artifacts ?? []).map((a) => ({ ref: redact(a.ref), role: redact(a.role) }))
     );
     const suggestedFirstPrompt = session.suggested_first_prompt ? redact(session.suggested_first_prompt) : null;
+    // COALESCE on update: a revision that omits the transcript (e.g. a
+    // retro-threading re-save) must not destroy a previously stored one.
+    const transcript = session.transcript ? redact(session.transcript) : null;
     const startedAt = session.started_at ?? null;
     const endedAt = session.ended_at ?? null;
     const continuesFrom = session.continues_from ?? null;
@@ -336,7 +343,8 @@ export class IngestStore {
           `UPDATE ingest_sessions SET harness_version = ?, started_at = ?, ended_at = ?, summary = ?,
              key_decisions = ?, files_touched = ?, open_items = ?, thread_id = ?, continues_from = ?,
              handoff = ?, state = ?, gotchas = ?, artifacts = ?, suggested_first_prompt = ?, door = ?,
-             capture_trigger = ?, updated_at = ?, revision = revision + 1, history = ?, deleted = 0
+             capture_trigger = ?, transcript = COALESCE(?, transcript),
+             updated_at = ?, revision = revision + 1, history = ?, deleted = 0
            WHERE id = ?`
         )
         .run(
@@ -356,6 +364,7 @@ export class IngestStore {
           suggestedFirstPrompt,
           door,
           trigger,
+          transcript,
           now,
           JSON.stringify(history.slice(0, HISTORY_CAP)),
           existing.id
@@ -375,8 +384,8 @@ export class IngestStore {
         `INSERT INTO ingest_sessions
            (root, harness, session_id, harness_version, started_at, ended_at,
             summary, key_decisions, files_touched, open_items, thread_id, continues_from,
-            handoff, state, gotchas, artifacts, suggested_first_prompt, door, capture_trigger, ingested_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+            handoff, state, gotchas, artifacts, suggested_first_prompt, door, capture_trigger, transcript, ingested_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         root,
@@ -398,6 +407,7 @@ export class IngestStore {
         suggestedFirstPrompt,
         door,
         trigger,
+        transcript,
         now,
         now
       );
@@ -513,6 +523,7 @@ export class IngestStore {
         gotchas: parseList(row.gotchas),
         artifacts: parseArtifacts(row.artifacts),
         suggested_first_prompt: row.suggested_first_prompt,
+        transcript: row.transcript,
         trigger: row.capture_trigger === "auto" ? "auto" : "manual",
         ingested_at: row.ingested_at,
         updated_at: row.updated_at,
@@ -617,8 +628,8 @@ export class IngestStore {
              (root, harness, session_id, harness_version, started_at, ended_at,
               summary, key_decisions, files_touched, open_items, thread_id, continues_from,
               handoff, state, gotchas, artifacts, suggested_first_prompt, door, capture_trigger,
-              ingested_at, updated_at, revision, deleted)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+              transcript, ingested_at, updated_at, revision, deleted)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         )
         .run(
           root,
@@ -640,6 +651,7 @@ export class IngestStore {
           payload.suggested_first_prompt,
           payload.door,
           payload.trigger === "auto" ? "auto" : "manual",
+          payload.transcript ?? null,
           payload.ingested_at,
           payload.updated_at,
           payload.revision,
@@ -652,7 +664,7 @@ export class IngestStore {
         `UPDATE ingest_sessions SET harness_version = ?, started_at = ?, ended_at = ?, summary = ?,
            key_decisions = ?, files_touched = ?, open_items = ?, thread_id = ?, continues_from = ?,
            handoff = ?, state = ?, gotchas = ?, artifacts = ?, suggested_first_prompt = ?, door = ?,
-           capture_trigger = ?, updated_at = ?, revision = ?, deleted = ?
+           capture_trigger = ?, transcript = COALESCE(?, transcript), updated_at = ?, revision = ?, deleted = ?
          WHERE id = ?`
       )
       .run(
@@ -672,6 +684,7 @@ export class IngestStore {
         payload.suggested_first_prompt,
         payload.door,
         payload.trigger === "auto" ? "auto" : "manual",
+        payload.transcript ?? null,
         payload.updated_at,
         payload.revision,
         payload.deleted ? 1 : 0,

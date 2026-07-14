@@ -487,6 +487,52 @@ describe("the relay (M3-M5 + federation), end to end", () => {
     await contractor.close();
   });
 
+  it("stores opt-in transcripts: digest-free everywhere, fetchable explicitly, revision-safe", async () => {
+    const device = await connectMcp(hubA.running.publicUrl, vaultA.token, "transcript-check");
+    const TRANSCRIPT = "USER: what is the fee?\nASSISTANT: KES 119,844 per year at JKUAT.\nUSER: thanks.";
+    const saved = await device.callTool({
+      name: "save_session",
+      arguments: {
+        summary: "Fee discussion digest.",
+        thread: "transcript thread",
+        session_id: "tr-1",
+        harness: "grok",
+        transcript: TRANSCRIPT,
+      },
+    });
+    expect(saved.isError ?? false).toBe(false);
+    expect(text(saved)).toContain("Full transcript stored");
+    expect(text(saved)).toContain('fetch("transcript:tr-1")');
+
+    // Digest surfaces must NEVER leak the transcript body.
+    const ctxRes = await device.callTool({ name: "get_context", arguments: {} });
+    expect(text(ctxRes)).not.toContain("KES 119,844");
+    const resumed = await device.callTool({ name: "continue_thread", arguments: { thread: "transcript thread" } });
+    expect(text(resumed)).toContain("Fee discussion digest");
+    expect(text(resumed)).not.toContain("KES 119,844");
+
+    // Explicit fetch returns it whole.
+    const fetched = await device.callTool({ name: "fetch", arguments: { id: "transcript:tr-1" } });
+    expect(fetched.isError ?? false).toBe(false);
+    const doc = JSON.parse(text(fetched)) as { text: string; metadata: { chars: number } };
+    expect(doc.text).toBe(TRANSCRIPT);
+
+    // A revision without a transcript (retro-threading style) preserves it.
+    const resave = await device.callTool({
+      name: "save_session",
+      arguments: { summary: "Fee discussion digest, rethreaded.", session_id: "tr-1", harness: "grok" },
+    });
+    expect(resave.isError ?? false).toBe(false);
+    const fetched2 = await device.callTool({ name: "fetch", arguments: { id: "transcript:tr-1" } });
+    expect((JSON.parse(text(fetched2)) as { text: string }).text).toBe(TRANSCRIPT);
+
+    // Sessions without one fail with the digest explanation.
+    const none = await device.callTool({ name: "fetch", arguments: { id: "transcript:desk-1" } });
+    expect(none.isError).toBe(true);
+    expect(text(none)).toContain("no stored transcript");
+    await device.close();
+  });
+
   it("coaches thread naming: a thread-less save returns the retro-threading hint", async () => {
     const device = await connectMcp(hubA.running.publicUrl, vaultA.token, "hint-check");
     const saved = await device.callTool({

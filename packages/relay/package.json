@@ -1,6 +1,6 @@
 {
   "name": "@ctxfile/relay",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "The ctxfile relay: an always-on MCP endpoint over an encrypted vault. Hosted it is Sync; self-hosted it is the Team/Enterprise hub. Stores ciphertext, serves the five ctxfile tools, issues grants, keeps an append-only audit log.",
   "type": "module",
   "license": "Apache-2.0",
@@ -58,7 +58,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
     "better-sqlite3": "^12.11.1",
-    "ctxfile": "^0.1.1",
+    "ctxfile": "^0.2.0",
     "zod": "^4.0.0"
   },
   "devDependencies": {

@@ -96,6 +96,11 @@ const ingestSessionBase = z
     artifacts: z.array(artifactSchema).max(100).optional(),
     /** Handoff: the prompt the next agent should receive to resume cold. */
     suggested_first_prompt: z.string().min(1).max(4_000).optional(),
+    /** OPT-IN full conversation text (not a digest). Stored verbatim after
+        redaction, NEVER auto-loaded into any context or digest: retrieval is
+        an explicit fetch. Chunk very long conversations across sessions
+        (part 1/2...) - the cap is per save. */
+    transcript: z.string().min(1).max(150_000).optional(),
     /** Behavior-layer provenance: "auto" for skill-driven ambient checkpoints
         (subject to pause/private/debounce guardrails), default "manual". */
     trigger: z.enum(["auto", "manual"]).optional(),
@@ -194,6 +199,8 @@ export interface IngestedSession {
   gotchas: string[];
   artifacts: IngestArtifact[];
   suggestedFirstPrompt: string | null;
+  /** Full conversation text when the save opted in; never part of digests. */
+  transcript: string | null;
   ingestedAt: string;
   updatedAt: string;
   revision: number;

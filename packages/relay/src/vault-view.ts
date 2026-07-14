@@ -76,6 +76,8 @@ export interface WriteSessionInput {
   artifacts: { ref: string; role: string }[];
   suggested_first_prompt?: string | null;
   trigger?: "auto" | "manual";
+  /** Opt-in full conversation text; never rendered into digests. */
+  transcript?: string | null;
 }
 
 /** The relay-side write path (chat surfaces saving through /mcp): redact,
@@ -93,11 +95,17 @@ export async function writeSession(
   const blobId = await deriveBlobId(dataKey, naturalId);
 
   let revision = 1;
+  // A revision that omits the transcript (e.g. a retro-threading re-save)
+  // must not destroy a previously stored one: carry it forward.
+  let priorTranscript: string | null = null;
   const existing = db.getBlob(vault.id, blobId);
   if (existing) {
     try {
       const prior = parseSyncPayload(await decryptBlob(dataKey, existing.data, blobId));
-      if (prior?.kind === "session") revision = prior.revision + 1;
+      if (prior?.kind === "session") {
+        revision = prior.revision + 1;
+        priorTranscript = prior.transcript ?? null;
+      }
     } catch {
       /* unreadable prior blob: overwrite with revision 1 */
     }
@@ -123,6 +131,7 @@ export async function writeSession(
     gotchas: input.gotchas.map(redact),
     artifacts: input.artifacts.map((a) => ({ ref: redact(a.ref), role: redact(a.role) })),
     suggested_first_prompt: input.suggested_first_prompt ? redact(input.suggested_first_prompt) : null,
+    transcript: input.transcript ? redact(input.transcript) : priorTranscript,
     trigger: input.trigger === "auto" ? "auto" : "manual",
     ingested_at: now,
     updated_at: now,

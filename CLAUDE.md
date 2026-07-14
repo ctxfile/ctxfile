@@ -35,3 +35,18 @@ See `CONTRIBUTING.md` for the contributor workflow.
 - Sync vault: `ctxfile vault create|join|recover|status`, `ctxfile sync` (passphrase via `CTXFILE_VAULT_PASSPHRASE`, recovery code via `CTXFILE_VAULT_RECOVERY_CODE`; never on argv)
 - Relay/hub: `node packages/relay/dist/cli.js start` (or `ctxfile-relay ...`); config via `CTXFILE_RELAY_*` env
 - Inspect: `npx @modelcontextprotocol/inspector node packages/core/dist/cli.js`
+
+## Release checklist (every ship, no step skipped)
+
+Run top to bottom whenever changes are pushed; skip only steps whose area is untouched.
+
+1. **Gate:** `npm run lint && npm run typecheck && npm test` (all workspaces). If `apps/web` changed, also `npm --prefix apps/web run build`.
+2. **Versions move together.** Core bump = `packages/core/package.json` + `packages/core/src/version.ts` + BOTH `version` fields in `/server.json`. Relay bump = `packages/relay/package.json` + `packages/relay/src/version.ts`, and widen the relay's `ctxfile` dep when core bumped.
+3. **Publish order:** `ctxfile` (from `packages/core`) BEFORE `@ctxfile/relay` — the relay builds against the published core.
+4. **Deploy what changed:**
+   - Relay code → `flyctl deploy . --config packages/relay/fly.toml --dockerfile packages/relay/Dockerfile -a ctxfile-relay` (repo root context).
+   - Site or docs → `npm --prefix apps/web run build && npx wrangler pages deploy apps/web/out --project-name ctxfile --branch main`.
+5. **MCP Registry:** whenever the core version was published, `mcp-publisher login dns` (maintainer holds the ctxfile.dev key) then `mcp-publisher publish` from the repo root.
+6. **Verify live, never assume:** relay `/healthz` reports the new version; a changed docs URL returns 200 with the new content; `npm view` shows the new versions.
+7. **Identity guard:** commits and tags carry ONLY `ctxfile <hello@ctxfile.dev>`; the repo-local git config and the `pre-push` guard stay installed. Never push with a personal identity.
+8. **Docs ship with features:** any user-visible behavior change lands in the same push as its documentation.
