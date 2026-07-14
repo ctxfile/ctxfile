@@ -59,7 +59,7 @@ describe("the relay (M3-M5 + federation), end to end", () => {
 
     const created = await createVault({
       relayUrl: hubA.running.publicUrl,
-      name: "hudson-vault",
+      name: "founder-vault",
       mode: "standard",
       passphrase: PASSPHRASE,
       kdf: TEST_KDF,
