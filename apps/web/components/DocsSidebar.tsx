@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 
 const DOCS_NAV = [
   { href: "/docs", label: "Quickstart" },
+  { href: "/docs/clients", label: "Client setup" },
   { href: "/docs/cli", label: "CLI reference" },
   { href: "/docs/mcp", label: "MCP surface" },
   { href: "/docs/configuration", label: "Configuration" },
@@ -14,11 +15,11 @@ const DOCS_NAV = [
   { href: "/docs/threads", label: "Threads & handoff" },
   { href: "/docs/sync", label: "Sync & roaming" },
   { href: "/docs/webchat", label: "Web chatbots" },
+  { href: "/docs/local-models", label: "Local models" },
   { href: "/docs/dashboard", label: "Dashboard" },
   { href: "/docs/export", label: "Cloud agents" },
   { href: "/docs/privacy", label: "Privacy" },
   { href: "/docs/pro", label: "Pro" },
-  { href: "/docs/clients", label: "Client setup" },
   { href: "/convention", label: "Convention" },
 ];
 

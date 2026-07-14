@@ -86,7 +86,7 @@ export default function Clients() {
 
       <h2>Generic stdio config</h2>
       <p>
-        For any other MCP client (Claude Desktop, Cline, Windsurf, custom SDK clients), the shape is always the
+        For any other MCP client (Codex CLI, Gemini CLI, Aider, OpenClaw, Hermes, Cline, Windsurf, custom SDK clients), the shape is always the
         same, a command plus args, spoken to over stdio:
       </p>
       <pre>

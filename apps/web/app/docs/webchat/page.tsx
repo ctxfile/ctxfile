@@ -131,7 +131,10 @@ export default function WebChatbotsPage() {
       <h2>Bringing the answer back</h2>
       <p>
         From a connected surface, just say &quot;save this session to ctxfile&quot; and the connector&apos;s{" "}
-        <code>save_session</code> tool stores it to the vault and every other agent sees it. From a
+        <code>save_session</code> tool stores it to the vault and every other agent sees it.{" "}
+        <strong>Name a thread when you save</strong> (&quot;save this to thread &apos;back rehab&apos;&quot;):
+        threads are what you resume by name from any surface. A save without one lands as a loose session,
+        and the tool will remind you it can re-file it if you give a name. From a
         paste-only surface, ask the model for a handoff summary and hand it to any connected agent to save.
       </p>
     </>
