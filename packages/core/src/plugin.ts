@@ -28,12 +28,25 @@ export interface ProLicenseInfo {
   customerId?: string | null;
 }
 
+export interface ProPlaybookEntry {
+  id: string;
+  title: string;
+  /** The reusable distilled prompt, decrypted for display. */
+  prompt: string;
+  /** Which model distilled it, from which sessions. */
+  provenance: string;
+  createdAt: string;
+}
+
 export interface ProUiApi {
   features(): ProUiFeatures;
   /** Display metadata from the verified license payload — never the key itself. */
   licenseInfo?(): ProLicenseInfo;
   listMemory(): Promise<ProMemoryEntry[]>;
   forgetMemory(id: string): Promise<boolean>;
+  /** Playbooks: prompts distilled by an AI from the user's own sessions. */
+  listPlaybooks?(): Promise<ProPlaybookEntry[]>;
+  removePlaybook?(id: string): Promise<boolean>;
   /** Streams consult progress via onEvent; resolves when complete. */
   consult?(question: string, onEvent: (event: { type: string; data: unknown }) => void): Promise<void>;
 }

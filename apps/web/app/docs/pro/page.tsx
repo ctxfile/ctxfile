@@ -35,6 +35,13 @@ export default function Pro() {
         <code>~/.ctxfile/</code>, the key lives in your OS keychain, and every entry carries provenance: what
         wrote it, when, from what source. The dashboard&apos;s Memory view lists and deletes entries.
       </p>
+      <h3>Playbooks</h3>
+      <p>
+        Reusable prompts <em>distilled by an AI from your own sessions</em>: ask any agent to{" "}
+        <code>distill_playbook</code> from a thread and the method you already proved becomes a prompt you
+        can run anywhere, stored encrypted with provenance and served as native MCP prompts. See{" "}
+        <Link href="/docs/playbooks">Playbooks</Link>.
+      </p>
       <h3>Multi-provider consult</h3>
       <p>
         The <code>consult</code> tool asks the same question to several models at once (Anthropic, any

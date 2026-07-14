@@ -16,6 +16,7 @@ const DOCS_NAV = [
   { href: "/docs/sync", label: "Sync & roaming" },
   { href: "/docs/webchat", label: "Web chatbots" },
   { href: "/docs/local-models", label: "Local models" },
+  { href: "/docs/playbooks", label: "Playbooks" },
   { href: "/docs/dashboard", label: "Dashboard" },
   { href: "/docs/export", label: "Cloud agents" },
   { href: "/docs/privacy", label: "Privacy" },

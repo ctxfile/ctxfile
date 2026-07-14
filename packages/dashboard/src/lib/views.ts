@@ -4,6 +4,7 @@ export type ViewId =
   | "git"
   | "sessions"
   | "memory"
+  | "playbooks"
   | "consult"
   | "settings";
 
@@ -21,6 +22,7 @@ export const VIEWS: readonly ViewDef[] = [
   { id: "git", label: "Git", glyph: "⎇" },
   { id: "sessions", label: "Sessions", glyph: "◷", pro: true },
   { id: "memory", label: "Memory", glyph: "▤", pro: true },
+  { id: "playbooks", label: "Playbooks", glyph: "▶", pro: true },
   { id: "consult", label: "Consult", glyph: "⇄", pro: true },
   { id: "settings", label: "Settings", glyph: "⚙" },
 ];

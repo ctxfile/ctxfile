@@ -129,6 +129,14 @@ export interface ContextObject {
   sessionSummary: string | null;
 }
 
+export interface PlaybookEntry {
+  id: string;
+  title: string;
+  prompt: string;
+  provenance: string;
+  createdAt: string;
+}
+
 export interface MemoryEntry {
   id: string;
   agentId: string;

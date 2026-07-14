@@ -2218,3 +2218,67 @@ kbd {
     animation: none;
   }
 }
+
+/* ---------- playbooks ---------- */
+
+.card-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.card {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--face);
+  padding: 14px 16px;
+}
+
+.card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.card-head h3 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.card-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.btn-quiet {
+  opacity: 0.6;
+}
+
+.btn-quiet:hover {
+  opacity: 1;
+}
+
+.card-body-pre {
+  margin: 10px 0 8px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--screen, rgba(0, 0, 0, 0.25));
+  color: var(--screen-text, inherit);
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.card-meta {
+  font-size: 11px;
+  opacity: 0.6;
+}

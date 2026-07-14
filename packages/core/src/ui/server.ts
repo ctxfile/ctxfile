@@ -198,6 +198,37 @@ export function createUiServer(deps: UiServerDeps): Server {
       return;
     }
 
+    if (route === "GET /api/internal/playbooks") {
+      const ui = proGate(deps, "memory", res);
+      if (ui) {
+        if (!ui.listPlaybooks) {
+          sendJson(res, 200, { entries: [] });
+          return;
+        }
+        sendJson(res, 200, { entries: await ui.listPlaybooks() });
+      }
+      return;
+    }
+
+    if ((req.method ?? "") === "DELETE" && url.pathname.startsWith("/api/internal/playbooks/")) {
+      const ui = proGate(deps, "memory", res);
+      if (ui) {
+        let id: string;
+        try {
+          id = decodeURIComponent(url.pathname.slice("/api/internal/playbooks/".length));
+        } catch {
+          sendJson(res, 400, { error: "bad path" });
+          return;
+        }
+        if (id.includes("/")) {
+          sendJson(res, 400, { error: "bad path" });
+          return;
+        }
+        sendJson(res, 200, { removed: ui.removePlaybook ? await ui.removePlaybook(id) : false });
+      }
+      return;
+    }
+
     if (route === "GET /api/internal/memory") {
       const ui = proGate(deps, "memory", res);
       if (ui) sendJson(res, 200, { entries: await ui.listMemory() });

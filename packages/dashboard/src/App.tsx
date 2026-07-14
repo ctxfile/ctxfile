@@ -12,6 +12,7 @@ import { ContextExplorer } from "./views/ContextExplorer";
 import { GitPanel } from "./views/GitPanel";
 import { Sessions } from "./views/Sessions";
 import { Memory } from "./views/Memory";
+import { Playbooks } from "./views/Playbooks";
 import { Consult } from "./views/Consult";
 import { Settings } from "./views/Settings";
 
@@ -167,6 +168,7 @@ export function App() {
               <Sessions features={features} onServerGone={reportServerGone} />
             )}
             {view === "memory" && <Memory features={features} onServerGone={reportServerGone} />}
+            {view === "playbooks" && <Playbooks features={features} onServerGone={reportServerGone} />}
             {view === "consult" && (
               <Consult
                 features={features}

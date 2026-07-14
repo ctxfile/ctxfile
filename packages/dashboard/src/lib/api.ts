@@ -6,6 +6,7 @@ import type {
   LicenseActivation,
   LicenseState,
   MemoryEntry,
+  PlaybookEntry,
   SnapshotJob,
 } from "./types";
 
@@ -69,6 +70,9 @@ export const api = {
   snapshot: (): Promise<SnapshotJob> => request("/api/internal/snapshot", { method: "POST" }),
 
   memory: (): Promise<{ entries: MemoryEntry[] }> => request("/api/internal/memory"),
+  playbooks: (): Promise<{ entries: PlaybookEntry[] }> => request("/api/internal/playbooks"),
+  rmPlaybook: (id: string): Promise<{ removed: boolean }> =>
+    request(`/api/internal/playbooks/${encodeURIComponent(id)}`, { method: "DELETE" }),
 
   forget: (id: string): Promise<{ forgotten: boolean }> =>
     request(`/api/internal/memory/${encodeURIComponent(id)}`, { method: "DELETE" }),

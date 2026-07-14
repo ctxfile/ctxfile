@@ -70,6 +70,7 @@ export default function Pricing() {
               <li>Session connectors: Claude Code, Cursor, Codex, OpenCode, Gemini CLI, Aider, OpenClaw, Hermes</li>
               <li>Encrypted cross-session memory (AES-256-GCM, keychain)</li>
               <li>Multi-agent consult with answer diffing</li>
+              <li>Playbooks: reusable prompts distilled from your sessions</li>
               <li>Voice notes with repo-aware vocabulary</li>
               <li>ctxfile serve: the HTTP door, bearer tokens with scopes</li>
               <li>Offline license: signed key, 14-day grace</li>
