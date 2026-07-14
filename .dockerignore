@@ -1,0 +1,12 @@
+# Keep relay/core image builds lean: the Dockerfile copies only the workspace
+# manifests plus packages/core and packages/relay sources.
+node_modules
+**/node_modules
+.git
+apps
+packages/dashboard
+packages/ui-kit
+packages/*/dist
+**/.next
+**/out
+*.mcpb

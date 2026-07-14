@@ -10,9 +10,8 @@
 app = "ctxfile-relay"
 primary_region = "iad"
 
-[build]
-  # Relative to the repo-root build context above.
-  dockerfile = "packages/relay/Dockerfile"
+# No [build] section: flyctl resolves a config-relative dockerfile path and
+# doubles it from a repo-root context; pass --dockerfile explicitly (see above).
 
 [env]
   CTXFILE_RELAY_HOST = "0.0.0.0"
