@@ -43,7 +43,11 @@ export default function Connectors() {
       <p>
         Off until you set <code>ollama.summarize: true</code>. Produces a digest of the working session using a
         model running on <strong>your</strong> machine via local Ollama (<code>ollama.baseUrl</code>, default{" "}
-        <code>http://localhost:11434</code>). No cloud involved.
+        <code>http://localhost:11434</code>). No cloud involved. Any installed model works here, tool
+        support not required; set <code>ollama.model</code> or the first installed model is used. Note the
+        summary rides in <code>get_context</code> and in exports under the <code>full</code> or{" "}
+        <code>custom</code> profiles; the default <code>repo-safe</code> export excludes it by design (it is
+        derived working state, not repository material).
       </p>
 
       <h2>Session connectors: Pro</h2>

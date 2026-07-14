@@ -62,6 +62,15 @@ export default function Clients() {
         Pro also reads OpenCode&apos;s own session history through the session connectors, so context saved
         there follows you to every other client.
       </p>
+      <p>
+        <strong>Running a local model as the agent?</strong> The model must support tool calling or it
+        cannot invoke ctxfile at all. In Ollama that means models tagged with the <code>tools</code>{" "}
+        capability (qwen3, llama3.1 and newer, mistral); gemma3 does <em>not</em> support tools, so Ollama
+        rejects the call outright. Gemma still works fine where ctxfile calls <em>it</em>: the{" "}
+        <code>ollama.summarize</code> connector and Pro&apos;s consult. OpenCode also recommends raising
+        Ollama&apos;s <code>num_ctx</code> to 16k or more for tool calls, and thinking models (qwen3) are
+        markedly slower on first response.
+      </p>
 
       <h2>Claude Desktop</h2>
       <p>
