@@ -34,22 +34,22 @@ export default function WebChatbotsPage() {
         <tbody>
           <tr>
             <td>Grok (grok.com)</td>
-            <td>Yes: custom connectors (API key or none)</td>
+            <td>Yes: custom connectors (Business/Enterprise per x.ai docs; some consumer plans have it too)</td>
             <td>Paste or upload the export</td>
           </tr>
           <tr>
             <td>ChatGPT</td>
-            <td>Yes: developer mode connectors, Plus and up (API key or none)</td>
+            <td>Yes, two ways: developer mode for all tools (Pro, Team, Enterprise), or the search/fetch data path</td>
             <td>Paste (long pastes become attachments)</td>
           </tr>
           <tr>
             <td>Claude (claude.ai)</td>
-            <td>Yes: custom connectors via the tokened URL (steps below)</td>
+            <td>Yes: custom connectors via the tokened URL (steps below); Free allows one connector</td>
             <td>Paste; the 1M-token window fits whole exports</td>
           </tr>
           <tr>
             <td>Perplexity</td>
-            <td>Yes: custom connectors on paid plans</td>
+            <td>Yes: custom remote connectors on Pro, Max, Enterprise</td>
             <td>Upload into a Space</td>
           </tr>
           <tr>
@@ -77,8 +77,12 @@ export default function WebChatbotsPage() {
           your vault token as the API key.
         </li>
         <li>
-          <strong>ChatGPT:</strong> Settings → Apps &amp; Connectors → enable developer mode → add the same
-          URL and token. Ask it to <em>search</em> your project and it will use the connector.
+          <strong>ChatGPT</strong> has two modes, and which one you get depends on your plan. For ctxfile&apos;s
+          full tool set, turn on <strong>developer mode</strong> (Settings → Connectors → Create, then per chat:
+          + → More → Developer mode) which needs <strong>Pro, Team, or Enterprise</strong>. The lighter path,
+          available more widely, uses only the <code>search</code> and <code>fetch</code> tools our relay
+          exposes for exactly this: ask ChatGPT to search your project and it pulls the thread. ChatGPT renamed
+          &ldquo;connectors&rdquo; to &ldquo;apps&rdquo; in late 2025, so the menu may say either.
         </li>
         <li>
           <strong>Claude (claude.ai):</strong> Settings → Connectors → Add custom connector. Claude&apos;s

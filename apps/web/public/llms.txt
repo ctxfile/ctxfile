@@ -16,7 +16,38 @@ Key facts: install with `npm install -g ctxfile`; works with any MCP client (Cla
 - [The .ctxfile convention](https://ctxfile.dev/convention): the versioned context artifact for tool authors
 - [Privacy](https://ctxfile.dev/docs/privacy): zero network by default, secret redaction, denied paths
 - [Security overview](https://ctxfile.dev/security): the CISO one-pager
+- [Make it automatic](https://ctxfile.dev/docs/automatic): the Behavior Layer, an installable skill (`ctxfile init`) that teaches an agent when to checkpoint; renders to a portable SKILL.md for Claude Code, OpenCode, OpenClaw, and Hermes, a Cursor rule, and GEMINI.md / AGENTS.md blocks
 - [Pricing](https://ctxfile.dev/pricing): Free (Apache-2.0), Pro $12/mo, Sync $6/mo, Team
+
+## Supported clients (MCP server, `npm install -g ctxfile`)
+
+Each entry is the exact registration; run ctxfile from the project or pass an absolute `--root`.
+
+- Claude Code: `claude mcp add ctxfile -- ctxfile --root .` (verify: `claude mcp list`)
+- Cursor: `.cursor/mcp.json` -> `{"mcpServers":{"ctxfile":{"command":"ctxfile","args":["--root","."]}}}`
+- Codex CLI: `codex mcp add ctxfile -- ctxfile --root .` (writes `~/.codex/config.toml` `[mcp_servers.ctxfile]`)
+- OpenCode: `opencode.json` -> `{"mcp":{"ctxfile":{"type":"local","command":["ctxfile","--root","."],"enabled":true}}}`
+- Gemini CLI: `gemini mcp add ctxfile ctxfile --root .` or `~/.gemini/settings.json` `mcpServers`
+- OpenClaw: `openclaw mcp add ctxfile --command ctxfile --arg --root --arg /abs/path` (config key is `mcp.servers`)
+- Hermes: `~/.hermes/config.yaml` `mcp_servers.ctxfile` command/args; tools register as `mcp_ctxfile_<tool>`
+- Claude Desktop: install the `ctxfile.mcpb` extension, or `claude_desktop_config.json` `mcpServers`
+- Aider: no MCP client; use `ctxfile export` then `/read .ctxfile/context.json`
+- Any other MCP client: `{"command":"ctxfile","args":["--root","."]}` over stdio
+
+## Web chatbots (remote MCP connector to the self-hosted Sync relay)
+
+The relay needs a public HTTPS URL; chatbots connect from their own cloud, not your machine.
+
+- Claude.ai: Settings -> Connectors -> Add custom connector; use the tokened URL `https://your-relay/mcp/t/<token>`
+- ChatGPT: developer mode connectors for all tools (Pro/Team/Enterprise), or the `search`+`fetch` data path
+- Grok: Connectors -> Custom (Business/Enterprise per x.ai docs; some consumer plans have it)
+- Perplexity: custom remote connector (Pro/Max/Enterprise)
+- Gemini web, and any prompt box: `ctxfile export --stdout` and paste the envelope
+
+## MCP tools exposed
+
+- Free core: `get_context`, `save_session`, `continue_thread`, `list_threads`, `ingest_context`
+- Pro adds: `remember`, `recall`, `forget`, `consult`, `distill_playbook`, `list_playbooks`, `get_playbook`, `rm_playbook`, `transcribe_voice`
 
 ## Source
 

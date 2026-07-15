@@ -317,7 +317,7 @@ async function runInit(argv: string[]): Promise<void> {
     const config = loadConfig({ root: args.root, configPath: args.configPath });
     // Every file-writing harness, whether or not its directory still exists.
     let removed = 0;
-    for (const harness of ["claude-code", "cursor", "agents-md"] as const) {
+    for (const harness of ["claude-code", "cursor", "opencode", "gemini", "agents-md"] as const) {
       const result = uninstallBehavior(harness, config.root);
       if (result.action === "absent") continue;
       removed += 1;
@@ -339,10 +339,20 @@ async function runInit(argv: string[]): Promise<void> {
       throw new Error(`--print requires one of: ${BEHAVIOR_HARNESSES.join(", ")}`);
     }
     process.stdout.write(renderBehavior(which as BehaviorHarness).content);
-    // To stderr so it never pollutes the piped behavior text: pasted behaviors
-    // only auto-checkpoint once auto-capture is enabled for this project.
+    // To stderr so it never pollutes the piped behavior text: where this render
+    // belongs, then the reminder that pasted behaviors only fire once
+    // auto-capture is enabled for the project.
+    const saveHint: Partial<Record<BehaviorHarness, string>> = {
+      openclaw: "save as a SKILL.md under ~/.openclaw/skills/ctxfile/ (or run: ctxfile init --print openclaw > SKILL.md; openclaw skills install ./SKILL.md --as ctxfile)",
+      hermes: "save as ~/.hermes/skills/ctxfile/SKILL.md (Hermes also installs from a URL: hermes skills install <url-to-SKILL.md>)",
+      opencode: "save as .opencode/skills/ctxfile/SKILL.md (OpenCode also auto-reads .claude/skills/ctxfile/SKILL.md)",
+      gemini: "paste into GEMINI.md (project or ~/.gemini/GEMINI.md)",
+      codex: "paste into your Codex instructions (~/.codex/AGENTS.md or per-project AGENTS.md)",
+    };
+    const hint = saveHint[which as BehaviorHarness];
+    if (hint) console.error(`\nctxfile: ${hint}`);
     console.error(
-      "\nctxfile: enable auto-capture for pasted behaviors to take effect — run 'ctxfile init --yes' " +
+      "\nctxfile: enable auto-capture for these behaviors to take effect — run 'ctxfile init --yes' " +
         "(or 'ctxfile init' and consent) in this project; otherwise auto checkpoints are skipped."
     );
     return;

@@ -10,8 +10,32 @@ import { fileURLToPath } from "node:url";
  * consent/pause state the server's guardrails read.
  */
 
-export const BEHAVIOR_HARNESSES = ["claude-code", "cursor", "agents-md", "codex", "generic"] as const;
+export const BEHAVIOR_HARNESSES = [
+  "claude-code",
+  "cursor",
+  "opencode",
+  "gemini",
+  "agents-md",
+  "codex",
+  "openclaw",
+  "hermes",
+  "generic",
+] as const;
 export type BehaviorHarness = (typeof BEHAVIOR_HARNESSES)[number];
+
+/** The Agent Skills SKILL.md frontmatter + body, shared by every harness that
+    reads a SKILL.md (Claude Code, OpenCode, OpenClaw, Hermes). One canonical
+    body, one frontmatter schema (name + description), so the same skill is
+    portable across their skill systems. */
+function skillFile(body: string): string {
+  return `---
+name: ctxfile
+description: Automatic context checkpointing via the ctxfile MCP tools. Use throughout every session - at session start (load context), when tasks complete or decisions are made (checkpoint), and when the user hands work off or says goodbye.
+---
+
+${body}
+`;
+}
 
 /** Managed-block markers for append-style targets (AGENTS.md, .cursorrules),
     same pattern as the git hook: reinstall updates in place, uninstall is a
@@ -45,15 +69,23 @@ export function renderBehavior(harness: BehaviorHarness, canonical = loadCanonic
   const body = canonical.trim();
   switch (harness) {
     case "claude-code":
+      return { harness, relativePath: "claude-code/SKILL.md", content: skillFile(body) };
+    case "opencode":
+      // OpenCode also auto-reads .claude/skills/, but its own path is explicit.
+      return { harness, relativePath: "opencode/SKILL.md", content: skillFile(body) };
+    case "openclaw":
+      return { harness, relativePath: "openclaw/SKILL.md", content: skillFile(body) };
+    case "hermes":
+      return { harness, relativePath: "hermes/SKILL.md", content: skillFile(body) };
+    case "gemini":
       return {
         harness,
-        relativePath: "claude-code/SKILL.md",
-        content: `---
-name: ctxfile
-description: Automatic context checkpointing via the ctxfile MCP tools. Use throughout every session - at session start (load context), when tasks complete or decisions are made (checkpoint), and when the user hands work off or says goodbye.
----
+        relativePath: "gemini/GEMINI.md",
+        content: `${BEHAVIOR_BLOCK_BEGIN}
+## ctxfile: automatic context checkpointing
 
 ${body}
+${BEHAVIOR_BLOCK_END}
 `,
       };
     case "cursor":
@@ -116,11 +148,23 @@ export function detectHarnesses(root: string, home: string): DetectedHarness[] {
   if (existsSync(path.join(root, ".cursor")) || existsSync(path.join(home, ".cursor"))) {
     found.push({ harness: "cursor", reason: ".cursor directory present" });
   }
+  if (existsSync(path.join(root, ".opencode")) || existsSync(path.join(home, ".config", "opencode"))) {
+    found.push({ harness: "opencode", reason: ".opencode directory present" });
+  }
+  if (existsSync(path.join(root, ".gemini")) || existsSync(path.join(home, ".gemini"))) {
+    found.push({ harness: "gemini", reason: ".gemini directory present" });
+  }
   if (existsSync(path.join(root, "AGENTS.md"))) {
     found.push({ harness: "agents-md", reason: "AGENTS.md present" });
   }
   if (existsSync(path.join(home, ".codex"))) {
     found.push({ harness: "codex", reason: "~/.codex present" });
+  }
+  if (existsSync(path.join(home, ".openclaw"))) {
+    found.push({ harness: "openclaw", reason: "~/.openclaw present" });
+  }
+  if (existsSync(path.join(home, ".hermes"))) {
+    found.push({ harness: "hermes", reason: "~/.hermes present" });
   }
   return found;
 }
@@ -150,8 +194,15 @@ export function installBehavior(harness: BehaviorHarness, root: string, canonica
     writeFileSync(target, rendered.content, "utf8");
     return { harness, target, action };
   }
-  if (harness === "agents-md") {
-    const target = path.join(root, "AGENTS.md");
+  if (harness === "opencode") {
+    const target = path.join(root, ".opencode", "skills", "ctxfile", "SKILL.md");
+    const action = existsSync(target) ? "updated" : "created";
+    mkdirSync(path.dirname(target), { recursive: true });
+    writeFileSync(target, rendered.content, "utf8");
+    return { harness, target, action };
+  }
+  if (harness === "agents-md" || harness === "gemini") {
+    const target = path.join(root, harness === "gemini" ? "GEMINI.md" : "AGENTS.md");
     const existing = existsSync(target) ? readFileSync(target, "utf8") : "";
     const begin = existing.indexOf(BEHAVIOR_BLOCK_BEGIN);
     const end = existing.indexOf(BEHAVIOR_BLOCK_END);
@@ -197,8 +248,15 @@ export function uninstallBehavior(harness: BehaviorHarness, root: string): Unins
     rmSync(target, { force: true });
     return { harness, target, action: "removed" };
   }
-  if (harness === "agents-md") {
-    const target = path.join(root, "AGENTS.md");
+  if (harness === "opencode") {
+    const dir = path.join(root, ".opencode", "skills", "ctxfile");
+    const target = path.join(dir, "SKILL.md");
+    if (!existsSync(target)) return { harness, target, action: "absent" };
+    rmSync(dir, { recursive: true, force: true });
+    return { harness, target, action: "removed" };
+  }
+  if (harness === "agents-md" || harness === "gemini") {
+    const target = path.join(root, harness === "gemini" ? "GEMINI.md" : "AGENTS.md");
     if (!existsSync(target)) return { harness, target, action: "absent" };
     const existing = readFileSync(target, "utf8");
     const begin = existing.indexOf(BEHAVIOR_BLOCK_BEGIN);

@@ -37,7 +37,7 @@ export default function AutomaticDocs() {
             <tr>
               <td>Claude Code</td>
               <td>
-                <code>.claude/skills/ctxfile/SKILL.md</code>
+                <code>.claude/skills/ctxfile/SKILL.md</code> (an Agent Skill)
               </td>
               <td>
                 <code>ctxfile init --print claude-code</code>
@@ -53,6 +53,22 @@ export default function AutomaticDocs() {
               </td>
             </tr>
             <tr>
+              <td>OpenCode</td>
+              <td>
+                <code>.opencode/skills/ctxfile/SKILL.md</code> (also reads <code>.claude/skills/</code>)
+              </td>
+              <td>
+                <code>ctxfile init --print opencode</code>
+              </td>
+            </tr>
+            <tr>
+              <td>Gemini CLI</td>
+              <td>A managed block appended to <code>GEMINI.md</code> (re-install updates it in place)</td>
+              <td>
+                <code>ctxfile init --print gemini</code>
+              </td>
+            </tr>
+            <tr>
               <td>AGENTS.md harnesses</td>
               <td>A managed block appended to <code>AGENTS.md</code> (re-install updates it in place)</td>
               <td>
@@ -61,9 +77,29 @@ export default function AutomaticDocs() {
             </tr>
             <tr>
               <td>Codex</td>
-              <td>Printed for pasting into your Codex instructions</td>
+              <td>Printed for pasting into your Codex instructions (<code>~/.codex/AGENTS.md</code>)</td>
               <td>
                 <code>ctxfile init --print codex</code>
+              </td>
+            </tr>
+            <tr>
+              <td>OpenClaw</td>
+              <td>
+                A <code>SKILL.md</code> for <code>~/.openclaw/skills/ctxfile/</code> (or{" "}
+                <code>openclaw skills install</code>)
+              </td>
+              <td>
+                <code>ctxfile init --print openclaw</code>
+              </td>
+            </tr>
+            <tr>
+              <td>Hermes</td>
+              <td>
+                A <code>SKILL.md</code> for <code>~/.hermes/skills/ctxfile/</code> (or{" "}
+                <code>hermes skills install</code>)
+              </td>
+              <td>
+                <code>ctxfile init --print hermes</code>
               </td>
             </tr>
             <tr>
@@ -77,9 +113,11 @@ export default function AutomaticDocs() {
         </table>
       </div>
       <p>
-        All five renders come from one canonical spec in the package (<code>behaviors/canonical.md</code>);
-        community PRs for new harnesses are markdown, the same cheap-connector dynamic as the{" "}
-        <Link href="/docs/ingest">ingest prompt snippets</Link>.
+        Every render comes from one canonical spec in the package (<code>behaviors/canonical.md</code>); a new
+        harness is a few lines of markdown, the same cheap-connector dynamic as the{" "}
+        <Link href="/docs/ingest">ingest prompt snippets</Link>. The Claude Code, OpenCode, OpenClaw, and Hermes
+        renders are the same portable <code>SKILL.md</code>, so one skill file works across all four skill
+        systems.
       </p>
 
       <h2>What the skill teaches the agent</h2>

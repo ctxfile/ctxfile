@@ -15,6 +15,7 @@ import {
   installBehavior,
   loadCanonicalBehaviors,
   renderAllBehaviors,
+  renderBehavior,
   uninstallBehavior,
   writeBehaviorState,
 } from "../src/behavior.js";
@@ -23,18 +24,32 @@ import { createServer } from "../src/server.js";
 import { IngestStore } from "../src/storage/ingest-store.js";
 
 describe("behavior pack (renders + install)", () => {
-  it("renders all five harness formats from the canonical spec, with B1-B5 intact", () => {
+  it("renders every harness format from the canonical spec, with B1-B5 intact", () => {
     const canonical = loadCanonicalBehaviors();
     for (const marker of ["B1", "B2", "B3", "B4", "B5", "B6", "✓ Checkpointed to ctxfile", 'trigger: "auto"', "Never save silently", "NEVER ask for, echo, or handle the passphrase"]) {
       expect(canonical).toContain(marker);
     }
     const renders = renderAllBehaviors(canonical);
-    expect(renders.map((r) => r.harness)).toEqual(["claude-code", "cursor", "agents-md", "codex", "generic"]);
+    expect(renders.map((r) => r.harness)).toEqual([
+      "claude-code",
+      "cursor",
+      "opencode",
+      "gemini",
+      "agents-md",
+      "codex",
+      "openclaw",
+      "hermes",
+      "generic",
+    ]);
     for (const render of renders) {
       expect(render.content).toContain("Checkpoint on significance");
     }
-    expect(renders[0]?.content.startsWith("---\nname: ctxfile\n")).toBe(true);
-    expect(renders[1]?.content).toContain("alwaysApply: true");
+    // The four SKILL.md harnesses share one frontmatter; gemini uses a managed block.
+    for (const h of ["claude-code", "opencode", "openclaw", "hermes"] as const) {
+      expect(renderBehavior(h, canonical).content.startsWith("---\nname: ctxfile\n")).toBe(true);
+    }
+    expect(renderBehavior("cursor", canonical).content).toContain("alwaysApply: true");
+    expect(renderBehavior("gemini", canonical).content).toContain(BEHAVIOR_BLOCK_BEGIN);
   });
 
   it("committed renders match the renderer (drift guard for scripts/render-behaviors.mjs)", () => {
@@ -63,6 +78,26 @@ describe("behavior pack (renders + install)", () => {
       const second = readFileSync(path.join(dir, "AGENTS.md"), "utf8");
       expect(second.split(BEHAVIOR_BLOCK_BEGIN)).toHaveLength(2);
       expect(second.split(BEHAVIOR_BLOCK_END)).toHaveLength(2);
+
+      // OpenCode: own skill dir, round-trips like the claude-code skill.
+      const oc = installBehavior("opencode", dir);
+      expect(oc.action).toBe("created");
+      expect(readFileSync(path.join(dir, ".opencode", "skills", "ctxfile", "SKILL.md"), "utf8")).toContain("name: ctxfile");
+      expect(uninstallBehavior("opencode", dir).action).toBe("removed");
+      expect(existsSync(path.join(dir, ".opencode", "skills", "ctxfile", "SKILL.md"))).toBe(false);
+
+      // Gemini: managed block in GEMINI.md, same idempotent append as AGENTS.md.
+      writeFileSync(path.join(dir, "GEMINI.md"), "# My Gemini context\n\nKeep me too.\n");
+      installBehavior("gemini", dir);
+      const gem = readFileSync(path.join(dir, "GEMINI.md"), "utf8");
+      expect(gem).toContain("Keep me too.");
+      expect(gem).toContain(BEHAVIOR_BLOCK_BEGIN);
+      expect(uninstallBehavior("gemini", dir).action).toBe("stripped");
+      expect(readFileSync(path.join(dir, "GEMINI.md"), "utf8")).toContain("Keep me too.");
+
+      // OpenClaw + Hermes are print targets (SKILL.md the user saves themselves).
+      expect(installBehavior("openclaw", dir).action).toBe("printed");
+      expect(installBehavior("hermes", dir).action).toBe("printed");
 
       const detected = detectHarnesses(dir, dir);
       expect(detected.map((d) => d.harness)).toContain("claude-code");

@@ -133,10 +133,24 @@ const CLIENTS: Client[] = [
       INSTALL,
       {
         title: "Register the server",
-        body: "Run from your project directory; that is what --root . points at.",
+        body: (
+          <>
+            Run from your project directory; that is what <code>--root .</code> points at. Defaults to{" "}
+            <code>local</code> scope (just you, this project). Add <code>--scope project</code> to commit it to
+            the repo for your team, or <code>--scope user</code> for all your projects.
+          </>
+        ),
         code: "claude mcp add ctxfile -- ctxfile --root .",
       },
-      { title: "Verify", body: "The ctxfile tools appear in the tool list.", code: "claude mcp list" },
+      {
+        title: "Verify",
+        body: (
+          <>
+            The ctxfile tools appear in the list, or run <code>/mcp</code> inside a session.
+          </>
+        ),
+        code: "claude mcp list",
+      },
     ],
   },
   {
@@ -200,6 +214,7 @@ const CLIENTS: Client[] = [
           </>
         ),
         code: `{
+  "$schema": "https://opencode.ai/config.json",
   "mcp": {
     "ctxfile": {
       "type": "local",
@@ -227,10 +242,16 @@ const CLIENTS: Client[] = [
     steps: [
       INSTALL,
       {
-        title: "Add the server",
+        title: "Register the server",
+        body: "Recent Gemini CLI has a one-command shortcut that writes settings.json for you:",
+        code: "gemini mcp add ctxfile ctxfile --root .",
+      },
+      {
+        title: "Or edit settings.json directly",
         body: (
           <>
-            In <code>~/.gemini/settings.json</code> (or the project&apos;s <code>.gemini/settings.json</code>):
+            In <code>~/.gemini/settings.json</code> (global) or the project&apos;s{" "}
+            <code>.gemini/settings.json</code>:
           </>
         ),
         code: `{
@@ -287,7 +308,15 @@ const CLIENTS: Client[] = [
     command: "ctxfile"
     args: ["--root", "/absolute/path/to/project"]`,
       },
-      { title: "Verify", body: "Hermes prefixes the tools with the server name: ctxfile_get_context and friends." },
+      {
+        title: "Verify",
+        body: (
+          <>
+            Hermes namespaces MCP tools as <code>mcp_&lt;server&gt;_&lt;tool&gt;</code>, so ctxfile&apos;s appear as{" "}
+            <code>mcp_ctxfile_get_context</code> and friends. <code>hermes mcp list</code> shows them.
+          </>
+        ),
+      },
     ],
   },
   {
