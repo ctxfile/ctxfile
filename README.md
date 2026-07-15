@@ -18,6 +18,7 @@
   <a href="https://ctxfile.dev">Website</a> ·
   <a href="https://ctxfile.dev/docs">Docs</a> ·
   <a href="#30-second-quickstart">Quickstart</a> ·
+  <a href="https://ctxfile.dev/docs/clients">Clients</a> ·
   <a href="https://ctxfile.dev/convention">The .ctxfile convention</a> ·
   <a href="https://ctxfile.dev/security">Security</a>
 </p>
@@ -50,11 +51,31 @@ claude mcp add ctxfile -- npx -y ctxfile
 }
 ```
 
+**Codex CLI**
+
+```bash
+codex mcp add ctxfile -- npx -y ctxfile --root .
+```
+
 **Claude Desktop**: download `ctxfile.mcpb` from [releases](https://github.com/ctxfile/ctxfile/releases) and drag it into Settings → Extensions.
 
-**Any other MCP client**: it is a standard stdio server. `npx -y ctxfile` is the whole command.
+**Every other client**: ctxfile is a standard stdio server, so `npx -y ctxfile` is the whole command. Copy-paste setup for **OpenCode, Gemini CLI, OpenClaw, Hermes, Aider**, and more is on the per-client tabs at [ctxfile.dev/docs/clients](https://ctxfile.dev/docs/clients).
 
 Then, in your agent: *"load my context"* (or call `get_context`). Requires Node ≥ 20 (≥ 22 on Windows).
+
+## Make it automatic
+
+You stop typing "save this." One command installs a **skill** that teaches any agent, while doing its normal work, *when* to checkpoint context and to announce every save (never silent, paused any time, reviewable always):
+
+```bash
+ctxfile init
+```
+
+It renders from one canonical spec into whatever each harness reads: an Agent `SKILL.md` for **Claude Code, OpenCode, OpenClaw, and Hermes** (one portable file across all four skill systems), a **Cursor** rule, and managed **GEMINI.md** / **AGENTS.md** blocks. Details at [ctxfile.dev/docs/automatic](https://ctxfile.dev/docs/automatic).
+
+## It follows you into the chat tabs, too
+
+The same context your CLI and editor agents load over MCP can travel to web chatbots. Connect **Grok, ChatGPT, Claude web, or Perplexity** to your encrypted [Sync](https://ctxfile.dev/docs/sync) vault as a custom MCP connector, or `ctxfile export` and paste the envelope into any prompt box (Gemini, and anything else). Walkthrough: [ctxfile.dev/docs/webchat](https://ctxfile.dev/docs/webchat).
 
 ## Private by default
 
@@ -91,7 +112,7 @@ The full model, including what Pro and Sync add and what they can never see, is 
 
 ## Open core, honestly
 
-Everything in this repo is Apache-2.0 and works standalone, forever. The paid [Pro](https://ctxfile.dev/pricing) add-on (a separate, closed package) adds session connectors that read your recent sessions from **Claude Code, Cursor, Codex CLI, OpenCode, Gemini CLI, Aider, OpenClaw, and Hermes Agent**, plus encrypted cross-session memory, multi-provider consult, and local voice capture. Licensing is an Ed25519-signed key verified **offline**. No phone-home, ever. Pro funds the open-source work.
+Everything in this repo is Apache-2.0 and works standalone, forever. The paid [Pro](https://ctxfile.dev/pricing) add-on (a separate, closed package) adds session connectors that read your recent sessions from **Claude Code, Cursor, Codex CLI, OpenCode, Gemini CLI, Aider, OpenClaw, and Hermes Agent**, encrypted cross-session memory, multi-provider [consult](https://ctxfile.dev/docs/pro) (Anthropic, **OpenRouter** for hundreds of models on one key, any OpenAI-compatible endpoint, or local Ollama), AI-distilled prompt [Playbooks](https://ctxfile.dev/docs/playbooks), and local voice capture. Licensing is an Ed25519-signed key verified **offline**. No phone-home, ever. Pro funds the open-source work.
 
 ## Contributing
 
