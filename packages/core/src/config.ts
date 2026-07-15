@@ -49,7 +49,7 @@ const fileConfigSchema = z
         providers: z
           .array(
             z.object({
-              type: z.enum(["anthropic", "openai-compatible", "ollama"]),
+              type: z.enum(["anthropic", "openai-compatible", "openrouter", "ollama"]),
               model: z.string().optional(),
               baseUrl: z.string().optional(),
               apiKeyEnv: z.string().optional(),
@@ -94,7 +94,7 @@ const fileConfigSchema = z
   .strict();
 
 export interface ConsultProviderSpec {
-  type: "anthropic" | "openai-compatible" | "ollama";
+  type: "anthropic" | "openai-compatible" | "openrouter" | "ollama";
   model?: string;
   baseUrl?: string;
   /** Name of the env var holding the API key — never the key itself. */

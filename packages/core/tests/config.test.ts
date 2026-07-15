@@ -60,6 +60,30 @@ describe("loadConfig", () => {
     expect(config.notion.pageIds).toEqual([]);
   });
 
+  it("accepts every consult provider type, including openrouter", () => {
+    writeFileSync(
+      path.join(dir, ".ctxfile.json"),
+      JSON.stringify({
+        consult: {
+          providers: [
+            { type: "anthropic", model: "claude-sonnet-5" },
+            { type: "openai-compatible", baseUrl: "https://api.example.com/v1", model: "gpt-test" },
+            { type: "openrouter", model: "openai/gpt-5.2", apiKeyEnv: "OPENROUTER_API_KEY" },
+            { type: "ollama", model: "qwen3:8b" },
+          ],
+        },
+      })
+    );
+    const config = loadConfig({ root: dir, env: {} });
+    expect(config.consult.providers).toHaveLength(4);
+    expect(config.consult.providers[2]).toEqual({ type: "openrouter", model: "openai/gpt-5.2", apiKeyEnv: "OPENROUTER_API_KEY" });
+  });
+
+  it("rejects an unknown consult provider type", () => {
+    writeFileSync(path.join(dir, ".ctxfile.json"), JSON.stringify({ consult: { providers: [{ type: "banana" }] } }));
+    expect(() => loadConfig({ root: dir, env: {} })).toThrow(/\.ctxfile\.json/);
+  });
+
   it("throws for a root that is not a directory", () => {
     expect(() => loadConfig({ root: path.join(dir, "nope"), env: {} })).toThrow(/not a directory/i);
   });

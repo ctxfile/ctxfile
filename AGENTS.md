@@ -41,7 +41,7 @@ See `CONTRIBUTING.md` for the contributor workflow.
 Run top to bottom whenever changes are pushed; skip only steps whose area is untouched.
 
 1. **Gate:** `npm run lint && npm run typecheck && npm test` (all workspaces). If `apps/web` changed, also `npm --prefix apps/web run build`.
-2. **Versions move together.** Core bump = `packages/core/package.json` + `packages/core/src/version.ts` + BOTH `version` fields in `/server.json`. Relay bump = `packages/relay/package.json` + `packages/relay/src/version.ts`, and widen the relay's `ctxfile` dep when core bumped.
+2. **Versions move together.** Core bump = `packages/core/package.json` + `packages/core/src/version.ts` + BOTH `version` fields in `/server.json` + `packages/core/manifest.json` (the .mcpb shown in Claude Desktop; it silently lagged at 0.1.0 until 0.3.1). Relay bump = `packages/relay/package.json` + `packages/relay/src/version.ts`, and widen the relay's `ctxfile` dep when core bumped.
 3. **Publish order:** `ctxfile` (from `packages/core`) BEFORE `@ctxfile/relay` — the relay builds against the published core.
 4. **Deploy what changed:**
    - Relay code → `flyctl deploy . --config packages/relay/fly.toml --dockerfile packages/relay/Dockerfile -a ctxfile-relay` (repo root context).

@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
+import { ClientSetup } from "../../../components/ClientSetup";
 
 export const metadata: Metadata = {
   title: "Client setup",
-  description: "Register ctxfile with Claude Code, Cursor, MCP Inspector, or any stdio MCP client.",
+  description:
+    "Register ctxfile with Claude Code, Cursor, Codex, OpenCode, Gemini CLI, OpenClaw, Hermes, or any stdio MCP client.",
 };
 
 export default function Clients() {
@@ -10,72 +12,21 @@ export default function Clients() {
     <>
       <h1>Client setup</h1>
       <p className="lede">
-        ctxfile is a standard stdio MCP server, so any MCP client can run it. Install first:{" "}
-        <code>npm install -g ctxfile</code>.
+        ctxfile is a standard stdio MCP server, so any MCP client can run it. Pick your client; the same install
+        serves all of them.
       </p>
       <p>
         Requires Node.js 20+ on macOS and Linux, and <strong>Node.js 22+ on Windows</strong> (a native dependency
         ships no Node 20 Windows prebuild). Node 22 and 24 are both current LTS lines.
       </p>
 
-      <h2>Claude Code</h2>
-      <pre>
-        <code>claude mcp add ctxfile -- ctxfile --root .</code>
-      </pre>
-      <p>
-        Run from your project directory (that&apos;s what <code>--root .</code> points at). Verify with{" "}
-        <code>claude mcp list</code>.
-      </p>
+      <ClientSetup />
 
-      <h2>Cursor</h2>
+      <h2>Pro reads the other side too</h2>
       <p>
-        Add to <code>.cursor/mcp.json</code> in the project, or <code>~/.cursor/mcp.json</code> globally:
-      </p>
-      <pre>
-        <code>{`{
-  "mcpServers": {
-    "ctxfile": {
-      "command": "ctxfile",
-      "args": ["--root", "."]
-    }
-  }
-}`}</code>
-      </pre>
-      <p>ctxfile exposes a handful of tools, far under Cursor&apos;s 40-tool cap.</p>
-
-      <h2>OpenCode</h2>
-      <p>
-        Add to <code>opencode.json</code> in the project (or the global config):
-      </p>
-      <pre>
-        <code>{`{
-  "mcp": {
-    "ctxfile": {
-      "type": "local",
-      "command": ["ctxfile", "--root", "."],
-      "enabled": true
-    }
-  }
-}`}</code>
-      </pre>
-      <p>
-        Pro also reads OpenCode&apos;s own session history through the session connectors, so context saved
-        there follows you to every other client.
-      </p>
-      <p>
-        <strong>Running a local model as the agent?</strong> The model must support tool calling or it
-        cannot invoke ctxfile at all. In Ollama that means models tagged with the <code>tools</code>{" "}
-        capability (qwen3, llama3.1 and newer, mistral); gemma3 does <em>not</em> support tools, so Ollama
-        rejects the call outright. Gemma still works fine where ctxfile calls <em>it</em>: the{" "}
-        <code>ollama.summarize</code> connector and Pro&apos;s consult. OpenCode also recommends raising
-        Ollama&apos;s <code>num_ctx</code> to 16k or more for tool calls, and thinking models (qwen3) are
-        markedly slower on first response.
-      </p>
-
-      <h2>Claude Desktop</h2>
-      <p>
-        Download <code>ctxfile.mcpb</code> from the releases page and drag it into Settings → Extensions, or add
-        the generic stdio JSON below to <code>claude_desktop_config.json</code>.
+        Registering the server gets every client the same tools. Pro&apos;s session connectors additionally read
+        each agent&apos;s own session history (Claude Code, Cursor, Codex, OpenCode, Gemini, Aider, OpenClaw,
+        Hermes), so work done in one client shows up in <code>get_context</code> in all the others.
       </p>
 
       <h2>MCP Inspector</h2>
@@ -86,8 +37,8 @@ export default function Clients() {
 
       <h2>Generic stdio config</h2>
       <p>
-        For any other MCP client (Codex CLI, Gemini CLI, Aider, OpenClaw, Hermes, Cline, Windsurf, custom SDK clients), the shape is always the
-        same, a command plus args, spoken to over stdio:
+        For any client not listed above (Cline, Windsurf, custom SDK clients), the shape is always the same, a
+        command plus args, spoken to over stdio:
       </p>
       <pre>
         <code>{`{

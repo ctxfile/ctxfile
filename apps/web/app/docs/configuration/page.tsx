@@ -45,6 +45,11 @@ export default function Configuration() {
         "baseUrl": "https://api.openai.com/v1",
         "apiKeyEnv": "OPENAI_API_KEY"
       },
+      {
+        "type": "openrouter",
+        "model": "google/gemini-2.5-pro",
+        "apiKeyEnv": "OPENROUTER_API_KEY"
+      },
       { "type": "ollama", "model": "qwen3:4b" }
     ]
   },
@@ -129,8 +134,11 @@ export default function Configuration() {
               <td>[]</td>
               <td>
                 Providers for the Pro consult tool. Each entry: <code>type</code> (<code>anthropic</code> |{" "}
-                <code>openai-compatible</code> | <code>ollama</code>), <code>model</code>, <code>baseUrl</code>,{" "}
-                <code>apiKeyEnv</code>: the <em>name</em> of the env var holding the key, never the key itself.
+                <code>openai-compatible</code> | <code>openrouter</code> | <code>ollama</code>), <code>model</code>,{" "}
+                <code>baseUrl</code>, <code>apiKeyEnv</code>: the <em>name</em> of the env var holding the key,
+                never the key itself. The <code>openrouter</code> type defaults <code>baseUrl</code> to
+                OpenRouter&apos;s API and <code>apiKeyEnv</code> to <code>OPENROUTER_API_KEY</code>, so one key
+                unlocks hundreds of models; just pick a <code>model</code> slug.
               </td>
             </tr>
             <tr>

@@ -15,3 +15,6 @@ apps/web/out/
 FOUNDER-ACTIONS.md
 TESTING.md
 STATUS.md
+
+# Local machine config — per-user, never committed.
+.ctxfile.json

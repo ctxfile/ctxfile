@@ -44,10 +44,27 @@ export default function Pro() {
       </p>
       <h3>Multi-provider consult</h3>
       <p>
-        The <code>consult</code> tool asks the same question to several models at once (Anthropic, any
-        OpenAI-compatible endpoint, or local Ollama) over your live project context, and streams their answers
-        side by side. Providers come from your <code>consult.providers</code> config; API keys are read from env
-        vars you name, never stored.
+        The <code>consult</code> tool asks the same question to several models at once (Anthropic, OpenRouter,
+        any OpenAI-compatible endpoint, or local Ollama) over your live project context, and streams their
+        answers side by side. Providers come from your <code>consult.providers</code> config; API keys are read
+        from env vars you name, never stored.
+      </p>
+      <p>
+        The fastest way to a real multi-model panel is <strong>OpenRouter</strong>: one key, hundreds of models.
+        List several <code>openrouter</code> entries with different model slugs and consult diffs them all:
+      </p>
+      <pre>
+        <code>{`"consult": {
+  "providers": [
+    { "type": "openrouter", "model": "anthropic/claude-sonnet-5" },
+    { "type": "openrouter", "model": "openai/gpt-5.2" },
+    { "type": "openrouter", "model": "google/gemini-2.5-pro" }
+  ]
+}`}</code>
+      </pre>
+      <p>
+        Export <code>OPENROUTER_API_KEY</code> in your shell and that is the whole setup. A local{" "}
+        <code>ollama</code> entry alongside keeps a fully on-machine voice in the panel.
       </p>
       <h3>Voice notes</h3>
       <p>
