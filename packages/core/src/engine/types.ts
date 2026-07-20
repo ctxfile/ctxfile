@@ -51,6 +51,31 @@ export interface SessionDigest {
   digest: string;
 }
 
+export interface VaultNoteLink {
+  title: string;
+  firstLine: string;
+}
+
+export interface VaultNote {
+  /** Provenance (PRD §2.2.5). Literal today; widens when other vault formats land. */
+  source: "obsidian";
+  vault: string;
+  /** Vault-relative path. */
+  path: string;
+  title: string;
+  /** Case-folded frontmatter tags. */
+  tags: string[];
+  /** ISO 8601, from file mtime. */
+  modifiedAt: string;
+  pinned: boolean;
+  tokens: number;
+  truncated: boolean;
+  redactions: number;
+  content: string;
+  /** One-hop wikilink stubs. */
+  links: VaultNoteLink[];
+}
+
 export interface ContextMeta {
   name: "ctxfile";
   version: string;
@@ -69,6 +94,8 @@ export interface ContextObject {
   notionPages: NotionPage[];
   /** Recent agent-session digests (populated by Pro session connectors). */
   sessions?: SessionDigest[];
+  /** Vault notes surfaced by note connectors (e.g. the Obsidian vault connector). */
+  notes?: VaultNote[];
   sessionSummary: string | null;
 }
 

@@ -21,6 +21,37 @@ export default function Changelog() {
 
         <div className="log-list">
           <article className="log-entry">
+            <span className="log-date">2026-07-19</span>
+            <div className="log-body">
+              <span className="log-tag">v0.4.0</span>
+              <h2>Your Obsidian vault, readable by every agent</h2>
+              <p>
+                Point ctxfile at a vault — any folder of markdown — and every agent you use loads your notes as
+                context. Read-only, fully local, redacted like everything else.
+              </p>
+              <ul>
+                <li>
+                  Obsidian vault connector: notes join snapshots as a <code>notes</code> section, ranked by pin
+                  (<code>ctxfile: pin</code> frontmatter), relevance to your recent threads, and recency — with
+                  one-hop <code>[[wikilink]]</code> previews for graph context.
+                </li>
+                <li>
+                  <code>ctxfile init</code> detects a nearby vault and offers to connect it, with PARA-aware
+                  defaults (Archive and Resources stay out unless you opt in).
+                </li>
+                <li>
+                  Privacy holds: vaults never sync, <code>repo-safe</code> exports never include notes, and every
+                  note passes the same redaction as project files.
+                </li>
+                <li>
+                  Agents now say which notes informed a context load — visibility over silence, per the behavior
+                  pack.
+                </li>
+              </ul>
+            </div>
+          </article>
+
+          <article className="log-entry">
             <span className="log-date">2026-07-15</span>
             <div className="log-body">
               <span className="log-tag">v0.3.1</span>

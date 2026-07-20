@@ -139,6 +139,55 @@ describe("buildExportEnvelope", () => {
   });
 });
 
+describe("notes export", () => {
+  const noteCtxPatch = {
+    notes: [
+      {
+        source: "obsidian" as const,
+        vault: "wk",
+        path: "a.md",
+        title: "A",
+        tags: ["t"],
+        modifiedAt: "2026-07-19T00:00:00.000Z",
+        pinned: false,
+        tokens: 3,
+        truncated: false,
+        redactions: 0,
+        content: "note body",
+        links: [{ title: "B", firstLine: "b line" }],
+      },
+    ],
+  };
+
+  it("repo-safe omits notes entirely", () => {
+    const envelope = buildExportEnvelope(makeCtx(noteCtxPatch), { profile: "repo-safe", now: NOW });
+    expect(envelope.sections).not.toContain("notes");
+    expect(envelope.context.notes).toBeUndefined();
+    expect(JSON.stringify(envelope)).not.toContain("note body");
+  });
+
+  it("full includes notes with content; custom can take notes without noteContent", () => {
+    const full = buildExportEnvelope(makeCtx(noteCtxPatch), { profile: "full", now: NOW });
+    expect(full.context.notes![0]!.content).toBe("note body");
+    expect(JSON.stringify(full)).not.toContain("b line"); // links never export
+    const custom = buildExportEnvelope(makeCtx(noteCtxPatch), {
+      profile: "custom",
+      customSections: ["notes"],
+      now: NOW,
+    });
+    expect(custom.context.notes![0]!.content).toBeUndefined();
+    expect(custom.context.notes![0]!.path).toBe("a.md");
+  });
+
+  it("renders a Vault notes section in markdown", () => {
+    const full = buildExportEnvelope(makeCtx(noteCtxPatch), { profile: "full", now: NOW });
+    const md = renderExportMarkdown(full);
+    expect(md).toContain("## Vault notes");
+    expect(md).toContain("a.md");
+    expect(md).toContain("note body");
+  });
+});
+
 describe("renderExportMarkdown", () => {
   function render(profile: "repo-safe" | "full"): { envelope: ExportEnvelope; md: string } {
     const envelope = buildExportEnvelope(makeCtx(), { profile, now: NOW });

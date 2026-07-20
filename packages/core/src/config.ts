@@ -90,8 +90,72 @@ const fileConfigSchema = z
           .optional(),
       })
       .optional(),
+    vaults: z
+      .array(
+        z
+          .object({
+            path: z.string().min(1),
+            name: z.string().min(1).optional(),
+            include: z.array(z.string()).optional(),
+            exclude: z.array(z.string()).optional(),
+          })
+          .strict()
+      )
+      .optional(),
   })
   .strict();
+
+export interface VaultSpec {
+  /** Resolved absolute path (leading ~ expanded to the home directory). */
+  path: string;
+  /** Unique display name; defaults to the basename of the resolved path. */
+  name: string;
+  include: string[];
+  exclude: string[];
+}
+
+function expandHome(p: string): string {
+  if (p === "~") return os.homedir();
+  if (p.startsWith("~/")) return path.join(os.homedir(), p.slice(2));
+  return p;
+}
+
+/** Warn-only guard (spec §1): pointing a vault at a known-sensitive root is
+    legal (explicit config is consent) but almost always a mistake. */
+function warnIfSensitiveVaultPath(resolved: string): void {
+  const home = os.homedir();
+  const sensitive = [
+    path.join(home, ".ssh"),
+    path.join(home, ".aws"),
+    path.join(home, ".gnupg"),
+    path.join(home, ".config"),
+    "/etc",
+  ];
+  for (const s of sensitive) {
+    if (resolved === s || resolved.startsWith(s + path.sep)) {
+      console.error(`ctxfile: warning: vault path ${resolved} is under ${s}; connect it only if that is really a note vault.`);
+      return;
+    }
+  }
+}
+
+function resolveVaults(
+  entries: { path: string; name?: string; include?: string[]; exclude?: string[] }[]
+): VaultSpec[] {
+  const specs: VaultSpec[] = [];
+  const seen = new Set<string>();
+  for (const entry of entries) {
+    const resolved = path.resolve(expandHome(entry.path));
+    const name = entry.name ?? path.basename(resolved);
+    if (seen.has(name)) {
+      throw new Error(`invalid .ctxfile.json: duplicate vault name "${name}" (names must be unique; set "name" explicitly)`);
+    }
+    seen.add(name);
+    warnIfSensitiveVaultPath(resolved);
+    specs.push({ path: resolved, name, include: entry.include ?? [], exclude: entry.exclude ?? [] });
+  }
+  return specs;
+}
 
 export interface ConsultProviderSpec {
   type: "anthropic" | "openai-compatible" | "openrouter" | "ollama";
@@ -116,6 +180,7 @@ export interface ResolvedConfig {
   cacheMaxAgeMs: number;
   include: string[];
   exclude: string[];
+  vaults: VaultSpec[];
   notion: { token: string | null; pageIds: string[] };
   ollama: { baseUrl: string; model: string | null; summarize: boolean };
   voice: { whisperPath: string | null; modelPath: string | null; audioDir: string | null };
@@ -170,6 +235,34 @@ export function loadConfig(opts: LoadConfigOptions = {}): ResolvedConfig {
   const notionToken = env.NOTION_TOKEN?.trim() || null;
   const pageIds = notionToken ? (fileConfig.notion?.pageIds ?? []) : [];
 
+  // Overlap between a vault and the project root is double-reading in
+  // BOTH directions: a vault nested under the root is walked by the file
+  // connector too (handled below via vaultExcludes), but the root nested
+  // under a vault (`ctxfile init` picking up a parent Obsidian vault) means
+  // the vault connector itself would re-walk the whole project subtree.
+  // Vault == root exactly can't be carved out either way — every markdown
+  // file legitimately belongs to both walks — so that case is warn-only.
+  const vaults = resolveVaults(fileConfig.vaults ?? []).map((v) => {
+    if (v.path === root) {
+      console.error(
+        `ctxfile: warning: vault "${v.name}" path is identical to the project root (${root}); every markdown file will appear as both a key file and a note.`
+      );
+      return v;
+    }
+    if (root.startsWith(v.path + path.sep)) {
+      const reverseCarveOut = `${path.relative(v.path, root).split(path.sep).join("/")}/**`;
+      return { ...v, exclude: [...v.exclude, reverseCarveOut] };
+    }
+    return v;
+  });
+  // A vault inside the project root would be double-read by the file
+  // connector into keyFiles — which repo-safe exports DO include. Carve the
+  // vault subtree out of the file walk so notes enter only via the vault
+  // connector (redacted, repo-safe-excluded).
+  const vaultExcludes = vaults
+    .filter((v) => v.path.startsWith(root + path.sep))
+    .map((v) => `${path.relative(root, v.path).split(path.sep).join("/")}/**`);
+
   return {
     root,
     tokenBudget: fileConfig.tokenBudget ?? 50_000,
@@ -177,7 +270,8 @@ export function loadConfig(opts: LoadConfigOptions = {}): ResolvedConfig {
     cacheDir: fileConfig.cacheDir ?? path.join(os.homedir(), ".ctxfile"),
     cacheMaxAgeMs: fileConfig.cacheMaxAgeMs ?? 30_000,
     include: fileConfig.include ?? [],
-    exclude: fileConfig.exclude ?? [],
+    exclude: [...(fileConfig.exclude ?? []), ...vaultExcludes],
+    vaults,
     notion: { token: notionToken, pageIds },
     ollama: {
       baseUrl: env.OLLAMA_BASE_URL?.trim() || fileConfig.ollama?.baseUrl || "http://localhost:11434",

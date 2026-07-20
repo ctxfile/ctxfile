@@ -1,5 +1,12 @@
 import path from "node:path";
-import type { ContextMeta, ContextObject, GitState, NotionPage, SessionDigest } from "./engine/types.js";
+import type {
+  ContextMeta,
+  ContextObject,
+  GitState,
+  NotionPage,
+  SessionDigest,
+  VaultNote,
+} from "./engine/types.js";
 import { redactContent } from "./redact.js";
 import { VERSION } from "./version.js";
 
@@ -23,6 +30,8 @@ export const EXPORT_SECTIONS = [
   "notionPages",
   "sessions",
   "sessionSummary",
+  "notes",
+  "noteContent",
 ] as const;
 export type ExportSection = (typeof EXPORT_SECTIONS)[number];
 
@@ -40,6 +49,21 @@ export interface ExportedKeyFile {
   content?: string;
 }
 
+export interface ExportedNote {
+  source: "obsidian";
+  vault: string;
+  path: string;
+  title: string;
+  tags: string[];
+  modifiedAt: string;
+  pinned: boolean;
+  tokens: number;
+  truncated: boolean;
+  redactions: number;
+  /** Present only when the "noteContent" section is included. Link stubs never export. */
+  content?: string;
+}
+
 export interface ExportedContext {
   meta: ContextMeta;
   plan: string | null;
@@ -47,6 +71,7 @@ export interface ExportedContext {
   gitState: GitState | null;
   notionPages: NotionPage[];
   sessions?: SessionDigest[];
+  notes?: ExportedNote[];
   sessionSummary: string | null;
 }
 
@@ -126,6 +151,25 @@ export function buildExportEnvelope(ctx: ContextObject, options: BuildExportOpti
       : [],
     ...(has("sessions") && ctx.sessions !== undefined
       ? { sessions: ctx.sessions.map((s) => ({ ...s, digest: redact(s.digest) })) }
+      : {}),
+    ...(has("notes") && ctx.notes !== undefined
+      ? {
+          notes: ctx.notes.map(
+            (n: VaultNote): ExportedNote => ({
+              source: n.source,
+              vault: n.vault,
+              path: n.path,
+              title: redact(n.title),
+              tags: n.tags.map((t) => redact(t)),
+              modifiedAt: n.modifiedAt,
+              pinned: n.pinned,
+              tokens: n.tokens,
+              truncated: n.truncated,
+              redactions: n.redactions,
+              ...(has("noteContent") ? { content: redact(n.content) } : {}),
+            })
+          ),
+        }
       : {}),
     sessionSummary:
       has("sessionSummary") && ctx.sessionSummary !== null ? redact(ctx.sessionSummary) : null,
@@ -218,6 +262,26 @@ export function renderExportMarkdown(envelope: ExportEnvelope): string {
       lines.push(`### ${page.title}`);
       lines.push("");
       lines.push(page.content.trim());
+      lines.push("");
+    }
+  }
+
+  if (context.notes !== undefined && context.notes.length > 0) {
+    lines.push("## Vault notes");
+    lines.push("");
+    lines.push("| Note | Vault | Tokens | Redactions |");
+    lines.push("| --- | --- | ---: | ---: |");
+    for (const note of context.notes) {
+      lines.push(
+        `| \`${note.path}\`${note.pinned ? " 📌" : ""} | ${note.vault} | ${note.tokens} | ${note.redactions} |`
+      );
+    }
+    lines.push("");
+    for (const note of context.notes) {
+      if (note.content === undefined) continue;
+      lines.push(`### ${note.title}`);
+      lines.push("");
+      lines.push(note.content.trim());
       lines.push("");
     }
   }

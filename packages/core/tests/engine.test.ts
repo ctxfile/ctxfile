@@ -5,7 +5,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import { loadConfig, type ResolvedConfig } from "../src/config.js";
 import type { Connector, Summarizer } from "../src/connectors/types.js";
 import { buildContext, filterScope } from "../src/engine/build.js";
-import type { BuildEvent, ContextObject } from "../src/engine/types.js";
+import type { BuildEvent, ContextObject, VaultNote } from "../src/engine/types.js";
 
 const dir = mkdtempSync(path.join(os.tmpdir(), "cb-engine-"));
 const config = loadConfig({ root: dir, env: {} });
@@ -172,5 +172,58 @@ describe("buildContext onEvent", () => {
     expect(ctx.meta.connectors.map((c) => c.status).sort()).toEqual(["error", "skipped"]);
     const doneBoom = events.find((e) => e.type === "connector:done" && e.connector.name === "boom");
     expect(doneBoom && doneBoom.type === "connector:done" ? doneBoom.connector.error : null).toBe("kaput");
+  });
+});
+
+function fakeNote(overrides: Partial<VaultNote> = {}): VaultNote {
+  return {
+    source: "obsidian",
+    vault: "work",
+    path: "Projects/launch.md",
+    title: "Launch",
+    tags: ["launch"],
+    modifiedAt: "2026-07-19T00:00:00.000Z",
+    pinned: false,
+    tokens: 5,
+    truncated: false,
+    redactions: 0,
+    content: "hello",
+    links: [],
+    ...overrides,
+  };
+}
+
+describe("notes plumbing", () => {
+  it("merges notes from multiple connectors and forwards hints", async () => {
+    const seenHints: unknown[] = [];
+    const noteConnector = (p: string): Connector => ({
+      name: `vault:${p}`,
+      isEnabled: () => true,
+      async snapshot({ hints }) {
+        seenHints.push(hints);
+        return { notes: [fakeNote({ vault: p, path: `${p}.md` })] };
+      },
+    });
+    const config = loadConfig({ root: dir, env: {} });
+    const ctx = await buildContext(config, [noteConnector("a"), noteConnector("b")], null, "full", undefined, {
+      threadTags: ["launch"],
+    });
+    expect(ctx.notes).toHaveLength(2);
+    expect(seenHints).toEqual([{ threadTags: ["launch"] }, { threadTags: ["launch"] }]);
+  });
+
+  it("filterScope keeps notes in files scope and omits them for plan/git", async () => {
+    const config = loadConfig({ root: dir, env: {} });
+    const connector: Connector = {
+      name: "vault:x",
+      isEnabled: () => true,
+      async snapshot() {
+        return { notes: [fakeNote()] };
+      },
+    };
+    const ctx = await buildContext(config, [connector], null);
+    expect(filterScope(ctx, "files").notes).toHaveLength(1);
+    expect(filterScope(ctx, "plan").notes).toBeUndefined();
+    expect(filterScope(ctx, "git").notes).toBeUndefined();
   });
 });

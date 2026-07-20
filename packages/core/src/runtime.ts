@@ -5,6 +5,7 @@ import { gitConnector } from "./connectors/git.js";
 import { createNotionConnector } from "./connectors/notion.js";
 import { createOllamaSummarizer } from "./connectors/ollama.js";
 import type { Connector, Summarizer } from "./connectors/types.js";
+import { createVaultConnectors } from "./connectors/vault.js";
 import { createSnapshotService, type SnapshotService } from "./engine/service.js";
 import type { ProModule } from "./plugin.js";
 import { SnapshotCache } from "./storage/cache.js";
@@ -42,6 +43,7 @@ export function createRuntime(config: ResolvedConfig, options: RuntimeOptions = 
     fileConnector,
     gitConnector,
     createNotionConnector(),
+    ...createVaultConnectors(config),
     ...(proActive ? (pro.connectors ?? []) : []),
   ];
   const summarizer = options.summarizer === undefined ? createOllamaSummarizer() : options.summarizer;

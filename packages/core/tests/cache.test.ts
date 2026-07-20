@@ -104,6 +104,38 @@ describe("SnapshotCache", () => {
     expect(cache.latest("/project/a", 60_000, "fp-v2")).toBeNull();
   });
 
+  it("latestByPrefix matches any config_fp sharing the given prefix", () => {
+    const fp = JSON.stringify({ staticFingerprint: "abc", hints: { threadTags: ["x"] } });
+    cache.save("/project/a", makeContext("/project/a", "hinted"), fp);
+    const prefix = `{"staticFingerprint":${JSON.stringify("abc")}`;
+    expect(cache.latestByPrefix("/project/a", 60_000, prefix)?.plan).toBe("hinted");
+    // A different static fingerprint must not match.
+    const otherPrefix = `{"staticFingerprint":${JSON.stringify("xyz")}`;
+    expect(cache.latestByPrefix("/project/a", 60_000, otherPrefix)).toBeNull();
+  });
+
+  it("latestByPrefix treats JSON special characters (_ and %) as literal, not LIKE wildcards", () => {
+    const fp = JSON.stringify({ staticFingerprint: "abc", hints: null });
+    cache.save("/project/a", makeContext("/project/a", "literal-match"), fp);
+    // A prefix containing `_`/`%`-like JSON punctuation must still match
+    // exactly (substr, not LIKE) rather than acting as SQL wildcards.
+    const prefix = `{"staticFingerprint":${JSON.stringify("abc")}`;
+    expect(cache.latestByPrefix("/project/a", 60_000, prefix)?.plan).toBe("literal-match");
+    // A prefix that only matches under LIKE-style wildcarding must NOT hit.
+    expect(cache.latestByPrefix("/project/a", 60_000, "%")).toBeNull();
+  });
+
+  it("latestByPrefix returns the newest matching row", async () => {
+    const fp = JSON.stringify({ staticFingerprint: "abc", hints: null });
+    cache.save("/project/a", makeContext("/project/a", "old"), fp);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    cache.save("/project/a", makeContext("/project/a", "new"), fp);
+    const prefix = `{"staticFingerprint":${JSON.stringify("abc")}`;
+    // maxAge filtering shares the same SQL clause as latest(), covered above;
+    // asserting a wall-clock window here would be flaky on loaded machines.
+    expect(cache.latestByPrefix("/project/a", 60_000, prefix)?.plan).toBe("new");
+  });
+
   it("treats a corrupt row as a cache miss instead of throwing", async () => {
     const corruptPath = path.join(dir, "corrupt.db");
     const c = new SnapshotCache(corruptPath);

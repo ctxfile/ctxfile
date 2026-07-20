@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { loadConfig } from "./config.js";
+import { loadConfig, type ResolvedConfig } from "./config.js";
 import {
   buildExportEnvelope,
   EXPORT_PROFILES,
@@ -38,6 +38,7 @@ import {
 } from "./sync/vault.js";
 import { sendPingIfDue } from "./telemetry.js";
 import { storeLicenseKey } from "./license-store.js";
+import { appendVaultToConfig, detectVaultNear, paraDefaultExcludes, tildeRelative } from "./vault-detect.js";
 import { generateToken } from "./ui/security.js";
 import { createUiServer, DEFAULT_UI_PORT, listenOnAvailablePort } from "./ui/server.js";
 import { VERSION } from "./version.js";
@@ -309,6 +310,41 @@ async function runServe(args: CliArgs): Promise<void> {
   process.on("SIGTERM", shutdown);
 }
 
+/** Spec §7: detect an Obsidian vault near the project and offer to connect it.
+    Interactive-only write; --yes consents to behaviors, not to new data
+    sources, so non-interactive runs only get a stderr hint. */
+async function maybeOfferVault(config: ResolvedConfig, configPath: string, nonInteractive: boolean): Promise<void> {
+  if (config.vaults.length > 0) return;
+  const vaultPath = detectVaultNear(config.root);
+  if (vaultPath === null) return;
+  if (nonInteractive || !process.stdin.isTTY) {
+    console.error(
+      `ctxfile: Obsidian vault detected at ${vaultPath}. Connect it (read-only, local) by running 'ctxfile init' interactively, or add a "vaults" entry to .ctxfile.json.`
+    );
+    return;
+  }
+  const readline = await import("node:readline/promises");
+  const rl = readline.createInterface({ input: process.stdin, output: process.stderr });
+  const answer = await rl.question(
+    `ctxfile: Obsidian vault detected at ${vaultPath}.\nConnect it as a context source? Read-only, fully local, redacted like everything else. [y/N] `
+  );
+  rl.close();
+  if (!/^y(es)?$/i.test(answer.trim())) return;
+  const excludes = paraDefaultExcludes(vaultPath);
+  const result = appendVaultToConfig(configPath, vaultPath, excludes);
+  if (result === "written") {
+    console.error(
+      `ctxfile: vault connected in .ctxfile.json${excludes.length > 0 ? ` (excluded by default: ${excludes.join(", ")})` : ""}. Tune include/exclude there any time.`
+    );
+  } else if (result === "exists") {
+    console.error("ctxfile: .ctxfile.json already has a vaults entry; left untouched.");
+  } else {
+    console.error(
+      `ctxfile: .ctxfile.json could not be parsed; add manually:\n  "vaults": [{ "path": "${tildeRelative(vaultPath)}" }]`
+    );
+  }
+}
+
 /** The Behavior Layer install (design doc 11): explicit consent, then the
     skill/rules files land where each detected harness looks for them. */
 async function runInit(argv: string[]): Promise<void> {
@@ -361,6 +397,8 @@ async function runInit(argv: string[]): Promise<void> {
   const noAuto = argv.includes("--no-auto");
   const args = parseArgs(argv.filter((a) => a !== "--yes" && a !== "--no-auto"));
   const config = loadConfig({ root: args.root, configPath: args.configPath });
+
+  await maybeOfferVault(config, args.configPath ?? path.join(config.root, ".ctxfile.json"), yes);
 
   let consent: boolean;
   if (yes) consent = true;
@@ -585,9 +623,9 @@ function runThreads(argv: string[]): void {
 }
 
 const FULL_PROFILE_WARNING = `ctxfile: WARNING — profile "full" includes session digests, Notion content,
-ctxfile: and file bodies. Committing it to a repository shares private working
-ctxfile: notes with everyone who can clone it. Keep it out of version control
-ctxfile: unless that is exactly what you intend.`;
+ctxfile: personal vault notes, and file bodies. Committing it to a repository
+ctxfile: shares private working notes with everyone who can clone it. Keep it
+ctxfile: out of version control unless that is exactly what you intend.`;
 
 async function runExport(args: CliArgs): Promise<void> {
   const config = loadConfig({ root: args.root, configPath: args.configPath });

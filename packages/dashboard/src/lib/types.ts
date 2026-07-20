@@ -109,6 +109,26 @@ export interface SessionDigest {
   digest: string;
 }
 
+export interface VaultNoteLink {
+  title: string;
+  firstLine: string;
+}
+
+export interface VaultNote {
+  source: string;
+  vault: string;
+  path: string;
+  title: string;
+  tags: string[];
+  modifiedAt: string;
+  pinned: boolean;
+  tokens: number;
+  truncated: boolean;
+  redactions: number;
+  content: string;
+  links: VaultNoteLink[];
+}
+
 export interface ContextMeta {
   name: string;
   version: string;
@@ -126,6 +146,7 @@ export interface ContextObject {
   gitState: GitState | null;
   notionPages: NotionPage[];
   sessions?: SessionDigest[];
+  notes?: VaultNote[];
   sessionSummary: string | null;
 }
 

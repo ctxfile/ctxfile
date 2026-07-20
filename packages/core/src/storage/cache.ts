@@ -46,6 +46,24 @@ export class SnapshotCache {
         "SELECT created_at, json FROM snapshots WHERE root = ? AND agent_id = ? AND config_fp = ? ORDER BY created_at DESC, id DESC LIMIT 1"
       )
       .get(root, agentId, configFingerprint) as { created_at: number; json: string } | undefined;
+    return this.rowToContext(row, maxAgeMs);
+  }
+
+  /** Like `latest`, but matches any config_fp sharing the given prefix
+      (e.g. the static-config portion of a `{ staticFingerprint, hints }`
+      fingerprint) instead of requiring an exact match. Uses `substr` rather
+      than `LIKE` because fingerprints are JSON and may contain `_`/`%`,
+      which `LIKE` treats as wildcards. */
+  latestByPrefix(root: string, maxAgeMs: number, fpPrefix: string, agentId = "default"): ContextObject | null {
+    const row = this.db
+      .prepare(
+        "SELECT created_at, json FROM snapshots WHERE root = ? AND agent_id = ? AND substr(config_fp, 1, length(?)) = ? ORDER BY created_at DESC, id DESC LIMIT 1"
+      )
+      .get(root, agentId, fpPrefix, fpPrefix) as { created_at: number; json: string } | undefined;
+    return this.rowToContext(row, maxAgeMs);
+  }
+
+  private rowToContext(row: { created_at: number; json: string } | undefined, maxAgeMs: number): ContextObject | null {
     if (!row) return null;
     if (Date.now() - row.created_at > maxAgeMs) return null;
     try {

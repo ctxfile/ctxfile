@@ -1,5 +1,5 @@
 import type { ResolvedConfig } from "../config.js";
-import type { Connector, Summarizer } from "../connectors/types.js";
+import type { Connector, SnapshotHints, Summarizer } from "../connectors/types.js";
 import { VERSION } from "../version.js";
 import { estimateTokens, TokenBudget } from "./tokens.js";
 import type { BuildEvent, ConnectorStatus, ContextObject, ContextScope } from "./types.js";
@@ -31,6 +31,9 @@ function mergePartial(ctx: ContextObject, partial: Partial<ContextObject>): void
   if (partial.sessions && partial.sessions.length > 0) {
     ctx.sessions = [...(ctx.sessions ?? []), ...partial.sessions];
   }
+  if (partial.notes && partial.notes.length > 0) {
+    ctx.notes = [...(ctx.notes ?? []), ...partial.notes];
+  }
   if (partial.sessionSummary !== undefined && partial.sessionSummary !== null) {
     ctx.sessionSummary = partial.sessionSummary;
   }
@@ -41,7 +44,8 @@ export async function buildContext(
   connectors: Connector[],
   summarizer: Summarizer | null,
   scope: ContextScope = "full",
-  onEvent?: (event: BuildEvent) => void
+  onEvent?: (event: BuildEvent) => void,
+  hints?: SnapshotHints
 ): Promise<ContextObject> {
   // Listener bugs must never break a snapshot build.
   const emit = (event: BuildEvent): void => {
@@ -63,7 +67,7 @@ export async function buildContext(
       return status;
     }
     try {
-      const partial = await connector.snapshot({ config, budget });
+      const partial = await connector.snapshot({ config, budget, hints });
       const status: ConnectorStatus = { name: connector.name, status: "ok", durationMs: Date.now() - started };
       emit({ type: "connector:done", connector: status });
       return { ...status, partial };
@@ -126,5 +130,6 @@ export function filterScope(ctx: ContextObject, scope: ContextScope): ContextObj
     gitState: scope === "git" ? ctx.gitState : null,
     notionPages: scope === "files" ? ctx.notionPages : [],
     sessionSummary: null,
+    ...(scope === "files" && ctx.notes !== undefined ? { notes: ctx.notes } : {}),
   };
 }

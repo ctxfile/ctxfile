@@ -4,6 +4,7 @@ export {
   type LoadConfigOptions,
   type ResolvedConfig,
   type ServeTokenSpec,
+  type VaultSpec,
 } from "./config.js";
 export {
   buildExportEnvelope,
@@ -17,12 +18,14 @@ export {
   type ExportSection,
   type ExportedContext,
   type ExportedKeyFile,
+  type ExportedNote,
 } from "./export.js";
 export { fileConnector } from "./connectors/file.js";
 export { gitConnector } from "./connectors/git.js";
 export { createNotionConnector, type FetchLike, type NotionConnectorOptions } from "./connectors/notion.js";
 export { createOllamaSummarizer, type OllamaSummarizerOptions } from "./connectors/ollama.js";
-export type { Connector, SnapshotInput, Summarizer } from "./connectors/types.js";
+export type { Connector, SnapshotHints, SnapshotInput, Summarizer } from "./connectors/types.js";
+export { createVaultConnectors } from "./connectors/vault.js";
 export { buildContext, filterScope } from "./engine/build.js";
 export { createSnapshotService, type SnapshotService } from "./engine/service.js";
 export { estimateTokens, TokenBudget, truncateToTokens } from "./engine/tokens.js";
@@ -37,6 +40,8 @@ export type {
   KeyFile,
   NotionPage,
   SessionDigest,
+  VaultNote,
+  VaultNoteLink,
 } from "./engine/types.js";
 export {
   autoCaptureBlocked,

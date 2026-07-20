@@ -2,9 +2,16 @@ import type { ResolvedConfig } from "../config.js";
 import type { TokenBudget } from "../engine/tokens.js";
 import type { ContextObject } from "../engine/types.js";
 
+/** Cross-connector relevance hints computed by the snapshot service. */
+export interface SnapshotHints {
+  threadTags?: string[];
+  threadTitleTokens?: string[];
+}
+
 export interface SnapshotInput {
   config: ResolvedConfig;
   budget: TokenBudget;
+  hints?: SnapshotHints;
 }
 
 export interface Connector {

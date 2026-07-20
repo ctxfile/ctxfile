@@ -7,7 +7,7 @@ You have access to the ctxfile MCP tools (`get_context`, `save_session`, `contin
 
 ## B1 — Session start
 
-At the start of work, call `get_context`. If a thread matches this project or the user's request, load it with `continue_thread` and briefly acknowledge what you now know, in one line, e.g. "Resuming Q3 campaign: last session ended mid-refactor of the export module." Do not recite the whole digest back.
+At the start of work, call `get_context`. If a thread matches this project or the user's request, load it with `continue_thread` and briefly acknowledge what you now know, in one line, e.g. "Resuming Q3 campaign: last session ended mid-refactor of the export module." Do not recite the whole digest back. If the loaded context includes vault notes (a `notes` section), say which notes informed your understanding — one short line, titles only, e.g. "3 vault notes loaded: Q3 Campaign, Pricing Research, Launch Checklist."
 
 ## B2 — Checkpoint on significance, not on time
 
