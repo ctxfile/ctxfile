@@ -181,15 +181,19 @@ describe("vaults config", () => {
     }
   });
 
-  it("loads fine (no throw) and warns when a vault path sits under a sensitive root like /etc", () => {
+  it("loads fine (no throw) and warns when a vault path sits under a sensitive root", () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
     try {
-      writeConfig([{ path: "/etc/some-ctxfile-test-vault" }]);
+      // Use ~/.ssh rather than a hardcoded POSIX /etc: /etc resolves to
+      // "D:\etc" on Windows and matches no sensitive entry, whereas the
+      // home-relative markers are portable across platforms.
+      const sensitive = path.join(os.homedir(), ".ssh", "some-ctxfile-test-vault");
+      writeConfig([{ path: sensitive }]);
       const config = loadConfig({ root: dir, env: {} });
       expect(config.vaults).toHaveLength(1);
-      expect(config.vaults[0]!.path).toBe("/etc/some-ctxfile-test-vault");
+      expect(config.vaults[0]!.path).toBe(sensitive);
       expect(spy).toHaveBeenCalled();
-      expect(spy.mock.calls.some(([msg]) => typeof msg === "string" && /sensitive|\/etc/i.test(msg))).toBe(true);
+      expect(spy.mock.calls.some(([msg]) => typeof msg === "string" && /is under|\.ssh/i.test(msg))).toBe(true);
     } finally {
       spy.mockRestore();
     }
