@@ -395,6 +395,66 @@ button {
   content: "";
 }
 
+/* ---------- hero setup: pick your agent, copy one command ---------- */
+
+.hero-setup {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 100%;
+}
+
+.hero-setup-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.hero-setup-tab {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.02em;
+  color: var(--text-3);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition:
+    color 160ms ease-out,
+    border-color 160ms ease-out,
+    background 160ms ease-out;
+}
+
+.hero-setup-tab:hover {
+  color: var(--text-2);
+}
+
+.hero-setup-tab[data-active="true"] {
+  color: var(--text);
+  background: var(--well);
+  border-color: var(--line);
+}
+
+.hero-setup-hint {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  color: var(--text-3);
+}
+
+.hero-next {
+  margin-top: 16px;
+  font-size: 14px;
+  color: var(--text-2);
+  max-width: 52ch;
+}
+
+.hero-next em {
+  color: var(--text);
+  font-style: normal;
+}
+
 /* ---------- install command: a recessed input well ---------- */
 
 .install {
@@ -421,6 +481,19 @@ button {
   color: var(--text);
   white-space: nowrap;
   overflow-x: auto;
+}
+
+/* JSON config is too long for one line: wrap it instead of clipping to a
+   scroll region, which reads as truncated. Must follow .install-cmd — same
+   specificity, so source order decides. min-width:0 is required because flex
+   children will not shrink below their intrinsic width without it. */
+.install-cmd-wrap {
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-x: visible;
+  line-height: 1.5;
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .install-copy {

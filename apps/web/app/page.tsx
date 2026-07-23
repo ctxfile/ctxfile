@@ -1,6 +1,6 @@
 import { ContextPreview } from "@/components/ContextPreview";
 import { ContextTravel } from "@/components/ContextTravel";
-import { CopyCommand } from "@/components/CopyCommand";
+import { HeroSetup } from "@/components/HeroSetup";
 import { HeroTilt } from "@/components/HeroTilt";
 import { Reveal } from "@/components/Reveal";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -9,7 +9,6 @@ import { SnapshotDemo } from "@/components/SnapshotDemo";
 import { SpotlightGrid } from "@/components/SpotlightGrid";
 import Link from "next/link";
 
-const INSTALL = "npm install -g ctxfile";
 const GITHUB_URL = "https://github.com/ctxfile/ctxfile";
 
 const WORKS_WITH = [
@@ -177,11 +176,15 @@ export default function Home() {
               loaded by any agent, any model. <strong>All local. Open source.</strong>
             </p>
             <div className="hero-ctas enter" style={{ animationDelay: "210ms" }}>
-              <CopyCommand command={INSTALL} />
+              <HeroSetup />
               <a className="btn-ghost" href={GITHUB_URL} rel="noopener">
                 ⭐ Star on GitHub
               </a>
             </div>
+            <p className="hero-next enter" style={{ animationDelay: "250ms" }}>
+              Then ask your agent: <em>&ldquo;load my project context.&rdquo;</em> That is the whole setup.{" "}
+              <Link href="/docs">Other clients →</Link>
+            </p>
             <p className="hero-meta enter" style={{ animationDelay: "280ms" }}>
               <span>Apache-2.0</span>
               <span>nothing leaves your machine by default</span>
@@ -495,7 +498,7 @@ export default function Home() {
                 One context. <span className="grad-text">Every agent.</span> All local.
               </h2>
               <div className="final-cta-actions">
-                <CopyCommand command={INSTALL} />
+                <HeroSetup />
                 <Link href="/docs" className="btn-ghost">
                   Read the quickstart →
                 </Link>
