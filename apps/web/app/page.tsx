@@ -386,8 +386,9 @@ export default function Home() {
             <Reveal delay={80}>
               <div className="horizon-cta">
                 <span className="horizon-note">
-                  Works today via Claude Desktop one-click install. Sync brings it to your phone and every
-                  chat app you use.
+                  Works today: the{" "}
+                  <Link href="/docs/clients?tab=claude-desktop">Claude Desktop extension</Link> installs in
+                  one drag, no terminal. Sync brings it to your phone and every chat app you use.
                 </span>
                 <Link className="btn-ghost" href="/pricing#sync">
                   Get Sync for knowledge work →

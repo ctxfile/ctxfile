@@ -328,14 +328,35 @@ const CLIENTS: Client[] = [
         title: "Install the extension",
         body: (
           <>
-            Download <code>ctxfile.mcpb</code> from the{" "}
-            <a href="https://github.com/ctxfile/ctxfile/releases" rel="noopener">
-              releases page
+            Download{" "}
+            <a
+              href="https://github.com/ctxfile/ctxfile/releases/latest/download/ctxfile-macos-arm64.mcpb"
+              rel="noopener"
+            >
+              <code>ctxfile-macos-arm64.mcpb</code>
             </a>{" "}
-            and drag it into Settings, Extensions. Or add the generic stdio JSON to{" "}
-            <code>claude_desktop_config.json</code>.
+            and drag it into Settings, Extensions. No terminal, no global install: the bundle carries its
+            own runtime.
           </>
         ),
+      },
+      {
+        title: "On Windows or an Intel Mac?",
+        body: (
+          <>
+            The bundle embeds a compiled native module, so today it is built for Apple Silicon only. Everywhere
+            else, run <code>npm install -g ctxfile</code> and add the generic stdio JSON to{" "}
+            <code>claude_desktop_config.json</code>:
+          </>
+        ),
+        code: `{
+  "mcpServers": {
+    "ctxfile": {
+      "command": "ctxfile",
+      "args": ["--root", "/absolute/path/to/project"]
+    }
+  }
+}`,
       },
       {
         title: "Point it at your project",

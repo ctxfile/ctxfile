@@ -57,7 +57,7 @@ claude mcp add ctxfile -- npx -y ctxfile
 codex mcp add ctxfile -- npx -y ctxfile --root .
 ```
 
-**Claude Desktop**: download `ctxfile.mcpb` from [releases](https://github.com/ctxfile/ctxfile/releases) and drag it into Settings → Extensions.
+**Claude Desktop** (no terminal needed): download [`ctxfile-macos-arm64.mcpb`](https://github.com/ctxfile/ctxfile/releases/latest/download/ctxfile-macos-arm64.mcpb) and drag it into Settings → Extensions. The bundle carries a compiled native module, so it is macOS (Apple Silicon) only for now; on Windows or an Intel Mac, add the stdio JSON above to `claude_desktop_config.json` instead.
 
 **Every other client**: ctxfile is a standard stdio server, so `npx -y ctxfile` is the whole command. Copy-paste setup for **OpenCode, Gemini CLI, OpenClaw, Hermes, Aider**, and more is on the per-client tabs at [ctxfile.dev/docs/clients](https://ctxfile.dev/docs/clients).
 

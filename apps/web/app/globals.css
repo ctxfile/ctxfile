@@ -443,6 +443,21 @@ button {
   color: var(--text-3);
 }
 
+/* Browser chatbots can't be a tab (no local process), but the people using
+   them are a real share of the audience — this is their signpost. */
+.hero-setup-alt {
+  font-size: 12.5px;
+  color: var(--text-3);
+}
+
+.hero-setup-alt a {
+  color: var(--text-2);
+}
+
+.hero-setup-alt a:hover {
+  color: var(--text);
+}
+
 .hero-next {
   margin-top: 16px;
   font-size: 14px;
@@ -510,6 +525,20 @@ button {
 }
 
 .install-copy:hover {
+  color: var(--text);
+  border-color: var(--line-strong);
+}
+
+/* The Claude Desktop tab installs by download rather than by command, so the
+   whole row is the link. Reuses the .install shell so the hero keeps one
+   visual anchor as you switch tabs. Must follow .install-copy:hover — the
+   nested hover below has to win. */
+.install-download {
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.install-download:hover .install-copy {
   color: var(--text);
   border-color: var(--line-strong);
 }
