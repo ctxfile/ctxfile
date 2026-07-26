@@ -1,5 +1,6 @@
 "use client";
 
+import { track } from "@/lib/analytics";
 import { useState } from "react";
 
 /**
@@ -35,6 +36,11 @@ export function HeroSetup() {
   const [copied, setCopied] = useState(false);
 
   async function copy(): Promise<void> {
+    // Copying the setup command is the closest thing the site has to an
+    // install: pageviews say someone read the pitch, this says they meant to
+    // act on it. Recorded before the clipboard call so a blocked clipboard
+    // (insecure context, denied permission) still counts the intent.
+    track("Setup command copied", { client: active.name });
     try {
       await navigator.clipboard.writeText(active.code);
       setCopied(true);

@@ -5,6 +5,9 @@ packages/core/ui-dist/
 .mcpb-staging/
 .env
 .env.*
+# Templates carry no secrets and document what a deploy needs.
+!.env.example
+!**/.env.example
 *.log
 .DS_Store
 coverage/

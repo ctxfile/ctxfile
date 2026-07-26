@@ -122,6 +122,14 @@ const ROAM = [
 
 const FAQ = [
   {
+    q: "Why not just keep a good CLAUDE.md?",
+    a: "Keep it. ctxfile doesn't replace it. CLAUDE.md, and Claude's own memory file, are instructions you write and maintain by hand, and one vendor's tool reads them. ctxfile is state read from the project itself: the branch you're on, the diff you haven't committed, the files you've actually been in, what the last session decided. It's rebuilt on every call instead of drifting out of date, and Cursor, Codex, Gemini CLI and any other MCP client get the same object. Two halves of the same problem.",
+  },
+  {
+    q: "How is this different from the other memory MCP servers?",
+    a: "Most of them store chat history for one tool, usually behind a vector database you now have to run. ctxfile isn't chat memory. It snapshots the working state of a project, plan and key files and git and sessions and notes, into one structured object, and the point is that the object is portable: save it in one agent, continue in another, on a different vendor. No embeddings, no database to operate, and no network call by default.",
+  },
+  {
     q: "Is my code sent anywhere?",
     a: "No. The default path makes zero network calls. Notion, cloud-model consult, and the Sync vault are opt-in and loudly flagged. The code is open: verify it.",
   },
@@ -147,9 +155,24 @@ const FAQ = [
   },
 ];
 
+// The FAQ answers the two questions that decide whether someone keeps reading
+// ("why not CLAUDE.md", "why not the other memory servers"). Marking them up
+// lets search and answer engines quote them directly, which is the only way
+// those answers reach people who never land on the page.
+const FAQ_LD = JSON.stringify({
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: FAQ.map((item) => ({
+    "@type": "Question",
+    name: item.q,
+    acceptedAnswer: { "@type": "Answer", text: item.a },
+  })),
+});
+
 export default function Home() {
   return (
     <>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: FAQ_LD }} />
       <div className="atmosphere" aria-hidden="true" />
       <SiteNav
         links={[

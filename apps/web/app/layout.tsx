@@ -1,3 +1,4 @@
+import { Analytics } from "@/components/Analytics";
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
@@ -29,8 +30,11 @@ const doto = localFont({
 export const metadata: Metadata = {
   metadataBase: new URL("https://ctxfile.dev"),
   title: "ctxfile: one context, every agent, all local",
+  // Leads with portability, not memory: "memory for your AI" is a crowded,
+  // vendor-locked category, and what actually distinguishes ctxfile in a search
+  // result or a shared link is that the context moves between agents.
   description:
-    "Stop re-explaining your project to every AI agent. ctxfile snapshots your working state into one context object any MCP agent loads instantly, and nothing leaves your machine.",
+    "Carry your project's working state between AI agents. One local context object — plan, files, git, sessions — that Claude Code, Cursor, and Codex all load. Open source.",
   // "./" resolves per-route against metadataBase: every page gets its own
   // canonical without per-page boilerplate.
   alternates: { canonical: "./" },
@@ -89,6 +93,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON_LD }} />
+        <Analytics />
       </head>
       <body>{children}</body>
     </html>
