@@ -1,0 +1,18 @@
+name = "ctxfile-ping"
+main = "src/index.ts"
+compatibility_date = "2026-07-01"
+
+# Matches the endpoint already compiled into packages/core (config.ts:
+# https://ping.ctxfile.dev/v1/ping), so opt-in telemetry starts working without
+# shipping a new core release.
+routes = [{ pattern = "ping.ctxfile.dev", custom_domain = true }]
+
+[[kv_namespaces]]
+binding = "PINGS"
+id = "478eeb6b26f94ca9a855d4c2490a15cd"
+
+# Platform request logs record client IPs. The application goes out of its way
+# not to look at them, so it would be incoherent to have the platform retain
+# them on our behalf.
+[observability]
+enabled = false

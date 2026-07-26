@@ -21,3 +21,9 @@ STATUS.md
 
 # Local machine config — per-user, never committed.
 .ctxfile.json
+
+# Local wrangler secrets for apps/ping — never committed.
+.dev.vars
+
+# Local wrangler dev state (miniflare KV/cache) — never committed.
+.wrangler/

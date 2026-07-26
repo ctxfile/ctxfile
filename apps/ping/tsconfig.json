@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // Wrangler bundles this rather than resolving it as Node ESM, and the
+    // runtime is Cloudflare's, not Node's — so both the module resolution and
+    // the ambient types differ from the rest of the workspace.
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "types": ["@cloudflare/workers-types"]
+  },
+  "include": ["src"]
+}
