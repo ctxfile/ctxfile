@@ -10,6 +10,7 @@ export interface NavLink {
 const DEFAULT_LINKS: NavLink[] = [
   { href: "/docs", label: "Docs" },
   { href: "/pricing", label: "Pricing" },
+  { href: "/blog", label: "Blog" },
   { href: "/changelog", label: "Changelog", hideSm: true },
 ];
 

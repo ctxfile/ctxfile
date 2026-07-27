@@ -49,6 +49,16 @@ The relay needs a public HTTPS URL; chatbots connect from their own cloud, not y
 - Free core: `get_context`, `save_session`, `continue_thread`, `list_threads`, `ingest_context`
 - Pro adds: `remember`, `recall`, `forget`, `consult`, `distill_playbook`, `list_playbooks`, `get_playbook`, `rm_playbook`, `transcribe_voice`
 
+## Guides
+
+Long-form answers to the questions that bring people here. Each ends in a runnable install.
+
+- [Share context between Claude Code and Cursor](https://ctxfile.dev/blog/share-context-between-claude-code-and-cursor): why neither tool reads the other, and how to point both at one local MCP server
+- [Claude Code /compact vs /clear](https://ctxfile.dev/blog/claude-code-compact-vs-clear): what each command does, when to use which, and the cross-session gap neither closes
+- [Switch from Cursor to Claude Code without losing context](https://ctxfile.dev/blog/switch-cursor-to-claude-code-without-losing-context): what does not transfer (`.cursor/rules/*.mdc` vs `CLAUDE.md`) and how to carry working state across
+- [Connect an Obsidian vault to any AI agent](https://ctxfile.dev/blog/connect-obsidian-vault-to-ai-agents): read-only vault connector, tiered note selection, and the privacy rules
+- [Build a local-first MCP server in TypeScript](https://ctxfile.dev/blog/build-local-first-mcp-server-typescript): stdio transport, Zod-validated tools, deny-paths and redaction
+
 ## Source
 
 - [GitHub](https://github.com/ctxfile/ctxfile): the open-source core, relay, and dashboard

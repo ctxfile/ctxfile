@@ -7,6 +7,7 @@ import { SiteFooter } from "@/components/SiteFooter";
 import { SiteNav } from "@/components/SiteNav";
 import { SnapshotDemo } from "@/components/SnapshotDemo";
 import { SpotlightGrid } from "@/components/SpotlightGrid";
+import { toJsonLd } from "@/lib/jsonld";
 import Link from "next/link";
 
 const GITHUB_URL = "https://github.com/ctxfile/ctxfile";
@@ -159,7 +160,7 @@ const FAQ = [
 // ("why not CLAUDE.md", "why not the other memory servers"). Marking them up
 // lets search and answer engines quote them directly, which is the only way
 // those answers reach people who never land on the page.
-const FAQ_LD = JSON.stringify({
+const FAQ_LD = toJsonLd({
   "@context": "https://schema.org",
   "@type": "FAQPage",
   mainEntity: FAQ.map((item) => ({
@@ -178,6 +179,7 @@ export default function Home() {
         links={[
           { href: "/docs", label: "Docs" },
           { href: "/pricing", label: "Pricing" },
+          { href: "/blog", label: "Blog" },
           { href: "#features", label: "Features", hideSm: true },
           { href: "#pricing", label: "Pro", hideSm: true },
         ]}
