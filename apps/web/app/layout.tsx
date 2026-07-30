@@ -29,12 +29,14 @@ const doto = localFont({
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://ctxfile.dev"),
-  title: "ctxfile: one context, every agent, all local",
-  // Leads with portability, not memory: "memory for your AI" is a crowded,
-  // vendor-locked category, and what actually distinguishes ctxfile in a search
-  // result or a shared link is that the context moves between agents.
+  title: "ctxfile: project context, committed to your repo",
+  // Leads with the artifact, not with portability. "Portable across agents" is
+  // what MCP already is, so it reads as table stakes; the versioned file living
+  // in the repo (rather than in a vendor's history or a hosted relay) is the
+  // part nothing else does, and it is what survives a cold read of a search
+  // result or a shared link.
   description:
-    "Carry your project's working state between AI agents. One local context object — plan, files, git, sessions — that Claude Code, Cursor, and Codex all load. Open source.",
+    "Your project's working state as one versioned file in your repo: plan, key files, git, session digests. Any MCP agent loads it, Claude Code, Cursor, Codex. Clone the repo and the context is already there. Local-first and open source.",
   // "./" resolves per-route against metadataBase: every page gets its own
   // canonical without per-page boilerplate.
   alternates: { canonical: "./" },
@@ -57,7 +59,7 @@ const JSON_LD = JSON.stringify([
     applicationCategory: "DeveloperApplication",
     operatingSystem: "macOS, Linux, Windows",
     description:
-      "Local-first MCP server that snapshots a project's working state into one context object any AI agent can load. Open-source core; Pro adds session connectors, encrypted memory, consult, and playbooks.",
+      "Local-first MCP server that snapshots a project's working state into one versioned context file in the repo, loadable by any AI agent. Open-source core; Pro adds session connectors, encrypted memory, consult, and playbooks.",
     url: "https://ctxfile.dev",
     downloadUrl: "https://www.npmjs.com/package/ctxfile",
     softwareHelp: "https://ctxfile.dev/docs",

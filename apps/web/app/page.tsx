@@ -189,7 +189,7 @@ export default function Home() {
         <section className="wrap hero" id="install">
           <div>
             <p className="eyebrow enter" style={{ animationDelay: "0ms" }}>
-              Your context belongs to you, not to your chatbot
+              One context file, versioned in your repo
             </p>
             <h1 className="enter" style={{ animationDelay: "70ms" }}>
               Stop <span className="strike">re&#8209;explaining</span> your project to{" "}
@@ -197,8 +197,9 @@ export default function Home() {
             </h1>
             <p className="hero-sub enter" style={{ animationDelay: "140ms" }}>
               You spend hours in Cursor, switch to Claude for a hard problem, come back and&hellip; start
-              over. <strong>ctxfile makes your context travel with you:</strong> plan, files, git, sessions,
-              loaded by any agent, any model. <strong>All local. Open source.</strong>
+              over. <strong>ctxfile writes your working state into one versioned file in your repo:</strong>{" "}
+              plan, key files, git, session digests, loaded by any MCP agent. Clone the repo and the context
+              is already there. <strong>All local. Open source.</strong>
             </p>
             <div className="hero-ctas enter" style={{ animationDelay: "210ms" }}>
               <HeroSetup />

@@ -27,3 +27,6 @@ STATUS.md
 
 # Local wrangler dev state (miniflare KV/cache) — never committed.
 .wrangler/
+
+# Local scratch, never committed.
+.local-notes/
