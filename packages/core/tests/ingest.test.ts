@@ -170,6 +170,24 @@ describe("harness inference from client names", () => {
     expect(inferHarnessFromClientName(undefined)).toBe("custom:unknown-client");
     expect(inferHarnessFromClientName("!!!")).toBe("custom:unknown-client");
   });
+
+  it("resolves clients whose name does not contain the product name", () => {
+    // Observed live: Grok's connector introduces itself as "connectors-manager",
+    // which used to file real Grok sessions as custom:connectors-manager.
+    expect(inferHarnessFromClientName("connectors-manager")).toBe("grok");
+    expect(inferHarnessFromClientName("Connectors Manager")).toBe("grok");
+    expect(inferHarnessFromClientName("claude-ai")).toBe("claude");
+  });
+
+  it("looks past launcher paths, executable suffixes, and mcp noise", () => {
+    expect(inferHarnessFromClientName("/usr/local/bin/claude-code")).toBe("claude-code");
+    expect(inferHarnessFromClientName("C:\\tools\\Cursor.EXE")).toBe("cursor");
+    expect(inferHarnessFromClientName("opencode.cmd")).toBe("opencode");
+    expect(inferHarnessFromClientName("aider-mcp-client")).toBe("aider");
+    expect(inferHarnessFromClientName("hermes-connector")).toBe("hermes");
+    // A name that is only noise must not be stripped down to nothing.
+    expect(inferHarnessFromClientName("-mcp")).toBe("custom:mcp");
+  });
 });
 
 describe("IngestStore", () => {

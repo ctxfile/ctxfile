@@ -433,17 +433,63 @@ const CLIENT_NAME_HINTS: [hint: string, harness: string][] = [
   ["hermes", "hermes"],
 ];
 
-/** Maps an MCP client's advertised name to a harness id, so save_session
-    callers never have to know our enum. Unknown clients become custom:<name>. */
-export function inferHarnessFromClientName(clientName: string | undefined): string {
-  const sanitized = (clientName ?? "")
+/** Clients whose advertised name says nothing about the product they belong to.
+    Grok's connector calls itself "connectors-manager", so without this table a
+    real Grok session is filed as custom:connectors-manager and looks like it
+    came from nowhere. Matched on the whole name, before the substring hints, so
+    a coincidental hint can never override a known alias. */
+const CLIENT_NAME_ALIASES: Record<string, string> = {
+  "connectors-manager": "grok",
+  "claude-ai": "claude",
+  "mcp-remote": "claude",
+};
+
+/** Noise some clients append to an otherwise recognizable name. Stripped only
+    from the end, so "mcp-remote" (a real alias) survives intact. */
+const CLIENT_NAME_SUFFIXES = ["-mcp-client", "-mcp-server", "-mcp", "-client", "-connector"];
+
+/** Reduces whatever a client advertised to a comparable identity: a bare
+    lowercase name. Clients report anything from "Cursor" to a launcher path
+    like "C:\\tools\\claude-code.EXE", and all of those are the same product. */
+function normalizeClientName(clientName: string | undefined): string {
+  return (clientName ?? "")
+    .trim()
+    .replace(/\\/g, "/")
+    .replace(/\/+$/, "")
+    .split("/")
+    .pop()!
+    .replace(/\.(exe|cmd|bat|sh)$/i, "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 32)
     .replace(/-+$/, "");
+}
+
+/** An exact identity match: the enum itself, then the alias table. */
+function resolveExact(name: string): string | null {
+  if ((KNOWN_HARNESSES as readonly string[]).includes(name)) return name;
+  return CLIENT_NAME_ALIASES[name] ?? null;
+}
+
+/** Maps an MCP client's advertised name to a harness id, so save_session
+    callers never have to know our enum. Unknown clients become custom:<name>. */
+export function inferHarnessFromClientName(clientName: string | undefined): string {
+  const sanitized = normalizeClientName(clientName);
   if (!sanitized || !/^[a-z0-9]/.test(sanitized)) return "custom:unknown-client";
-  if ((KNOWN_HARNESSES as readonly string[]).includes(sanitized)) return sanitized;
+
+  const exact = resolveExact(sanitized);
+  if (exact) return exact;
+
+  // Only shed trailing noise when what remains is a harness we actually know.
+  // A client legitimately called "test-client" must stay "test-client", not
+  // become "test".
+  for (const suffix of CLIENT_NAME_SUFFIXES) {
+    if (!sanitized.endsWith(suffix) || sanitized.length <= suffix.length) continue;
+    const trimmed = resolveExact(sanitized.slice(0, -suffix.length));
+    if (trimmed) return trimmed;
+  }
+
   const hint = CLIENT_NAME_HINTS.find(([needle]) => sanitized.includes(needle));
   if (hint) return hint[1];
   return `custom:${sanitized}`;
