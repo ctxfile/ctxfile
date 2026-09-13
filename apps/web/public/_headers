@@ -1,0 +1,6 @@
+# Next writes the social cards without an extension; Pages guesses octet-stream
+# and link scrapers then ignore the image. Pin the type.
+/opengraph-image
+  Content-Type: image/png
+/blog/*/opengraph-image
+  Content-Type: image/png
