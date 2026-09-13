@@ -1,4 +1,5 @@
 import { Component, type ReactNode } from "react";
+import { Icon } from "./Icon";
 
 interface ErrorBoundaryProps {
   /** Reset the boundary when this changes (e.g. active view id). */
@@ -31,17 +32,23 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   override render(): ReactNode {
     if (this.state.error !== null) {
       return (
-        <div className="empty-state view-error" role="alert">
-          <div className="empty-title">This view hit an unexpected error</div>
-          <div className="empty-body">Switching views or refreshing usually clears it.</div>
-          <div className="empty-action">
-            <button
-              type="button"
-              className="btn"
-              onClick={() => this.setState({ error: null, keyAtError: null })}
-            >
-              Try again
-            </button>
+        <div className="view">
+          <div className="empty-state view-error" role="alert">
+            <div className="empty-icon" aria-hidden="true">
+              <Icon name="alert" size={22} />
+            </div>
+            <div className="empty-title">This view hit an unexpected error</div>
+            <div className="empty-body">Switching views or refreshing usually clears it.</div>
+            <div className="empty-action">
+              <button
+                type="button"
+                className="btn"
+                onClick={() => this.setState({ error: null, keyAtError: null })}
+              >
+                <Icon name="refresh" size={14} />
+                Try again
+              </button>
+            </div>
           </div>
         </div>
       );

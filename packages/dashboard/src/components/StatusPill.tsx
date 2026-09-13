@@ -9,6 +9,7 @@ const LABELS: Record<PillStatus, string> = {
   pending: "pending",
 };
 
+/** LED status pill: a lit dot plus a short caps label. */
 export function StatusPill({ status, label }: { status: PillStatus; label?: string }) {
   return (
     <span className={`pill pill-${status}`} data-status={status}>
