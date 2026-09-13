@@ -245,25 +245,21 @@ svg {
   inset: 0;
   z-index: -1;
   pointer-events: none;
-  background:
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.04 0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E"),
     radial-gradient(900px 520px at 18% -10%, var(--bg-glow-a), transparent 65%),
     radial-gradient(700px 480px at 92% 6%, var(--bg-glow-b), transparent 65%),
     radial-gradient(760px 620px at 60% 110%, var(--bg-glow-c), transparent 65%),
     linear-gradient(180deg, var(--bg), var(--bg-2));
 }
 
-.atmosphere::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  opacity: 0.35;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.05 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
-  mix-blend-mode: overlay;
-}
-
-:root[data-theme="light"] .atmosphere::after {
-  opacity: 0.25;
-  mix-blend-mode: multiply;
+:root[data-theme="light"] .atmosphere {
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.035 0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E"),
+    radial-gradient(900px 520px at 18% -10%, var(--bg-glow-a), transparent 65%),
+    radial-gradient(700px 480px at 92% 6%, var(--bg-glow-b), transparent 65%),
+    radial-gradient(760px 620px at 60% 110%, var(--bg-glow-c), transparent 65%),
+    linear-gradient(180deg, var(--bg), var(--bg-2));
 }
 
 /* ---------- shared primitives ---------- */
@@ -822,24 +818,13 @@ svg {
   position: relative;
   padding: 18px;
   border-radius: var(--radius-xl);
-  background: var(--surface-0);
+  background:
+    radial-gradient(60% 60% at 20% 15%, var(--bg-glow-b), transparent 70%),
+    radial-gradient(60% 60% at 85% 90%, var(--bg-glow-a), transparent 70%),
+    var(--surface-0);
   border: 1px solid var(--line);
   box-shadow: var(--glass-edge), var(--shadow-lg);
   overflow: hidden;
-}
-
-.hero-frame::before {
-  content: "";
-  position: absolute;
-  inset: -40%;
-  background:
-    radial-gradient(40% 40% at 30% 30%, var(--bg-glow-b), transparent 70%),
-    radial-gradient(40% 40% at 70% 70%, var(--bg-glow-a), transparent 70%);
-  pointer-events: none;
-}
-
-.hero-frame > * {
-  position: relative;
 }
 
 /* hero setup: pick your agent, copy one command */
@@ -914,6 +899,7 @@ svg {
 
 .install-cmd {
   flex: 1;
+  text-align: left;
   color: var(--code-text);
   white-space: nowrap;
   overflow-x: auto;
@@ -997,9 +983,14 @@ svg {
   align-items: center;
   gap: 18px;
   padding-bottom: 72px;
+}
+
+.works-marquee {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
-  -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
-  mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
 }
 
 .works-label {
@@ -1715,7 +1706,7 @@ section {
   font-family: var(--font-mono);
   font-size: 11.5px;
   color: var(--text-2);
-  background: var(--surface-2);
+  background: var(--surface-solid-2);
   border: 1px solid var(--line);
   transition: color var(--dur) var(--ease), background var(--dur) var(--ease), border-color var(--dur) var(--ease);
 }
@@ -1724,7 +1715,7 @@ section {
 .pre-copy:hover,
 .cs-copy:hover {
   color: var(--text);
-  background: var(--surface-3);
+  border-color: var(--line-strong);
 }
 
 .code-copy[data-copied="true"],
@@ -3318,6 +3309,23 @@ footer {
     font-size: clamp(32px, 9.5vw, 42px);
   }
 
+  .strike {
+    white-space: normal;
+    text-decoration: line-through;
+    text-decoration-color: var(--accent);
+    text-decoration-thickness: 0.08em;
+  }
+
+  .strike::after {
+    display: none;
+  }
+
+  .docs-side {
+    margin: 0 -18px;
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+
   .hero-sub {
     font-size: 16px;
   }
@@ -3443,7 +3451,7 @@ footer {
     transform: scaleX(1);
   }
 
-  .works-with {
+  .works-marquee {
     -webkit-mask-image: none;
     mask-image: none;
   }

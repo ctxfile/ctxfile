@@ -4,7 +4,7 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "Dashboard",
   description:
-    "The ctxfile ui local dashboard: live snapshot runs, context explorer, git, sessions, memory, consult, settings, and how its security works.",
+    "The ctxfile ui local dashboard: live snapshot runs, context explorer, git, sessions, memory, playbooks, consult, settings, and how its security works.",
 };
 
 export default function Dashboard() {
@@ -50,29 +50,48 @@ ctxfile ui --port 5000    # explicit port (default 4747)`}</code>
             <tr>
               <td>Context</td>
               <td>
-                The captured ContextObject as a browsable tree: plan, every key file with its token count and
-                redactions, git state, Notion pages, sessions. Scope switch (full / plan / files / git), raw
-                JSON view, and &ldquo;Copy as agent payload&rdquo;.
+                The captured ContextObject as a filterable, virtualised tree: plan, every key file with its
+                token count and redactions, git state, Notion pages, notes, sessions. Files open in a
+                syntax-coloured view with line numbers and wrap; plan, notes, and session text render as
+                Markdown; the JSON view is collapsible. Scope switch (full / plan / files / git) and
+                &ldquo;Copy payload&rdquo;.
               </td>
             </tr>
             <tr>
               <td>Git</td>
-              <td>Staged / modified / untracked columns, recent commits, and the diff summary.</td>
+              <td>
+                Staged / modified / untracked columns, a commit timeline, and the diff summary as diffstat bars
+                with a raw toggle.
+              </td>
             </tr>
             <tr>
               <td>Sessions (Pro)</td>
-              <td>Claude Code and Cursor session digests, with source, turn count, and last activity.</td>
+              <td>
+                Session digests from every connected tool, grouped by day, with per-source filters and search.
+                Each shows source, turn count, and last activity.
+              </td>
             </tr>
             <tr>
               <td>Memory (Pro)</td>
               <td>
-                Every memory entry grouped by the agent that wrote it, with provenance and timestamps. Filter,
-                and forget (permanently delete) any entry behind a confirmation.
+                Every memory entry grouped by the agent that wrote it, collapsible per agent, with provenance
+                and timestamps. Search highlights matches; forget (permanently delete) any entry behind a
+                confirmation.
+              </td>
+            </tr>
+            <tr>
+              <td>Playbooks (Pro)</td>
+              <td>
+                Reusable prompts distilled from your sessions: filter, copy, expand, remove; placeholders like{" "}
+                <code>&lt;feature&gt;</code> are highlighted so you know what to fill in.
               </td>
             </tr>
             <tr>
               <td>Consult (Pro)</td>
-              <td>Ask your configured providers a question; answers stream in side-by-side columns.</td>
+              <td>
+                Ask your configured providers a question; answers stream as Markdown in side-by-side columns,
+                with a Stop button and suggested questions to start from.
+              </td>
             </tr>
             <tr>
               <td>Settings</td>
@@ -98,11 +117,27 @@ ctxfile ui --port 5000    # explicit port (default 4747)`}</code>
           <tbody>
             <tr>
               <td>R</td>
-              <td>Run a snapshot.</td>
+              <td>Run a snapshot from any view.</td>
             </tr>
             <tr>
               <td>⌘K / Ctrl+K</td>
-              <td>Command palette: jump to any view, run a snapshot, switch theme.</td>
+              <td>Command palette: fuzzy search, grouped by views, actions, and settings.</td>
+            </tr>
+            <tr>
+              <td>1 – 8</td>
+              <td>Switch views.</td>
+            </tr>
+            <tr>
+              <td>/</td>
+              <td>Focus the filter in the current view.</td>
+            </tr>
+            <tr>
+              <td>[</td>
+              <td>Collapse or expand the sidebar.</td>
+            </tr>
+            <tr>
+              <td>?</td>
+              <td>Shortcuts help.</td>
             </tr>
             <tr>
               <td>Esc</td>
@@ -128,6 +163,10 @@ ctxfile ui --port 5000    # explicit port (default 4747)`}</code>
           If the <code>ctxfile ui</code> process dies, the page shows a &ldquo;server unreachable&rdquo; overlay
           and reconnects automatically when you restart it.
         </li>
+        <li>
+          The view is in the URL hash (<code>#/context</code>), so refresh and back/forward keep your place.
+        </li>
+        <li>The sidebar collapses to an icon rail and becomes a drawer on narrow screens.</li>
         <li>Dark and light themes; the toggle lives in the top bar and persists.</li>
       </ul>
     </>

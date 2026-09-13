@@ -195,7 +195,7 @@ function WorksWith() {
   return (
     <div className="wrap works-with enter" style={{ animationDelay: "380ms" }}>
       <span className="works-label">Works with</span>
-      {chips(false)}
+      <div className="works-marquee">{chips(false)}</div>
     </div>
   );
 }
