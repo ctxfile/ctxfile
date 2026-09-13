@@ -251,6 +251,42 @@ const SESSIONS = [
   },
 ];
 
+const NOTES = [
+  {
+    source: "obsidian",
+    vault: "engineering",
+    path: "Payments/Webhook verification.md",
+    title: "Webhook verification",
+    tags: ["payments", "security"],
+    modifiedAt: iso(5 * HOUR),
+    pinned: true,
+    tokens: 318,
+    truncated: false,
+    redactions: 0,
+    content:
+      "# Webhook verification\n\nWhat we learned the hard way with the previous provider:\n\n- **Verify before parse.** Never `JSON.parse` an unverified body; a malformed payload should fail closed.\n- **Replay window of 5 minutes.** Longer and retries collide; shorter and clock skew bites.\n- **Claim the event id first**, then act. The claim is what makes retries safe.\n\nSee [[Idempotency keys]] for the storage side and [[Incident 04-12]] for why this note exists.",
+    links: [
+      { title: "Idempotency keys", firstLine: "Provider event id is the key; never the order id." },
+      { title: "Incident 04-12", firstLine: "Duplicate receipts sent after a provider retry storm." },
+    ],
+  },
+  {
+    source: "obsidian",
+    vault: "engineering",
+    path: "Payments/Idempotency keys.md",
+    title: "Idempotency keys",
+    tags: ["payments"],
+    modifiedAt: iso(2 * DAY),
+    pinned: false,
+    tokens: 142,
+    truncated: false,
+    redactions: 0,
+    content:
+      "# Idempotency keys\n\nProvider event id is the key; never the order id (one order can emit several events). Store the claim in the same transaction as the side effect, or accept that a crash between the two re-sends.",
+    links: [],
+  },
+];
+
 const SESSION_SUMMARY =
   "Across three sessions the checkout flow moved from scaffolding to a verified, idempotent webhook handler. Signature verification and the event store are done; the receipt template and a load test remain. One config concern: `MAIL_FROM` is read at import time.";
 
@@ -270,11 +306,12 @@ function context(scope: ContextScope): ContextObject {
     gitState: GIT,
     notionPages: [],
     sessions: SESSIONS,
+    notes: NOTES,
     sessionSummary: SESSION_SUMMARY,
   };
-  if (scope === "plan") return { ...base, keyFiles: [], gitState: null, sessions: [], sessionSummary: null, meta: { ...base.meta, tokensUsed: 402 } };
-  if (scope === "files") return { ...base, plan: null, gitState: null, sessions: [], sessionSummary: null, meta: { ...base.meta, tokensUsed: 3_543 } };
-  if (scope === "git") return { ...base, plan: null, keyFiles: [], sessions: [], sessionSummary: null, meta: { ...base.meta, tokensUsed: 1_830 } };
+  if (scope === "plan") return { ...base, keyFiles: [], gitState: null, sessions: [], notes: [], sessionSummary: null, meta: { ...base.meta, tokensUsed: 402 } };
+  if (scope === "files") return { ...base, plan: null, gitState: null, sessions: [], notes: [], sessionSummary: null, meta: { ...base.meta, tokensUsed: 3_543 } };
+  if (scope === "git") return { ...base, plan: null, keyFiles: [], sessions: [], notes: [], sessionSummary: null, meta: { ...base.meta, tokensUsed: 1_830 } };
   return base;
 }
 

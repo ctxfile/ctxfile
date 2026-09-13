@@ -1,4 +1,5 @@
 import { ArticleBody } from "@/components/blog/ArticleBody";
+import { PostEngagement } from "@/components/blog/PostEngagement";
 import { CopyBlocks } from "@/components/CopyBlocks";
 import { SiteFooter } from "@/components/SiteFooter";
 import { SiteNav } from "@/components/SiteNav";
@@ -136,7 +137,23 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
 
           <ArticleBody markdown={post.body} />
 
+          <aside className="post-cta" aria-label="Try ctxfile">
+            <p>
+              <strong>See it before you install it.</strong> The live demo runs the real dashboard over a sample
+              project, snapshot runs and all.
+            </p>
+            <div className="post-cta-actions">
+              <a className="btn-ghost" href="/demo/">
+                Open the live demo →
+              </a>
+              <Link className="nav-cta" href="/docs">
+                Quickstart
+              </Link>
+            </div>
+          </aside>
+
           <hr className="post-rule" />
+          <PostEngagement slug={post.slug} />
 
           <aside className="post-related">
             <h2>Keep reading</h2>

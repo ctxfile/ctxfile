@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { Fragment, type ReactNode } from "react";
+import { ContextPreview } from "../ContextPreview";
+import { SnapshotDemo } from "../SnapshotDemo";
 import { PlaybookDistillDemo } from "./PlaybookDistillDemo";
 
 /**
@@ -43,6 +45,16 @@ const DEMO_LINE = /^::demo:([a-z-]+)::$/;
 /** Embedded, interactive product demos a post can place with `::demo:name::`. */
 const DEMOS: Record<string, () => ReactNode> = {
   "playbook-distill": () => <PlaybookDistillDemo />,
+  snapshot: () => (
+    <div className="post-demo">
+      <SnapshotDemo />
+    </div>
+  ),
+  payload: () => (
+    <div className="post-demo">
+      <ContextPreview />
+    </div>
+  ),
 };
 
 /** Returns the fence marker a line opens with, or null if it opens none. */

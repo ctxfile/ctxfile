@@ -52,7 +52,7 @@ const MONTH_MS = 30 * 24 * 60 * 60 * 1000;
 /** Only the marketing site may report events; the browser enforces this via CORS. */
 const EVENT_ORIGINS = new Set(["https://ctxfile.dev", "https://www.ctxfile.dev"]);
 /** Event names are a closed set so the store cannot be filled with junk. */
-const EVENT_NAMES = new Set(["setup-copied", "extension-downloaded", "demo-opened", "pricing-cta"]);
+const EVENT_NAMES = new Set(["setup-copied", "extension-downloaded", "demo-opened", "pricing-cta", "post-read", "post-cta"]);
 
 function readString(value: unknown, maxLength: number): string | null {
   if (typeof value !== "string") return null;

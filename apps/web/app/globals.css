@@ -3803,3 +3803,43 @@ footer {
     animation: none;
   }
 }
+
+/* ---------- blog: embedded product demos ---------- */
+
+.post-demo {
+  margin: 28px 0;
+}
+
+.post-demo .demo,
+.post-demo .payload {
+  margin: 0;
+}
+
+.post-cta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 32px 0 8px;
+  padding: 18px 20px;
+  border-radius: 14px;
+  border: 1px solid var(--line-accent);
+  background: linear-gradient(135deg, var(--accent-soft), transparent 60%), var(--surface-1);
+}
+
+.post-cta p {
+  margin: 0;
+  font-size: 15px;
+  color: var(--text-2);
+}
+
+.post-cta p strong {
+  color: var(--text);
+}
+
+.post-cta-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}

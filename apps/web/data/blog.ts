@@ -190,6 +190,20 @@ The result appears in the dashboard and in every connected client's prompt list.
     date: "2026-09-13",
     readTime: "7 min read",
     primaryKeyword: "claude code memory across sessions",
+    faq: [
+      {
+        q: "Does Claude Code remember previous sessions?",
+        a: "Only three things persist: CLAUDE.md instruction files, the auto-memory notes Claude Code chooses to save, and past conversations you reopen with /resume. The current plan, the files you were in, what you decided, and your git state are rebuilt from scratch each session.",
+      },
+      {
+        q: "Should I put project state in CLAUDE.md?",
+        a: "No. CLAUDE.md is the right home for standing rules, and it drifts the moment you stop editing it. State changes daily and should be read from the project instead: that is what a context snapshot does.",
+      },
+      {
+        q: "How do I give Claude Code memory that also works in Cursor?",
+        a: "Use a local MCP server both tools can read. ctxfile snapshots the plan, ranked key files, git state and session digests into one object; Claude Code, Cursor, Codex and any other MCP client load the same one, so the memory is not locked inside a single tool.",
+      },
+    ],
     body: `You close the terminal on Friday with a plan half executed. On Monday, Claude Code opens fresh, reads your repository, and asks what you would like to work on. The plan, the three decisions you made on Thursday, the file you were in the middle of, the test that was failing: none of it is there.
 
 This is not a bug. It is how the tool is built, and once you know exactly what persists and what does not, the fix is small.
@@ -232,6 +246,10 @@ That is working state. It changes every day, it lives in the project, and it can
 
 [ctxfile](/) is a local MCP server that snapshots exactly that set into one structured object and serves it to any MCP client. Claude Code calls \`get_context\` at the start of a session and starts already knowing the plan, the key files, the git state, and the last session's digest. Nothing leaves your machine; the default path makes zero network calls.
 
+A snapshot takes about two seconds. This is a replay of a real run:
+
+::demo:snapshot::
+
 Install once and register it with Claude Code from your project directory:
 
 ~~~bash
@@ -251,6 +269,14 @@ From then on, a new session opens with the context already loaded. Ask it what y
 Friday, 6pm. You have been in Claude Code for two hours on a webhook handler. You reach a stopping point and the agent checkpoints: plan, files touched, three decisions, two open items.
 
 Monday, 9am. New session. "Continue." Claude Code loads the context object and replies with the open items, the branch you are on, and the file you stopped in. No re-explaining.
+
+This is the session history the new session reads, as the dashboard shows it:
+
+![The ctxfile Sessions view with digests from Claude Code, Cursor, and Codex grouped by day, each listing decisions and open items](/blog/context/sessions.jpg "Friday's session, digested: what was implemented, what was decided, what is still open. Monday's session starts here.")
+
+Git state travels the same way, so the new session knows what is staged, modified, and untracked without being told:
+
+![The ctxfile Git view: staged, modified and untracked columns, a commit timeline, and a diff summary with insertion and deletion bars](/blog/context/git.jpg "Branch, uncommitted changes, recent commits, and the diff summary, captured at snapshot time.")
 
 Tuesday. The refactor is gnarly and you would rather do it in Cursor. Cursor is an MCP client too, so it loads the same object and starts from the same facts. Wednesday, Codex reviews the diff with the same context. Three tools, one memory, and the memory is yours: it is a file in your repository, not a vendor's chat history.
 
@@ -277,6 +303,20 @@ This reduces the reconstruction work at the start of every session. It does not 
     metaDescription:
       "Claude Code and Cursor keep separate context and cannot read each other. Here is how to connect both to one local, shared context layer so your plan, files and git state travel between them.",
     primaryKeyword: "share context between Claude Code and Cursor",
+    faq: [
+      {
+        q: "Can Claude Code and Cursor share the same project context?",
+        a: "Yes. Both are MCP clients, so both can read from one local MCP server. ctxfile reads the project directly and returns the same structured object (plan, ranked key files, git state, session digests) to whichever tool asks, with no copy-paste between them.",
+      },
+      {
+        q: "Does symlinking CLAUDE.md and .cursor/rules solve it?",
+        a: "Only partly. Symlinked files share instructions you wrote by hand. They do not share working state such as the current plan, uncommitted changes, or what the last session decided, because that state was never in those files.",
+      },
+      {
+        q: "Does my code leave my machine when both tools share context?",
+        a: "No. ctxfile makes zero network calls by default. Files matching denied patterns such as .env are never read, and secret-shaped strings are redacted before anything enters a snapshot. The core is Apache-2.0 so the claim can be checked.",
+      },
+    ],
     category: "Workflows",
     date: "2026-07-26",
     readTime: "8 min read",
@@ -309,6 +349,10 @@ Claude Code and Cursor are both [Model Context Protocol](https://modelcontextpro
 So instead of syncing two config formats, point both tools at one server that reads your project directly and hands back the same structured object to whoever asks.
 
 That is what ctxfile does. It runs locally, reads your repository, and exposes the result over MCP. Claude Code calls it. Cursor calls it. They get the same answer.
+
+This is the object both tools receive. Switch the scope tabs to see how much travels for each kind of call:
+
+::demo:payload::
 
 ## Setting it up
 
@@ -369,6 +413,12 @@ The context object is structured, not a blob of text:
 
 Everything carries provenance, so a downstream agent can tell what was read by a parser and what was reported by another agent.
 
+The dashboard shows the same object the agents get, so you can check what will travel before either tool loads it:
+
+![The ctxfile Context view: a tree of key files with token counts and redaction badges, git state, vault notes, and sessions from Claude Code, Cursor, and Codex, with a TypeScript file open in a syntax-coloured viewer](/blog/context/context-file.jpg "The Context view in the ctxfile dashboard. Every key file shows its token cost and redactions; the sessions group lists what Claude Code, Cursor, and Codex each did.")
+
+You can click through this view in the [live demo](/demo/#/context) without installing anything.
+
 ## An honest boundary
 
 This reduces reconstruction work. It does not give you perfect memory, and it does not make two different models behave identically. Claude and whatever powers your Cursor session will still reach different conclusions sometimes, because they are different models. What changes is that they start from the same facts instead of from nothing.
@@ -404,6 +454,20 @@ The [client setup docs](/docs/clients) cover Codex CLI, Gemini CLI, OpenCode, Ai
     metaDescription:
       "What /compact and /clear really do in Claude Code, when to use each, and how to keep your working state across sessions and across tools once the window resets.",
     primaryKeyword: "Claude Code /compact vs /clear",
+    faq: [
+      {
+        q: "What is the difference between /compact and /clear in Claude Code?",
+        a: "/compact replaces the conversation so far with a summary and keeps the session going; it is lossy and it costs tokens to produce. /clear empties the context window entirely and reloads your project instructions. Use /compact mid-task when the window is filling up, and /clear on a genuine task switch.",
+      },
+      {
+        q: "Does CLAUDE.md survive /clear?",
+        a: "Yes. CLAUDE.md is reloaded at the start of every session and after /clear. It holds instructions you maintain by hand; it does not hold working state such as what you decided last session or what is uncommitted right now.",
+      },
+      {
+        q: "How do I keep working state across Claude Code sessions?",
+        a: "Snapshot it from the project rather than from memory. ctxfile is a local MCP server that captures the plan, ranked key files, git state and session digests, and serves them to Claude Code or any other MCP client at the start of the next session.",
+      },
+    ],
     category: "Claude Code",
     date: "2026-07-26",
     readTime: "7 min read",
@@ -467,6 +531,10 @@ The missing layer is a snapshot of working state that outlives the session and i
 
 ctxfile is a local MCP server that builds one. It reads the project directly — plan, ranked key files, git state, session digests, threads — and serves it to any MCP client that asks.
 
+A snapshot takes about two seconds. This is a replay of a real run, in the same event format the dashboard streams:
+
+::demo:snapshot::
+
 ~~~bash
 npm install -g ctxfile
 ctxfile init
@@ -484,6 +552,10 @@ The workflow becomes:
 2. At a natural stopping point, let the agent checkpoint the session.
 3. Tomorrow, in a new session, ask it to load the project context. It calls \`get_context\` and starts with the plan, the decisions and the git state already in hand.
 4. Or open a different tool entirely and type **Continue.**
+
+What a checkpointed session looks like the next morning, in the dashboard:
+
+![The ctxfile Sessions view: a session summary at the top, then digests from Claude Code, Cursor, and Codex grouped by day, each with turn count, duration, decisions, and open items](/blog/context/sessions.jpg "Session digests grouped by day. The decisions and open items survive /clear, the end of the session, and a switch to another tool.")
 
 Because the snapshot is rebuilt on every call rather than hand-maintained, it does not drift the way a \`CLAUDE.md\` does. It reports the branch you are actually on, not the one you were on when you last remembered to edit the file.
 
@@ -514,6 +586,20 @@ Zero network calls by default, no account, Apache-2.0. See the [threads and hand
     metaDescription:
       "Moving from Cursor to Claude Code? Your rules, decisions and working state do not transfer automatically. Here is exactly what is lost and how to carry your context across.",
     primaryKeyword: "switch from Cursor to Claude Code",
+    faq: [
+      {
+        q: "What do I lose when I switch from Cursor to Claude Code?",
+        a: "Your .cursor/rules files (Claude Code reads CLAUDE.md instead), Cursor's workspace index, and everything in Cursor's chat history: the decisions, the ruled-out approaches, and where you had got to. The rules take twenty minutes to rewrite; the decisions are the expensive part.",
+      },
+      {
+        q: "Can I use Cursor and Claude Code on the same project at the same time?",
+        a: "Yes, and most people end up doing exactly that. Register both as MCP clients of one local ctxfile server and each one starts from the same plan, key files, git state and session digests, so moving between them costs nothing.",
+      },
+      {
+        q: "Is switching reversible?",
+        a: "When context belongs to the project rather than to a tool, yes. Nothing you built up is locked inside Claude Code, so going back to Cursor is a no-op.",
+      },
+    ],
     category: "Workflows",
     date: "2026-07-26",
     readTime: "7 min read",
@@ -582,6 +668,10 @@ Open it and type **Continue.**
 
 It calls \`get_context\`, and starts with the plan, the ranked key files, the git state and the decisions from your Cursor sessions already loaded. You did not rewrite anything.
 
+Sessions from Cursor, Claude Code, and Codex sit side by side in the dashboard, grouped by day. The tool you open next reads all of them:
+
+![The ctxfile Sessions view showing digests from Claude Code, Cursor, and Codex on different days, with per-source filters and a session summary](/blog/context/sessions.jpg "Three tools, one session history. The filters at the top narrow to a single source; the summary at the top is what a fresh session reads first.")
+
 ## You probably want both anyway
 
 The framing of "switching" is usually wrong. The two tools are good at different things: Cursor for inline edits and tight review loops, Claude Code for longer autonomous runs in the terminal. Most people who try to pick one end up using both.
@@ -600,6 +690,10 @@ It also means the decision is reversible. If Claude Code does not suit you, goin
 - Notion pages and Obsidian notes, if connected
 
 Each entry is tagged with its source, so an agent can tell what a parser read from what another agent reported.
+
+Here is the shape of the object, scope by scope. The \`full\` scope is what a fresh Claude Code session asks for:
+
+::demo:payload::
 
 ## The boundary worth stating
 
@@ -628,6 +722,20 @@ Register both tools, then type **Continue** in whichever one you opened second. 
     metaDescription:
       "Give Claude Code, Cursor and any MCP agent read-only access to your Obsidian vault. Local, no sync, no upload: ranked note selection that puts the right notes in context.",
     primaryKeyword: "connect Obsidian to AI agent",
+    faq: [
+      {
+        q: "Can Claude Code or Cursor read my Obsidian vault?",
+        a: "Through ctxfile, yes, read-only. The vault connector reads any local folder of Markdown, ranks notes by pins, relevance to your recent threads, wikilink neighbours and recency, and includes the selected notes in the context object every MCP client loads.",
+      },
+      {
+        q: "Is my vault uploaded anywhere?",
+        a: "No. Notes are read from disk when a snapshot is built and never synced. They are excluded from repo-safe exports, pass through the same secret redaction as everything else, and the default path makes zero network calls.",
+      },
+      {
+        q: "Do I need Obsidian installed?",
+        a: "No. The connector reads plain Markdown files. ctxfile init looks for a nearby .obsidian directory to offer a vault automatically, but any folder of notes can be configured explicitly.",
+      },
+    ],
     category: "Connectors",
     date: "2026-07-26",
     readTime: "8 min read",
@@ -696,6 +804,12 @@ Selected notes arrive as a \`notes[]\` section inside the context object, each s
 
 In practice: ask your agent why the sync layer is designed the way it is, and instead of guessing from the implementation, it answers from the note where you worked it out.
 
+This is what a selected note looks like in the dashboard, rendered from the same object the agent receives:
+
+![A vault note open in the ctxfile Context view: the note rendered as Markdown with its tags, a pinned badge, token count, and two linked notes previewed underneath](/blog/context/context-note.jpg "A pinned vault note inside the context, with its tags and one-hop wikilink previews. The agent sees this section stamped source: obsidian.")
+
+Try it in the [live demo](/demo/#/context): the notes group sits between git state and sessions.
+
 ## The privacy rules, precisely
 
 This is a read-only connector and the constraints are deliberately strict:
@@ -734,6 +848,20 @@ Free, Apache-2.0, local. Then ask your agent something only your notes know, and
     metaDescription:
       "Build an MCP server in TypeScript that makes zero network calls: stdio transport, Zod-validated tools, secret redaction and deny-paths. With a working example you can run.",
     primaryKeyword: "build local-first MCP server TypeScript",
+    faq: [
+      {
+        q: "What makes an MCP server local-first?",
+        a: "It runs on the user's machine, talks to the client over stdio rather than a network port, reads data that is already on disk, and makes no outbound calls unless the user opts in. Deny-paths and secret redaction keep credentials out of anything the model sees.",
+      },
+      {
+        q: "When should an MCP server use HTTP instead of stdio?",
+        a: "Only when the client is not on the same machine: a browser-based chat product, a CI job, or a hosted agent. That changes the security model, so bind to loopback by default and require an explicit opt-in for anything wider.",
+      },
+      {
+        q: "Is there a working example of a local-first MCP server?",
+        a: "ctxfile is an Apache-2.0 local-first MCP server built on these rules. It snapshots a project's plan, key files, git state and session digests and serves them to any MCP client with zero network calls by default.",
+      },
+    ],
     category: "Engineering",
     date: "2026-07-26",
     readTime: "10 min read",
@@ -880,6 +1008,10 @@ You need HTTP when the client is not on the machine — a browser-based chat pro
 
 Things worth reading in it: the redaction pass and deny-path handling, the token-budgeted file selection (choosing which files matter is most of the difficulty), and the export path, which produces a repo-safe context file containing a manifest of key files rather than their contents.
 
+What the rules above look like once they are running. Every number here comes from a local run; the redaction count is the deny-path and secret-scrubbing pass doing its job:
+
+![The ctxfile dashboard Overview after a snapshot: a token budget gauge, connector timing bars for file, git, notion, ollama and sessions, counts for key files and redactions, a usage chart, and the heaviest files](/blog/context/overview.jpg "The Overview of a local-first server: connector timing, token budget against a 50k limit, redactions counted, and the files that cost the most.")
+
 ## Shipping it
 
 Publish to npm so people can install it without cloning, then list it on the [MCP Registry](https://modelcontextprotocol.io) so clients can discover it.
@@ -888,12 +1020,16 @@ Two things to get right in the README: the exact registration command for each c
 
 ## Try one that already works
 
+A snapshot run, replayed in the wire format the real server streams to its dashboard (connector:start, connector:done, tokens, done):
+
+::demo:snapshot::
+
 ~~~bash
 npm install -g ctxfile
 ctxfile init
 ~~~
 
-Zero network calls by default, Apache-2.0, and the [source](https://github.com/ctxfile/ctxfile) is there to read.`,
+Zero network calls by default, Apache-2.0, and the [source](https://github.com/ctxfile/ctxfile) is there to read. The [live demo](/demo/) runs the dashboard over a sample project if you want to see the output before you build your own.`,
   },
 ];
 

@@ -35,6 +35,8 @@ const EVENT_KEYS: Record<string, string> = {
   "Extension downloaded": "extension-downloaded",
   "Demo opened": "demo-opened",
   "Pricing CTA": "pricing-cta",
+  "Post read": "post-read",
+  "Post CTA": "post-cta",
 };
 
 const SITE_EVENTS_ENABLED =
