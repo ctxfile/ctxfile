@@ -282,7 +282,7 @@ export function ContextExplorer({ onServerGone, initialPath = null }: ContextExp
               </>
             }
           >
-            <CodeBlock code={file.content} language={file.path} title={file.path} />
+            <CodeBlock code={file.content} language={file.path} />
           </DetailFrame>
         );
       }

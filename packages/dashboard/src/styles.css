@@ -2920,8 +2920,8 @@ mark {
 }
 
 .tree-label .tree-base {
-  flex: 0 1 auto;
-  min-width: 3ch;
+  flex: 0 0 auto;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
 }
