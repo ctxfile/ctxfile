@@ -1,46 +1,82 @@
-/* ctxfile design tokens: "hardware instrument" material system.
-   Two materials everywhere:
-   - chassis: the physical device body (theme-dependent: black field / silver)
-   - screen:  dark LCD display windows where data renders (constant across themes)
-   Signal colors are LED-grade and stay vivid; text-grade variants adapt per theme. */
+/* ctxfile design tokens: "glass instrument".
+   One material system shared by the local dashboard and ctxfile.dev.
+
+   Layers (back to front):
+     canvas   the page itself: deep, slightly tinted, with soft colour fields
+     surface  translucent panels stacked on the canvas (0 = flush, 2 = raised)
+     glass    floating chrome that blurs whatever sits behind it (nav, sheets, palette)
+     signal   LED-grade status colour: vivid in both themes, never used for text blocks
+     ink      text colours; three steps of emphasis
+
+   Every colour is a token. Components never hard-code a hex. */
 
 :root {
-  /* desk the device sits on (page background, both themes) */
-  --desk: #0b0b0a;
+  /* canvas */
+  --bg: #09090b;
+  --bg-2: #0e0e11;
+  --bg-glow-a: rgba(255, 87, 20, 0.16);
+  --bg-glow-b: rgba(78, 196, 230, 0.1);
+  --bg-glow-c: rgba(184, 146, 255, 0.08);
 
-  /* chassis: black "field" edition */
-  --face: #191916;
-  --face-2: #201f1c;
-  --well: #121210;
-  --line: rgba(255, 255, 255, 0.09);
-  --line-strong: rgba(255, 255, 255, 0.2);
-  --text: #ebe9e1;
-  --text-2: #a6a396;
-  --text-3: #767263;
+  /* surfaces */
+  --surface-0: rgba(255, 255, 255, 0.025);
+  --surface-1: rgba(255, 255, 255, 0.045);
+  --surface-2: rgba(255, 255, 255, 0.075);
+  --surface-3: rgba(255, 255, 255, 0.11);
+  --surface-solid: #131316;
+  --surface-solid-2: #18181c;
+  --well: rgba(0, 0, 0, 0.35);
 
-  /* screens: constant, slightly green-black like an LCD at rest */
-  --screen: #0c0e0d;
-  --screen-2: #121514;
-  --screen-text: #dbe5d8;
-  --screen-dim: #7d887a;
-  --screen-line: rgba(214, 232, 208, 0.12);
-  --screen-green: #56df88;
-  --screen-amber: #ffc555;
-  --screen-red: #ff6b5e;
+  /* glass */
+  --glass: rgba(16, 16, 20, 0.72);
+  --glass-strong: rgba(14, 14, 18, 0.88);
+  --glass-blur: 18px;
+  --glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 
-  /* signals: text-grade (readable on chassis face) */
+  /* hairlines */
+  --line: rgba(255, 255, 255, 0.08);
+  --line-strong: rgba(255, 255, 255, 0.16);
+  --line-accent: rgba(255, 87, 20, 0.45);
+
+  /* ink */
+  --text: #f2f1ed;
+  --text-2: #a5a49d;
+  --text-3: #6f6e68;
+  --text-on-accent: #1a0a02;
+
+  /* code / data ink */
+  --code-bg: rgba(255, 255, 255, 0.035);
+  --code-text: #e6e4dc;
+  --syn-key: #9ecbff;
+  --syn-string: #8fdc9a;
+  --syn-number: #ffb86b;
+  --syn-keyword: #d7a6ff;
+  --syn-comment: #6f6e68;
+  --syn-punct: #8b8a83;
+  --syn-tag: #ff8f6b;
+  --diff-add: rgba(63, 215, 126, 0.16);
+  --diff-del: rgba(255, 92, 80, 0.16);
+
+  /* signals */
   --accent: #ff5714;
-  --accent-dim: rgba(255, 87, 20, 0.14);
+  --accent-2: #ff7a3d;
+  --accent-soft: rgba(255, 87, 20, 0.14);
+  --accent-glow: 0 0 0 1px rgba(255, 87, 20, 0.35), 0 8px 28px rgba(255, 87, 20, 0.25);
   --ok: #3fd77e;
-  --ok-dim: rgba(63, 215, 126, 0.13);
+  --ok-soft: rgba(63, 215, 126, 0.14);
   --warn: #ffb02e;
-  --warn-dim: rgba(255, 176, 46, 0.13);
+  --warn-soft: rgba(255, 176, 46, 0.14);
   --err: #ff5c50;
-  --err-dim: rgba(255, 92, 80, 0.13);
+  --err-soft: rgba(255, 92, 80, 0.14);
+  --info: #7aa2ff;
+  --info-soft: rgba(122, 162, 255, 0.14);
   --redact: #b892ff;
-  --redact-dim: rgba(184, 146, 255, 0.15);
-  --pro: #d9a23c;
-  --pro-dim: rgba(217, 162, 60, 0.14);
+  --redact-soft: rgba(184, 146, 255, 0.15);
+  --pro: #e3b25a;
+  --pro-soft: rgba(227, 178, 90, 0.14);
+  --pro-ink: #2b1e06;
+  --sync: #4ec4e6;
+  --sync-soft: rgba(78, 196, 230, 0.14);
 
   /* LED lamps: physical light, identical in both themes */
   --lamp-ok: #2ee27b;
@@ -48,65 +84,112 @@
   --lamp-err: #ff4b3e;
   --lamp-accent: #ff5714;
   --lamp-pro: #ffc043;
-  --lamp-redact: #b892ff;
-  --lamp-off: rgba(128, 128, 118, 0.45);
+  --lamp-off: rgba(128, 128, 118, 0.4);
 
-  /* keys (tactile buttons) */
-  --key-bg: linear-gradient(180deg, #26251f, #1c1b17);
-  --key-border: rgba(255, 255, 255, 0.16);
-  --key-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 1px 2px rgba(0, 0, 0, 0.5);
-  --key-shadow-down: inset 0 2px 3px rgba(0, 0, 0, 0.45);
+  /* geometry */
+  --radius-xs: 5px;
+  --radius-sm: 8px;
+  --radius: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-pill: 999px;
 
-  --radius: 8px;
-  --radius-lg: 12px;
-  --radius-xl: 18px;
-
+  /* type */
   --font-sans: "Archivo", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  --font-led: "Doto", "IBM Plex Mono", ui-monospace, monospace;
+  --font-display: "Doto", "IBM Plex Mono", ui-monospace, monospace;
+  --fs-2xs: 10.5px;
+  --fs-xs: 11.5px;
+  --fs-sm: 12.5px;
+  --fs-md: 13.5px;
+  --fs-lg: 15px;
+  --fs-xl: 18px;
+  --fs-2xl: 22px;
+  --fs-3xl: 28px;
+  --lh-tight: 1.2;
+  --lh: 1.5;
+  --lh-loose: 1.65;
+  --track-caps: 0.08em;
 
-  --ease: cubic-bezier(0.3, 0.1, 0.2, 1);
-  --dur-fast: 100ms;
-  --dur: 150ms;
-  --dur-slow: 220ms;
+  /* elevation */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.45), 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 24px 64px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.4);
+  --shadow-ring: 0 0 0 1px var(--line);
 
-  --shadow-device: 0 40px 90px rgba(0, 0, 0, 0.6), 0 4px 14px rgba(0, 0, 0, 0.45);
-  --shadow-sheet: 0 24px 64px rgba(0, 0, 0, 0.6);
+  /* motion */
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-fast: 120ms;
+  --dur: 180ms;
+  --dur-slow: 320ms;
 
   color-scheme: dark;
 }
 
 [data-theme="light"] {
-  /* chassis: silver edition (the desk stays dark; the device is the light) */
-  --face: #d5d4cc;
-  --face-2: #e0dfd8;
-  --well: #c6c5bc;
-  --line: rgba(32, 31, 25, 0.16);
-  --line-strong: rgba(32, 31, 25, 0.32);
-  --text: #201f1a;
-  --text-2: #55534a;
-  --text-3: #676458;
+  --bg: #f6f5f1;
+  --bg-2: #eeede8;
+  --bg-glow-a: rgba(255, 87, 20, 0.12);
+  --bg-glow-b: rgba(13, 127, 166, 0.08);
+  --bg-glow-c: rgba(106, 62, 203, 0.06);
+
+  --surface-0: rgba(255, 255, 255, 0.45);
+  --surface-1: rgba(255, 255, 255, 0.68);
+  --surface-2: rgba(255, 255, 255, 0.9);
+  --surface-3: rgba(255, 255, 255, 1);
+  --surface-solid: #ffffff;
+  --surface-solid-2: #f9f8f5;
+  --well: rgba(20, 20, 18, 0.05);
+
+  --glass: rgba(250, 249, 245, 0.78);
+  --glass-strong: rgba(250, 249, 245, 0.92);
+  --glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+
+  --line: rgba(20, 20, 18, 0.09);
+  --line-strong: rgba(20, 20, 18, 0.18);
+  --line-accent: rgba(224, 74, 0, 0.45);
+
+  --text: #17171a;
+  --text-2: #5b5a55;
+  --text-3: #8a8983;
+  --text-on-accent: #ffffff;
+
+  --code-bg: rgba(20, 20, 18, 0.045);
+  --code-text: #23232a;
+  --syn-key: #0b57c2;
+  --syn-string: #14742f;
+  --syn-number: #b35c00;
+  --syn-keyword: #7a2ec9;
+  --syn-comment: #8a8983;
+  --syn-punct: #6b6a64;
+  --syn-tag: #c8420f;
+  --diff-add: rgba(18, 129, 63, 0.14);
+  --diff-del: rgba(191, 47, 36, 0.12);
 
   --accent: #e04a00;
-  --accent-dim: rgba(224, 74, 0, 0.13);
+  --accent-2: #ff6a2b;
+  --accent-soft: rgba(224, 74, 0, 0.12);
+  --accent-glow: 0 0 0 1px rgba(224, 74, 0, 0.3), 0 8px 24px rgba(224, 74, 0, 0.18);
   --ok: #12813f;
-  --ok-dim: rgba(18, 129, 63, 0.13);
+  --ok-soft: rgba(18, 129, 63, 0.12);
   --warn: #94660a;
-  --warn-dim: rgba(148, 102, 10, 0.15);
+  --warn-soft: rgba(148, 102, 10, 0.13);
   --err: #bf2f24;
-  --err-dim: rgba(191, 47, 36, 0.12);
+  --err-soft: rgba(191, 47, 36, 0.11);
+  --info: #2f5fd1;
+  --info-soft: rgba(47, 95, 209, 0.11);
   --redact: #6a3ecb;
-  --redact-dim: rgba(106, 62, 203, 0.12);
+  --redact-soft: rgba(106, 62, 203, 0.11);
   --pro: #8a6210;
-  --pro-dim: rgba(138, 98, 16, 0.15);
+  --pro-soft: rgba(138, 98, 16, 0.13);
+  --pro-ink: #fff6e4;
+  --sync: #0d7fa6;
+  --sync-soft: rgba(13, 127, 166, 0.11);
 
-  --key-bg: linear-gradient(180deg, #f2f1ea, #dddcd4);
-  --key-border: rgba(32, 31, 25, 0.3);
-  --key-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85), 0 1px 2px rgba(32, 31, 25, 0.25);
-  --key-shadow-down: inset 0 2px 3px rgba(32, 31, 25, 0.28);
-
-  --shadow-device: 0 40px 90px rgba(0, 0, 0, 0.55), 0 4px 14px rgba(0, 0, 0, 0.4);
-  --shadow-sheet: 0 24px 64px rgba(10, 10, 9, 0.5);
+  --shadow-sm: 0 1px 2px rgba(20, 20, 18, 0.08);
+  --shadow-md: 0 8px 24px rgba(20, 20, 18, 0.1), 0 1px 2px rgba(20, 20, 18, 0.08);
+  --shadow-lg: 0 24px 64px rgba(20, 20, 18, 0.16), 0 2px 8px rgba(20, 20, 18, 0.08);
 
   color-scheme: light;
 }
