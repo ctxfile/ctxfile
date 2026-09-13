@@ -142,6 +142,11 @@ export function SnapshotDemo() {
   return (
     <div className="demo" aria-label="Live demo of a ctxfile snapshot run">
       <div className="demo-titlebar">
+        <span className="demo-dots" aria-hidden="true">
+          <span />
+          <span />
+          <span />
+        </span>
         <span className="demo-lamp" aria-hidden="true" />
         <span className="demo-title">ctxfile ui · 127.0.0.1:4747</span>
         <button className="demo-replay" onClick={play}>

@@ -1,10 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { highlight } from "@/components/Code";
 
 /**
  * Interactive view of the actual ContextObject an agent receives, per scope.
- * The same payloads `get_context` returns, with a tiny JSON highlighter.
+ * The same payloads `get_context` returns, syntax-coloured by the shared
+ * highlighter in components/Code.tsx.
  */
 
 const SCOPES = ["full", "plan", "files", "git"] as const;
@@ -59,40 +61,6 @@ const PAYLOADS: Record<Scope, string> = {
 }`,
 };
 
-function highlight(json: string): React.ReactNode[] {
-  const out: React.ReactNode[] = [];
-  const re = /("(?:[^"\\]|\\.)*")(\s*:)?|(-?\d+(?:\.\d+)?)|(true|false|null)/g;
-  let last = 0;
-  let match: RegExpExecArray | null;
-  let i = 0;
-  while ((match = re.exec(json)) !== null) {
-    if (match.index > last) out.push(json.slice(last, match.index));
-    if (match[1] !== undefined) {
-      out.push(
-        <span key={i++} className={match[2] ? "j-key" : "j-str"}>
-          {match[1]}
-        </span>
-      );
-      if (match[2]) out.push(match[2]);
-    } else if (match[3] !== undefined) {
-      out.push(
-        <span key={i++} className="j-num">
-          {match[3]}
-        </span>
-      );
-    } else if (match[4] !== undefined) {
-      out.push(
-        <span key={i++} className="j-lit">
-          {match[4]}
-        </span>
-      );
-    }
-    last = re.lastIndex;
-  }
-  if (last < json.length) out.push(json.slice(last));
-  return out;
-}
-
 export function ContextPreview() {
   const [scope, setScope] = useState<Scope>("full");
   const [copied, setCopied] = useState(false);
@@ -111,7 +79,7 @@ export function ContextPreview() {
     <div className="payload">
       <div className="payload-bar">
         <span className="payload-call">
-          get_context<span className="j-lit">(</span>scope<span className="j-lit">:</span>
+          get_context<span className="tok-punct">(</span>scope<span className="tok-punct">:</span>
         </span>
         <div className="payload-tabs" role="tablist" aria-label="Context scope">
           {SCOPES.map((s) => (
@@ -128,14 +96,14 @@ export function ContextPreview() {
           ))}
         </div>
         <span className="payload-call">
-          <span className="j-lit">)</span>
+          <span className="tok-punct">)</span>
         </span>
-        <button className="install-copy payload-copy" onClick={copy} data-copied={copied}>
+        <button className="code-copy payload-copy" onClick={copy} data-copied={copied} aria-label="Copy payload">
           {copied ? "copied" : "copy"}
         </button>
       </div>
       <pre className="payload-json" key={scope}>
-        {highlight(PAYLOADS[scope])}
+        {highlight(PAYLOADS[scope], "json", true)}
       </pre>
     </div>
   );

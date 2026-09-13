@@ -2,6 +2,7 @@ import { ContextPreview } from "@/components/ContextPreview";
 import { ContextTravel } from "@/components/ContextTravel";
 import { HeroSetup } from "@/components/HeroSetup";
 import { HeroTilt } from "@/components/HeroTilt";
+import { Icon, type IconName } from "@/components/Icons";
 import { Reveal } from "@/components/Reveal";
 import { SiteFooter } from "@/components/SiteFooter";
 import { SiteNav } from "@/components/SiteNav";
@@ -21,19 +22,23 @@ const WORKS_WITH = [
   "Aider",
   "OpenClaw",
   "Hermes",
+  "Claude Desktop",
   "any MCP client",
 ];
 
-const PROBLEMS = [
+const PROBLEMS: { icon: IconName; title: string; body: string }[] = [
   {
+    icon: "blind",
     title: "Every session starts blind.",
     body: "Your agent forgot the plan, the decisions, and where you left off. You burn the first 15 minutes rebuilding context it had yesterday.",
   },
   {
+    icon: "island",
     title: "Every agent is an island.",
     body: "Cursor doesn't know what Claude Code did. Your writing agent documents endpoints your coding agent deleted this morning.",
   },
   {
+    icon: "lock",
     title: "Your context is hostage.",
     body: "Weeks of project understanding trapped inside one vendor's chat history. Switching models means starting over.",
   },
@@ -60,35 +65,37 @@ const STEPS = [
   },
 ];
 
-const FEATURES = [
+const FEATURES: { icon: IconName; tone?: string; title: string; body: string }[] = [
   {
-    icon: "⛨",
+    icon: "shield",
     tone: "redact",
     title: "Local-first, provably",
     body: "No server, no account, no telemetry by default. Open source: audit the claim, don't trust it. Your data never becomes our data.",
   },
   {
-    icon: "⇄",
+    icon: "exchange",
     title: "Any agent, any model",
     body: "MCP-native: works with every MCP client today and every one that ships tomorrow. Cloud model, local model, doesn't matter.",
   },
   {
-    icon: "⇪",
+    icon: "cloud-up",
+    tone: "sync",
     title: "Cloud agents included",
     body: "ctxfile export ships a repo-safe context file with your repo. CI agents and hosted sessions load it on clone; redaction profiles keep private notes private.",
   },
   {
-    icon: "∿",
+    icon: "wave",
+    tone: "ok",
     title: "Automatic, not prompted",
     body: "Install the skill (ctxfile init) and your agents checkpoint on their own: announced every time, paused whenever you want, reviewable always. When a parser breaks, the fallback ladder still catches you.",
   },
   {
-    icon: "◈",
+    icon: "tag",
     title: "Provenance on everything",
     body: "Every context entry is tagged with its source, parser-read vs. agent-reported, so downstream agents know what they're trusting.",
   },
   {
-    icon: "❐",
+    icon: "file",
     title: "The .ctxfile convention",
     body: "A versioned, documented format any tool can adopt. Like Dockerfile for builds or AGENTS.md for instructions, but for live working state.",
   },
@@ -170,6 +177,29 @@ const FAQ_LD = toJsonLd({
   })),
 });
 
+function WorksWith() {
+  const chips = (clone: boolean) => (
+    <div className="works-track" data-clone={clone || undefined} aria-hidden={clone || undefined}>
+      {WORKS_WITH.map((w) => (
+        <span className="works-chip" key={w}>
+          {w}
+        </span>
+      ))}
+      {WORKS_WITH.map((w) => (
+        <span className="works-chip" key={`${w}-2`} aria-hidden="true">
+          {w}
+        </span>
+      ))}
+    </div>
+  );
+  return (
+    <div className="wrap works-with enter" style={{ animationDelay: "380ms" }}>
+      <span className="works-label">Works with</span>
+      <div className="works-marquee">{chips(false)}</div>
+    </div>
+  );
+}
+
 export default function Home() {
   return (
     <>
@@ -180,14 +210,14 @@ export default function Home() {
           { href: "/docs", label: "Docs" },
           { href: "/pricing", label: "Pricing" },
           { href: "/blog", label: "Blog" },
-          { href: "#features", label: "Features", hideSm: true },
-          { href: "#pricing", label: "Pro", hideSm: true },
+          { href: "/#features", label: "Features", hideSm: true },
+          { href: "/#pricing", label: "Pro", hideSm: true },
         ]}
       />
 
       <main>
         <section className="wrap hero" id="install">
-          <div>
+          <div className="hero-copy">
             <p className="eyebrow enter" style={{ animationDelay: "0ms" }}>
               One context file, versioned in your repo
             </p>
@@ -204,7 +234,7 @@ export default function Home() {
             <div className="hero-ctas enter" style={{ animationDelay: "210ms" }}>
               <HeroSetup />
               <a className="btn-ghost" href={GITHUB_URL} rel="noopener">
-                ⭐ Star on GitHub
+                <Icon name="github" size={16} /> Star on GitHub
               </a>
             </div>
             <p className="hero-next enter" style={{ animationDelay: "250ms" }}>
@@ -217,21 +247,16 @@ export default function Home() {
               <span>no account required</span>
             </p>
           </div>
-          <div className="enter" style={{ animationDelay: "180ms" }}>
+          <div className="hero-visual enter" style={{ animationDelay: "180ms" }}>
             <HeroTilt>
-              <ContextTravel />
+              <div className="hero-frame">
+                <ContextTravel />
+              </div>
             </HeroTilt>
           </div>
         </section>
 
-        <div className="wrap works-with enter" style={{ animationDelay: "380ms" }}>
-          <span className="works-label">Works with</span>
-          {WORKS_WITH.map((w) => (
-            <span className="works-chip" key={w}>
-              {w}
-            </span>
-          ))}
-        </div>
+        <WorksWith />
 
         <section className="problem hairline">
           <div className="wrap">
@@ -245,6 +270,9 @@ export default function Home() {
               <SpotlightGrid className="feature-grid problem-grid">
                 {PROBLEMS.map((p) => (
                   <div className="feature spot" key={p.title}>
+                    <span className="f-icon">
+                      <Icon name={p.icon} />
+                    </span>
                     <h3>{p.title}</h3>
                     <p>{p.body}</p>
                   </div>
@@ -316,8 +344,8 @@ export default function Home() {
               <SpotlightGrid className="feature-grid">
                 {FEATURES.map((f) => (
                   <div className="feature spot" key={f.title} data-tone={f.tone}>
-                    <span className="f-icon" aria-hidden="true">
-                      {f.icon}
+                    <span className="f-icon">
+                      <Icon name={f.icon} />
                     </span>
                     <h3>{f.title}</h3>
                     <p>{f.body}</p>
@@ -388,14 +416,14 @@ export default function Home() {
             </Reveal>
             <Reveal delay={80}>
               <div className="horizon-cta">
+                <Link className="btn-ghost" href="/pricing#sync">
+                  Get Sync for knowledge work <Icon name="arrow" size={16} />
+                </Link>
                 <span className="horizon-note">
                   Works today: the{" "}
                   <Link href="/docs/clients?tab=claude-desktop">Claude Desktop extension</Link> installs in
                   one drag, no terminal. Sync brings it to your phone and every chat app you use.
                 </span>
-                <Link className="btn-ghost" href="/pricing#sync">
-                  Get Sync for knowledge work →
-                </Link>
               </div>
             </Reveal>
           </div>
@@ -492,11 +520,16 @@ export default function Home() {
             </Reveal>
             <div className="faq-list">
               {FAQ.map((item, i) => (
-                <Reveal key={item.q} delay={i * 60}>
-                  <div className="faq-item">
-                    <h3>{item.q}</h3>
-                    <p>{item.a}</p>
-                  </div>
+                <Reveal key={item.q} delay={i * 50}>
+                  <details className="faq-item" open={i === 0}>
+                    <summary>
+                      <h3>{item.q}</h3>
+                      <span className="faq-chevron" aria-hidden="true">
+                        <Icon name="plus" size={14} />
+                      </span>
+                    </summary>
+                    <p className="faq-a">{item.a}</p>
+                  </details>
                 </Reveal>
               ))}
             </div>
@@ -527,7 +560,7 @@ export default function Home() {
               <div className="final-cta-actions">
                 <HeroSetup />
                 <Link href="/docs" className="btn-ghost">
-                  Read the quickstart →
+                  Read the quickstart <Icon name="arrow" size={16} />
                 </Link>
               </div>
             </Reveal>

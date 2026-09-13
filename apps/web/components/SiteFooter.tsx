@@ -1,11 +1,12 @@
 import Link from "next/link";
+import { BrandMark } from "@/components/SiteNav";
 
 const COLUMNS = [
   {
     title: "Product",
     links: [
       { href: "/#features", label: "Features" },
-      { href: "/#pro", label: "Pro" },
+      { href: "/#pricing", label: "Pro" },
       { href: "/pricing", label: "Pricing" },
       { href: "/security", label: "Security" },
       { href: "/changelog", label: "Changelog" },
@@ -26,9 +27,9 @@ const COLUMNS = [
     title: "Ecosystem",
     links: [
       { href: "https://modelcontextprotocol.io", label: "MCP specification", external: true },
+      { href: "https://github.com/ctxfile/ctxfile", label: "GitHub", external: true },
+      { href: "https://www.npmjs.com/package/ctxfile", label: "npm", external: true },
       { href: "/convention", label: "The .ctxfile convention" },
-      { href: "/docs/clients", label: "Claude Code setup" },
-      { href: "/docs/clients", label: "Cursor setup" },
       { href: "/docs/pro", label: "Offline licensing" },
     ],
   },
@@ -41,18 +42,7 @@ export function SiteFooter() {
         <div className="foot-grid">
           <div className="foot-brand">
             <p className="wordmark">
-              <svg className="brand-mark" viewBox="0 0 32 32" width="24" height="24" aria-hidden="true">
-                <rect width="32" height="32" rx="7" fill="#f55300" />
-                <path
-                  d="M11 8.5h7l3.5 3.5v11.5h-10.5z"
-                  fill="none"
-                  stroke="#1c0b02"
-                  strokeWidth="2"
-                  strokeLinejoin="round"
-                />
-                <path d="M18 8.5v3.5h3.5" fill="none" stroke="#1c0b02" strokeWidth="2" strokeLinejoin="round" />
-                <circle cx="16" cy="18" r="2.1" fill="#1c0b02" />
-              </svg>
+              <BrandMark />
               ctxfile
             </p>
             <p className="foot-claims">
@@ -79,7 +69,7 @@ export function SiteFooter() {
           ))}
         </div>
         <div className="foot-base">
-          <span>© 2026 ctxfile</span>
+          <span>© 2026 ctxfile · Apache-2.0</span>
           <span className="foot-tag">Local-first by architecture, not by policy.</span>
         </div>
       </div>

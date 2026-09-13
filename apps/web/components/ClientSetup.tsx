@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
+import { highlight, type Lang } from "@/components/Code";
 
 /* Simplified brand marks, nominative use only ("works with"). Sized 20x20. */
 
@@ -460,6 +461,15 @@ export function ClientSetup() {
   );
 }
 
+/** Config snippets are JSON, YAML, or TOML; anything else is a shell line. */
+function guessLang(code: string): Lang {
+  const t = code.trimStart();
+  if (t.startsWith("{") || t.startsWith("[")) return "json";
+  if (/^[\w-]+:\s*(\n|$)/m.test(t) && !t.includes("=")) return "yaml";
+  if (/^\[[^\]]+\]\s*$/m.test(t)) return "toml";
+  return "bash";
+}
+
 function StepCode({ code }: { code: string }) {
   const [copied, setCopied] = useState(false);
 
@@ -476,7 +486,7 @@ function StepCode({ code }: { code: string }) {
   return (
     <div className="cs-code">
       <pre>
-        <code>{code}</code>
+        <code>{highlight(code, guessLang(code))}</code>
       </pre>
       <button className="cs-copy" onClick={copy} data-copied={copied} aria-label="Copy snippet">
         {copied ? "copied" : "copy"}
