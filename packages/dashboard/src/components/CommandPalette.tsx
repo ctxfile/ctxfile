@@ -68,7 +68,7 @@ export function CommandPalette({ commands, onClose }: CommandPaletteProps) {
 
   useEffect(() => {
     const el = listRef.current?.querySelector<HTMLElement>('[aria-selected="true"]');
-    el?.scrollIntoView({ block: "nearest" });
+    if (el !== null && el !== undefined && typeof el.scrollIntoView === "function") el.scrollIntoView({ block: "nearest" });
   }, [cursor]);
 
   const run = (entry: { command: PaletteCommand } | undefined): void => {

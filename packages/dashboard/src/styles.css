@@ -295,7 +295,7 @@ mark {
   margin-top: 3px;
 }
 
-.sidebar-close {
+.sidebar .sidebar-close {
   display: none;
   margin-left: auto;
 }
@@ -532,7 +532,7 @@ mark {
   min-width: 0;
 }
 
-.topbar-menu {
+.topbar .topbar-menu {
   display: none;
 }
 
@@ -2124,15 +2124,23 @@ mark {
 }
 
 /* sparkline */
+.grid-2 > .panel {
+  display: flex;
+  flex-direction: column;
+}
+
 .spark {
+  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 8px;
+  min-height: 160px;
 }
 
 .spark-svg {
+  flex: 1;
   width: 100%;
-  height: 132px;
+  min-height: 132px;
   display: block;
   overflow: visible;
 }
@@ -2205,15 +2213,56 @@ mark {
 }
 
 .topfile-path {
+  display: flex;
   min-width: 0;
   white-space: nowrap;
+}
+
+.topfile-dir {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  direction: rtl;
+  text-align: left;
+}
+
+.topfile-dir::before {
+  content: "\200E";
+}
+
+.topfile-base {
+  flex: none;
 }
 
 .topfile-dir,
 .tree-dir {
   color: var(--text-3);
+}
+
+/* Paths ellipsize the directory from the left so the basename always survives. */
+.file-list li,
+.diffstat-file {
+  display: flex;
+  min-width: 0;
+}
+
+.file-list .tree-dir,
+.diffstat-file .tree-dir {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  direction: rtl;
+  text-align: left;
+}
+
+.file-list .tree-dir::before,
+.diffstat-file .tree-dir::before {
+  content: "\200E";
+}
+
+.file-list .tree-base,
+.diffstat-file .tree-base {
+  flex: none;
 }
 
 .topfile-base,
@@ -2852,24 +2901,33 @@ mark {
 
 .tree-label {
   flex: 1;
+  display: flex;
+  align-items: baseline;
   min-width: 0;
   white-space: nowrap;
+}
+
+.tree-label .tree-dir {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   direction: rtl;
   text-align: left;
 }
 
-.tree-label > * {
-  direction: ltr;
-  unicode-bidi: isolate;
+.tree-label .tree-dir::before {
+  content: "\200E";
 }
 
-.tree-label:not(.mono) {
-  direction: ltr;
+.tree-label .tree-base {
+  flex: 0 1 auto;
+  min-width: 3ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .tree-sub {
+  flex: none;
   margin-left: 6px;
   color: var(--text-3);
   font-size: var(--fs-2xs);
@@ -4445,7 +4503,7 @@ mark {
     display: none;
   }
 
-  .sidebar-close {
+  .sidebar .sidebar-close {
     display: inline-flex;
   }
 
@@ -4469,7 +4527,7 @@ mark {
     padding: 0 12px;
   }
 
-  .topbar-menu {
+  .topbar .topbar-menu {
     display: inline-flex;
   }
 
@@ -4568,6 +4626,17 @@ mark {
   .status-chip {
     display: none;
   }
+}
+
+/* ---------- long lists stay cheap to paint ---------- */
+
+.memory-row,
+.session-card,
+.playbook,
+.commit-row,
+.diffstat-row {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 80px;
 }
 
 /* ---------- reduced motion ---------- */
