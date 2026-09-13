@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Fragment, type ReactNode } from "react";
+import { PlaybookDistillDemo } from "./PlaybookDistillDemo";
 
 /**
  * Markdown renderer for long-form posts.
@@ -8,8 +9,9 @@ import { Fragment, type ReactNode } from "react";
  * the posts are authored in this repo by us, so the input is trusted and
  * finite, and the output has to land inside the existing `.prose` styles that
  * the docs already use. Supported: `##`/`###` headings, paragraphs, `-` lists,
- * `1.` ordered lists, fenced code blocks, `**bold**`, `` `code` `` and
- * `[label](href)`.
+ * `1.` ordered lists, fenced code blocks, `**bold**`, `` `code` ``,
+ * `[label](href)`, images on their own line as `![alt](src "caption")`, and
+ * embedded product demos on their own line as `::demo:<name>::`.
  *
  * Fenced code blocks matter more here than they do on a marketing page — every
  * post ends in a command the reader is meant to run — and they render as the
@@ -28,11 +30,20 @@ type Block =
   | { kind: "heading"; level: 2 | 3; text: string }
   | { kind: "paragraph"; nodes: InlineNode[] }
   | { kind: "list"; ordered: boolean; items: InlineNode[][] }
-  | { kind: "code"; code: string };
+  | { kind: "code"; code: string }
+  | { kind: "image"; src: string; alt: string; caption?: string }
+  | { kind: "demo"; name: string };
 
 const INLINE_PATTERN = /\*\*([^*]+)\*\*|`([^`]+)`|\[([^\]]+)\]\(([^)\s]+)\)/g;
 const UNORDERED_ITEM = /^[-*]\s+(.*)$/;
 const ORDERED_ITEM = /^\d+\.\s+(.*)$/;
+const IMAGE_LINE = /^!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)$/;
+const DEMO_LINE = /^::demo:([a-z-]+)::$/;
+
+/** Embedded, interactive product demos a post can place with `::demo:name::`. */
+const DEMOS: Record<string, () => ReactNode> = {
+  "playbook-distill": () => <PlaybookDistillDemo />,
+};
 
 /** Returns the fence marker a line opens with, or null if it opens none. */
 function isFence(line: string): "```" | "~~~" | null {
@@ -112,6 +123,21 @@ function parseBlocks(markdown: string): Block[] {
 
     if (trimmed === "") {
       flushAll();
+      continue;
+    }
+
+    const image = IMAGE_LINE.exec(trimmed);
+    if (image && image[2] !== undefined) {
+      flushAll();
+      const caption = image[3];
+      blocks.push({ kind: "image", src: image[2], alt: image[1] ?? "", ...(caption !== undefined && caption !== "" ? { caption } : {}) });
+      continue;
+    }
+
+    const demo = DEMO_LINE.exec(trimmed);
+    if (demo && demo[1] !== undefined) {
+      flushAll();
+      blocks.push({ kind: "demo", name: demo[1] });
       continue;
     }
 
@@ -200,6 +226,18 @@ export function ArticleBody({ markdown }: { markdown: string }) {
                 <code>{block.code}</code>
               </pre>
             );
+          case "image":
+            return (
+              <figure key={i} className="post-figure">
+                {/* Static export: plain img keeps the page dependency-free and unoptimized on purpose. */}
+                <img src={block.src} alt={block.alt} loading="lazy" decoding="async" />
+                {block.caption !== undefined && <figcaption>{block.caption}</figcaption>}
+              </figure>
+            );
+          case "demo": {
+            const render = DEMOS[block.name];
+            return render ? <Fragment key={i}>{render()}</Fragment> : null;
+          }
           case "list":
             return block.ordered ? (
               <ol key={i}>

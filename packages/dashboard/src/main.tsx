@@ -12,17 +12,21 @@ import "./styles.css";
 const DEMO = import.meta.env["VITE_DEMO"] === "1";
 
 async function boot(): Promise<void> {
+  let requestedView: string | null = null;
   if (DEMO) {
     const { installMockServer } = await import("./demo/mockServer");
     installMockServer();
-    if (!/[#&]token=/.test(window.location.hash)) {
-      window.location.hash = `#token=demo${window.location.hash.replace(/^#/, "&")}`;
-    }
+    // Keep a deep link like /demo/#/playbooks: the token capture below strips
+    // the whole fragment, so the view part is restored afterwards.
+    const fragment = window.location.hash.replace(/^#/, "");
+    if (fragment.startsWith("/")) requestedView = fragment;
+    if (!/[#&]token=/.test(window.location.hash)) window.location.hash = "#token=demo";
     document.documentElement.dataset["demo"] = "true";
   }
 
   // Capture the #token fragment and apply the persisted theme before first paint.
   captureToken();
+  if (requestedView !== null) window.history.replaceState(null, "", `#${requestedView}`);
   document.documentElement.dataset["theme"] = localStorage.getItem("cb-theme") === "light" ? "light" : "dark";
 
   const container = document.getElementById("root");

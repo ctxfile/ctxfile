@@ -93,11 +93,26 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
     ],
   };
 
+  const faqJsonLd =
+    post.faq !== undefined && post.faq.length > 0
+      ? {
+          "@context": "https://schema.org",
+          "@type": "FAQPage",
+          mainEntity: post.faq.map((item) => ({
+            "@type": "Question",
+            name: item.q,
+            acceptedAnswer: { "@type": "Answer", text: item.a },
+          })),
+        }
+      : null;
+
   return (
     <>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: toJsonLd([articleJsonLd, breadcrumbJsonLd]) }}
+        dangerouslySetInnerHTML={{
+          __html: toJsonLd(faqJsonLd !== null ? [articleJsonLd, breadcrumbJsonLd, faqJsonLd] : [articleJsonLd, breadcrumbJsonLd]),
+        }}
       />
       <div className="atmosphere" aria-hidden="true" />
       <SiteNav />

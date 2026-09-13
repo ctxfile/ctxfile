@@ -3496,3 +3496,310 @@ footer {
 .hero-demo-link:hover {
   text-decoration-color: currentColor;
 }
+
+/* ---------- blog: figures ---------- */
+
+.post-figure {
+  margin: 28px 0;
+}
+
+.post-figure img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-md);
+  background: var(--surface-solid);
+}
+
+.post-figure figcaption {
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--text-3);
+  text-align: center;
+}
+
+/* ---------- blog: playbook distillation demo ---------- */
+
+.pbdemo {
+  margin: 28px 0;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: var(--surface-solid);
+  box-shadow: var(--glass-edge), var(--shadow-md);
+  overflow: hidden;
+}
+
+.pbdemo-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-1);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.pbdemo-replay {
+  font: 600 12px var(--font-sans);
+  padding: 5px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line-strong);
+  color: var(--text-2);
+}
+
+.pbdemo-replay:hover {
+  color: var(--text);
+}
+
+.pbdemo-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 132px minmax(0, 1.15fr);
+  gap: 14px;
+  padding: 18px;
+  align-items: start;
+}
+
+.pbdemo-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  margin-bottom: 10px;
+}
+
+.pbdemo-session {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--surface-1);
+  margin-bottom: 8px;
+  opacity: 0.35;
+  transform: translateX(-6px);
+  transition: opacity 400ms var(--ease), transform 400ms var(--ease), border-color 400ms var(--ease);
+}
+
+.pbdemo-session[data-on="true"] {
+  opacity: 1;
+  transform: none;
+  border-color: var(--line-strong);
+}
+
+.pbdemo-session-tool {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.pbdemo-session-turns {
+  float: right;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+.pbdemo-session p {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-2);
+}
+
+.pbdemo-flow {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding-top: 40px;
+}
+
+.pbdemo-wire {
+  width: 2px;
+  height: 34px;
+  border-radius: 1px;
+  background: var(--line-strong);
+  transition: background 400ms var(--ease), box-shadow 400ms var(--ease);
+}
+
+.pbdemo-wire[data-on="true"] {
+  background: var(--accent);
+  box-shadow: 0 0 10px var(--accent-soft);
+}
+
+.pbdemo-model {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface-1);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-3);
+  text-align: center;
+  transition: border-color 400ms var(--ease), color 400ms var(--ease);
+}
+
+.pbdemo-model small {
+  font-weight: 400;
+  font-size: 10px;
+  color: var(--text-3);
+}
+
+.pbdemo-model[data-on="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.pbdemo[data-phase="distilling"] .pbdemo-model {
+  animation: pbdemo-pulse 1s ease-in-out infinite;
+}
+
+@keyframes pbdemo-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 var(--accent-soft); }
+  50% { box-shadow: 0 0 0 8px transparent; }
+}
+
+.pbdemo-card {
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface-1);
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 500ms var(--ease), transform 500ms var(--ease);
+}
+
+.pbdemo-card[data-on="true"] {
+  opacity: 1;
+  transform: none;
+  border-color: var(--pro);
+}
+
+.pbdemo-card-title {
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin-bottom: 8px;
+}
+
+.pbdemo-card-prompt {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-2);
+}
+
+.pbdemo-slot {
+  display: inline-block;
+  padding: 0 6px;
+  border-radius: 6px;
+  border: 1px dashed rgba(122, 162, 255, 0.55);
+  background: rgba(122, 162, 255, 0.12);
+  color: #7aa2ff;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.6;
+}
+
+:root[data-theme="light"] .pbdemo-slot {
+  color: #2f5fd1;
+  border-color: rgba(47, 95, 209, 0.5);
+  background: rgba(47, 95, 209, 0.1);
+}
+
+.pbdemo-card-meta {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+.pbdemo-label-served {
+  margin-top: 14px;
+  opacity: 0;
+  transition: opacity 400ms var(--ease);
+}
+
+.pbdemo-label-served[data-on="true"] {
+  opacity: 1;
+}
+
+.pbdemo-clients {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pbdemo-client {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface-1);
+  font-size: 12px;
+  color: var(--text-2);
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 350ms var(--ease), transform 350ms var(--ease);
+}
+
+.pbdemo-client[data-on="true"] {
+  opacity: 1;
+  transform: none;
+}
+
+.pbdemo-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--lamp-ok);
+  box-shadow: 0 0 6px var(--lamp-ok);
+}
+
+.pbdemo-caption {
+  padding: 10px 14px 12px;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+  color: var(--text-3);
+}
+
+@media (max-width: 700px) {
+  .pbdemo-stage {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .pbdemo-flow {
+    flex-direction: row;
+    padding-top: 0;
+  }
+  .pbdemo-wire {
+    width: 34px;
+    height: 2px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pbdemo-session,
+  .pbdemo-card,
+  .pbdemo-client,
+  .pbdemo-label-served {
+    transition: none;
+  }
+  .pbdemo[data-phase="distilling"] .pbdemo-model {
+    animation: none;
+  }
+}

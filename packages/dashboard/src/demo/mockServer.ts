@@ -295,6 +295,22 @@ let playbooks: PlaybookEntry[] = [
     createdAt: iso(5 * HOUR),
   },
   {
+    id: "p3",
+    title: "Write an incident postmortem people will actually read",
+    prompt:
+      "For <incident>, reconstruct the timeline from logs and chat before writing a word. State impact in customer terms first, then the trigger, then the contributing causes (never a single root cause). List what detected it, what should have, and the three fixes with owners and dates. Blameless tone; name systems, not people.",
+    provenance: "distilled by claude from 1 session in thread “payments outage 04-12”",
+    createdAt: iso(1 * DAY + 4 * HOUR),
+  },
+  {
+    id: "p4",
+    title: "Onboard a new engineer to this codebase",
+    prompt:
+      "Give <engineer> the current plan, the three most-touched directories from git, and the one decision most likely to surprise them (see plan). Pair them on a <small task> that crosses the webhook and receipt modules, and have them write down every question; the questions become the next docs pass.",
+    provenance: "distilled by ollama/qwen3:8b from 2 sessions in thread “onboarding”",
+    createdAt: iso(4 * DAY),
+  },
+  {
     id: "p2",
     title: "Ship a feature end to end",
     prompt:
