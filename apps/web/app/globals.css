@@ -729,6 +729,13 @@ svg {
   align-items: center;
 }
 
+.hero > *,
+.hero-copy,
+.hero-setup,
+.install {
+  min-width: 0;
+}
+
 .hero h1 {
   font-size: clamp(38px, 5vw, 62px);
   line-height: 1.02;
