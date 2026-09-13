@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Pro",
-  description: "Session connectors, encrypted memory, multi-provider consult, voice, and offline licensing.",
+  title: "What does ctxfile Pro add? Sessions, memory, consult, playbooks",
+  description:
+    "What you get with ctxfile Pro: automatic session sync from Claude Code, Cursor, Codex and five more tools, encrypted cross-session memory, multi-model consult, playbooks, and an offline license.",
 };
 
 export default function Pro() {

@@ -3483,3 +3483,16 @@ footer {
     display: none;
   }
 }
+
+/* Hero: the no-install path */
+.hero-demo-link {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-color: var(--line-accent);
+  text-underline-offset: 3px;
+}
+
+.hero-demo-link:hover {
+  text-decoration-color: currentColor;
+}

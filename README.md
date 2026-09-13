@@ -15,6 +15,10 @@
 </p>
 
 <p align="center">
+  <a href="https://glama.ai/mcp/servers/ctxfile/ctxfile"><img src="https://glama.ai/mcp/servers/ctxfile/ctxfile/badge" alt="ctxfile MCP server on Glama" /></a>
+</p>
+
+<p align="center">
   <a href="https://ctxfile.dev">Website</a> ·
   <a href="https://ctxfile.dev/docs">Docs</a> ·
   <a href="#30-second-quickstart">Quickstart</a> ·

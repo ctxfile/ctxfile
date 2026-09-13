@@ -46,15 +46,15 @@ const SHORTCUTS: { keys: string[]; label: string }[] = [
   { keys: ["Esc"], label: "Close dialogs" },
 ];
 
-export function App() {
+export function App({ demo = false }: { demo?: boolean }) {
   return (
     <ToastProvider>
-      <Shell />
+      <Shell demo={demo} />
     </ToastProvider>
   );
 }
 
-function Shell() {
+function Shell({ demo }: { demo: boolean }) {
   const [view, setViewState] = useState<ViewId>(() => viewFromHash(window.location.hash));
   const [state, setState] = useState<DashboardState | null>(null);
   const [serverGone, setServerGone] = useState(false);
@@ -221,8 +221,18 @@ function Shell() {
   };
 
   return (
-    <div className={`app${collapsed ? " sidebar-collapsed" : ""}`}>
+    <div className={`app${collapsed ? " sidebar-collapsed" : ""}${demo ? " is-demo" : ""}`}>
       <div className="app-glow" aria-hidden="true" />
+      {demo && (
+        <a className="demo-banner" href="https://ctxfile.dev/docs" target="_top">
+          <span className="led led-running" aria-hidden="true" />
+          <span>
+            <strong>Demo data.</strong> This is the real <code>ctxfile ui</code> answering from fixtures. Run a snapshot, browse
+            context, try consult. Install in 30 seconds for your own project.
+          </span>
+          <Icon name="external" size={13} />
+        </a>
+      )}
       <Sidebar
         active={view}
         features={features}

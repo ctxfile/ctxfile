@@ -4628,6 +4628,41 @@ mark {
   }
 }
 
+/* ---------- public demo ---------- */
+
+.app.is-demo {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.demo-banner {
+  grid-column: 1 / -1;
+  position: relative;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 38px;
+  padding: 6px 16px;
+  background: linear-gradient(90deg, var(--accent-soft), transparent 40%, transparent 60%, var(--sync-soft));
+  border-bottom: 1px solid var(--line-accent);
+  color: var(--text-2);
+  font-size: var(--fs-xs);
+  text-decoration: none;
+}
+
+.demo-banner strong {
+  color: var(--text);
+}
+
+.demo-banner code {
+  color: var(--accent);
+}
+
+.demo-banner:hover {
+  color: var(--text);
+}
+
 /* ---------- long lists stay cheap to paint ---------- */
 
 .memory-row,

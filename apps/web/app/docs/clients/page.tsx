@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import { ClientSetup } from "../../../components/ClientSetup";
 
 export const metadata: Metadata = {
-  title: "Client setup",
+  title: "How to add ctxfile to Claude Code, Cursor, Codex, and other MCP clients",
   description:
-    "Register ctxfile with Claude Code, Cursor, Codex, OpenCode, Gemini CLI, OpenClaw, Hermes, or any stdio MCP client.",
+    "Copy-paste setup for Claude Code, Cursor, Codex CLI, OpenCode, Gemini CLI, OpenClaw, Hermes, Claude Desktop, and any stdio MCP client, plus the nvm PATH fix when a client cannot find the server.",
 };
 
 export default function Clients() {

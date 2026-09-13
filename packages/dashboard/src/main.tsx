@@ -4,16 +4,35 @@ import { App } from "./App";
 import { captureToken } from "./lib/token";
 import "./styles.css";
 
-// Capture the #token fragment and apply the persisted theme before first paint.
-captureToken();
-document.documentElement.dataset["theme"] =
-  localStorage.getItem("cb-theme") === "light" ? "light" : "dark";
+/**
+ * Demo build (ctxfile.dev/demo): the API is answered in-page from fixtures so
+ * the real dashboard can be explored without installing anything. The flag is
+ * baked in at build time; a normal `ctxfile ui` build never includes the mock.
+ */
+const DEMO = import.meta.env["VITE_DEMO"] === "1";
 
-const container = document.getElementById("root");
-if (container === null) throw new Error("missing #root element");
+async function boot(): Promise<void> {
+  if (DEMO) {
+    const { installMockServer } = await import("./demo/mockServer");
+    installMockServer();
+    if (!/[#&]token=/.test(window.location.hash)) {
+      window.location.hash = `#token=demo${window.location.hash.replace(/^#/, "&")}`;
+    }
+    document.documentElement.dataset["demo"] = "true";
+  }
 
-createRoot(container).render(
-  <StrictMode>
-    <App />
-  </StrictMode>
-);
+  // Capture the #token fragment and apply the persisted theme before first paint.
+  captureToken();
+  document.documentElement.dataset["theme"] = localStorage.getItem("cb-theme") === "light" ? "light" : "dark";
+
+  const container = document.getElementById("root");
+  if (container === null) throw new Error("missing #root element");
+
+  createRoot(container).render(
+    <StrictMode>
+      <App demo={DEMO} />
+    </StrictMode>
+  );
+}
+
+void boot();

@@ -135,6 +135,10 @@ export function HeroSetup() {
       {active.hint ? <p className="hero-setup-hint">{active.hint}</p> : null}
 
       <p className="hero-setup-alt">
+        Nothing to install yet?{" "}
+        <a href="/demo/" className="hero-demo-link" onClick={() => track("Demo opened", { from: "hero" })}>
+          Open the live demo →
+        </a>{" "}
         Using ChatGPT, Claude, or Grok in the browser? Those reach your context through{" "}
         <Link href="/docs/webchat">Sync →</Link>
       </p>

@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Sync & roaming",
+  title: "How to use the same project context in ChatGPT, Claude, and Grok",
   description:
-    "Local-first, everywhere you work: the encrypted Sync vault, the roaming flow across ChatGPT/Claude/Grok, Standard vs Strict encryption stated honestly, and the self-hosted relay.",
+    "Sync carries your local ctxfile context to the web chat apps and your phone through an encrypted vault: how roaming works across ChatGPT, Claude and Grok, Standard vs Strict encryption stated honestly, and the self-hosted relay.",
 };
 
 export default function SyncDocs() {

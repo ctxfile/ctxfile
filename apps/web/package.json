@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "scripts": {
+    "prebuild": "npm run build:demo -w @ctxfile/dashboard",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
