@@ -21,6 +21,42 @@ export default function Changelog() {
 
         <div className="log-list">
           <article className="log-entry">
+            <span className="log-date">2026-09-13</span>
+            <div className="log-body">
+              <span className="log-tag">v0.5.0</span>
+              <h2>A new instrument: the dashboard and ctxfile.dev, redesigned</h2>
+              <p>
+                Same engine, same privacy, a new surface. The local dashboard and this site now share one
+                &ldquo;glass instrument&rdquo; design system: a deep canvas, translucent panels, and LED-grade
+                status, in dark and light.
+              </p>
+              <ul>
+                <li>
+                  Dashboard shell: a grouped, collapsible sidebar with digit shortcuts, a top bar that shows the
+                  snapshot recording live from any view, the <code>R</code> key everywhere, a fuzzy command
+                  palette, and the view kept in the URL so refresh and back keep your place.
+                </li>
+                <li>
+                  Reading captured context is now pleasant: syntax-coloured files with line numbers and wrap,
+                  plan and session text rendered as Markdown, a collapsible JSON view, and a filterable tree
+                  that stays smooth with thousands of key files.
+                </li>
+                <li>
+                  Overview gains a token-budget gauge, connector timing bars, a usage chart over recent
+                  snapshots, and the heaviest files at a glance. Git shows a commit timeline and diffstat bars.
+                  Sessions group by day with source filters; Memory groups by agent with search; Playbooks
+                  highlight the placeholders to fill; Consult streams Markdown with a Stop button.
+                </li>
+                <li>
+                  ctxfile.dev: new hero, install card, docs rail grouped by topic, code windows with a copy key,
+                  and a rewritten design-system page that renders the live tokens.
+                </li>
+                <li>No behaviour, API, or privacy change: the dashboard still makes zero network calls.</li>
+              </ul>
+            </div>
+          </article>
+
+          <article className="log-entry">
             <span className="log-date">2026-07-19</span>
             <div className="log-body">
               <span className="log-tag">v0.4.0</span>
