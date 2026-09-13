@@ -2438,7 +2438,7 @@ footer {
   border-radius: var(--radius-lg);
   box-shadow: var(--glass-edge), var(--shadow-sm);
   padding: 16px 18px;
-  padding-right: 72px;
+  padding-top: 50px;
   font-family: var(--font-mono);
   font-size: 13px;
   line-height: 1.65;
@@ -2448,11 +2448,21 @@ footer {
   tab-size: 2;
 }
 
+/* The copy key sits in its own strip above the code so it never covers a long line. */
+.prose pre::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 40px;
+  border-top: 1px solid var(--line);
+}
+
 .pre-copy {
   position: absolute;
-  top: 8px;
+  top: 7px;
   right: 8px;
-  opacity: 0.7;
+  opacity: 0.85;
 }
 
 .prose pre:hover .pre-copy,
