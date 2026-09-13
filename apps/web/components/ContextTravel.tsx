@@ -13,36 +13,36 @@
 const STYLE = `
 .ctv {
   display: block; width: 100%; height: auto;
-  --g-stroke: rgba(126, 216, 244, 0.65);
-  --g-fill: rgba(120, 212, 244, 0.10);
-  --g-sheen: rgba(255, 255, 255, 0.28);
+  --g-stroke: rgba(78, 196, 230, 0.6);
+  --g-fill: rgba(78, 196, 230, 0.09);
+  --g-sheen: rgba(255, 255, 255, 0.24);
   --g-glow: #4ec4e6;
-  --w-fill: rgba(14, 21, 30, 0.78);
-  --w-bar: rgba(255, 255, 255, 0.05);
-  --w-stroke: rgba(140, 205, 235, 0.32);
-  --w-text: #d9e7f0;
-  --w-line: rgba(217, 231, 240, 0.30);
-  --w-dot: rgba(217, 231, 240, 0.25);
-  --doc-text: #eefaff;
+  --w-fill: rgba(19, 19, 22, 0.86);
+  --w-bar: rgba(255, 255, 255, 0.045);
+  --w-stroke: rgba(255, 255, 255, 0.12);
+  --w-text: #f2f1ed;
+  --w-line: rgba(242, 241, 237, 0.26);
+  --w-dot: rgba(242, 241, 237, 0.22);
+  --doc-text: #f2f1ed;
   --mesh: rgba(126, 224, 250, 0.85);
-  --shadow: rgba(2, 12, 20, 0.45);
-  --pkt-fill: rgba(10, 24, 33, 0.85);
+  --shadow: rgba(0, 0, 0, 0.5);
+  --pkt-fill: rgba(14, 14, 18, 0.92);
 }
 :root[data-theme="light"] .ctv {
-  --g-stroke: rgba(13, 127, 166, 0.55);
-  --g-fill: rgba(13, 127, 166, 0.08);
-  --g-sheen: rgba(255, 255, 255, 0.85);
+  --g-stroke: rgba(13, 127, 166, 0.5);
+  --g-fill: rgba(13, 127, 166, 0.07);
+  --g-sheen: rgba(255, 255, 255, 0.9);
   --g-glow: #0d7fa6;
-  --w-fill: rgba(255, 255, 255, 0.82);
-  --w-bar: rgba(13, 127, 166, 0.06);
-  --w-stroke: rgba(13, 127, 166, 0.30);
-  --w-text: #1d3b4a;
-  --w-line: rgba(29, 59, 74, 0.28);
-  --w-dot: rgba(29, 59, 74, 0.22);
+  --w-fill: rgba(255, 255, 255, 0.9);
+  --w-bar: rgba(20, 20, 18, 0.04);
+  --w-stroke: rgba(20, 20, 18, 0.12);
+  --w-text: #17171a;
+  --w-line: rgba(23, 23, 26, 0.26);
+  --w-dot: rgba(23, 23, 26, 0.2);
   --doc-text: #0b3547;
   --mesh: rgba(11, 116, 152, 0.75);
-  --shadow: rgba(13, 60, 80, 0.18);
-  --pkt-fill: rgba(255, 255, 255, 0.9);
+  --shadow: rgba(20, 20, 18, 0.16);
+  --pkt-fill: rgba(255, 255, 255, 0.95);
 }
 
 .ctv .win { fill: var(--w-fill); stroke: var(--w-stroke); stroke-width: 1; }
