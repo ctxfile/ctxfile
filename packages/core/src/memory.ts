@@ -366,8 +366,10 @@ export function memoryImportPrompt(options: MemoryPromptOptions): string {
     scope === "global"
       ? "everything you have stored in memory, and any durable context you have learned about me from past conversations"
       : `everything you know about the project${options.projectName ? ` "${options.projectName}"` : " we are working on"}: its rules, conventions, decisions, and gotchas`;
+  const opening =
+    scope === "global" ? `Export ${subject} into ctxfile.` : `Export into ctxfile ${subject}.`;
   const lines = [
-    `Export ${subject} into ctxfile. Preserve my words verbatim where possible, especially for instructions and preferences.`,
+    `${opening} Preserve my words verbatim where possible, especially for instructions and preferences.`,
     "",
     "Categories (use these exact values, in this order):",
     ...CATEGORY_GUIDE[scope].map((c) => `- ${c}`),

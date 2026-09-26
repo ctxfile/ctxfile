@@ -156,7 +156,7 @@ describe("Import memory sheet", () => {
     render(<ImportedMemory onServerGone={vi.fn()} />);
     fireEvent.click(await screen.findByRole("button", { name: /import memory/i }));
     expect(await screen.findByText(/PASTE PROMPT/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("tab", { name: "ctxfile connected" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Connected" }));
     expect(await screen.findByText(/MCP PROMPT/)).toBeInTheDocument();
     expect(screen.queryByLabelText("The assistant's reply")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("tab", { name: "This project" }));

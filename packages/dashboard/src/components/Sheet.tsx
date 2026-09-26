@@ -1,4 +1,5 @@
 import { useEffect, useRef, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Icon } from "./Icon";
 
 export interface SheetProps {
@@ -10,7 +11,9 @@ export interface SheetProps {
   size?: "sm" | "md";
 }
 
-/** Modal dialog with a glass backdrop; Escape and the scrim close it. */
+/** Modal dialog with a glass backdrop; Escape and the scrim close it. Portaled
+    to <body> so no ancestor stacking context (animated views, locked Pro
+    previews) can paint over it. */
 export function Sheet({ title, onClose, children, tone = "neutral", size = "sm" }: SheetProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const previouslyFocused = useRef<Element | null>(null);
@@ -50,7 +53,7 @@ export function Sheet({ title, onClose, children, tone = "neutral", size = "sm" 
     };
   }, [onClose]);
 
-  return (
+  return createPortal(
     <div className="sheet-backdrop" onClick={onClose}>
       <div
         ref={panelRef}
@@ -72,6 +75,7 @@ export function Sheet({ title, onClose, children, tone = "neutral", size = "sm" 
         </div>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

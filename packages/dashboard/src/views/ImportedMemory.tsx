@@ -342,7 +342,7 @@ export function ImportMemorySheet({ onClose, onServerGone, onImported }: ImportM
             onChange={setMode}
             options={[
               { value: "paste", label: "Paste back" },
-              { value: "mcp", label: "ctxfile connected" },
+              { value: "mcp", label: "Connected" },
             ]}
           />
         </div>
