@@ -51,6 +51,7 @@ export default function Pricing() {
               <li>Secret redaction and denied paths</li>
               <li>SQLite cache and local dashboard</li>
               <li>Agent-assisted session ingest (any harness, one pasted prompt)</li>
+              <li>Memory import from ChatGPT, Grok, Claude, any assistant, with approval before it steers</li>
               <li>Cloud export with redaction profiles</li>
               <li>Notion and Ollama connectors (opt-in)</li>
             </ul>

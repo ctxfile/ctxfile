@@ -53,6 +53,12 @@ export default function SyncDocs() {
         </li>
       </ol>
       <p>
+        <Link href="/docs/memory">Imported memory</Link> travels the same way. Global memory (about you) rides
+        every vault this machine syncs; project memory rides its project&apos;s vault. A chat surface can export
+        its memory into the vault with <code>ingest_memory</code>; you approve pending instructions on your own
+        device and the approval syncs back. Handoff grants and federation never see memory.
+      </p>
+      <p>
         Remote MCP connectors are supported today by Claude (all tiers), ChatGPT (paid tiers, remote servers
         only, OAuth required), Grok (paid), Perplexity (Pro), and Mistral Le Chat. Nothing in this flow is
         speculative; it is the standard remote-connector pattern applied to context.
@@ -142,7 +148,7 @@ export default function SyncDocs() {
   }
 }`}</pre>
       <p>
-        Same engine, same five tools, over HTTP. Loopback-only by default; binding beyond loopback requires
+        Same engine, same six tools, over HTTP. Loopback-only by default; binding beyond loopback requires
         bearer tokens (values live in env vars, never in the config file), and each MCP session is bound to
         the token that opened it. This is the same door the relay is built from. Pricing:{" "}
         <Link href="/pricing#sync">Sync is $6/month, or $15 bundled with Pro</Link>.
@@ -171,7 +177,7 @@ export CTXFILE_VAULT_RECOVERY_CODE="ABCDE-FGHJK-..."   # the code shown at creat
 export CTXFILE_VAULT_PASSPHRASE="a new long passphrase"
 ctxfile vault recover   # unwraps with the code, re-wraps, prints a fresh code`}</pre>
       <p>
-        Standard mode serves the five tools from the vault; Strict mode makes step 3 refuse by design while
+        Standard mode serves the six tools from the vault; Strict mode makes step 3 refuse by design while
         step 4 keeps working. Handoff grants (<code>ctxfile-relay grants issue</code>), org-to-org federation
         (<code>ctxfile-relay federation issue/redeem</code>), and the append-only audit trail
         (<code>ctxfile-relay audit tail|export</code>) are documented in the relay package README.

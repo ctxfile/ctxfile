@@ -101,6 +101,26 @@ const FEATURES: { icon: IconName; tone?: string; title: string; body: string }[]
   },
 ];
 
+const MEMORY: { icon: IconName; tone?: string; title: string; body: string }[] = [
+  {
+    icon: "exchange",
+    title: "One prompt, any assistant",
+    body: "Paste it into ChatGPT, Grok, Claude, or Gemini. The assistant exports your rules, preferences, and projects against a strict schema, or prints a JSON block you pipe into ctxfile memory import.",
+  },
+  {
+    icon: "lock",
+    tone: "redact",
+    title: "Nothing steers until you say so",
+    body: "Instructions and identity wait for your approval. Duplicates from different assistants merge. Reject something once and it stays rejected, whoever reports it next.",
+  },
+  {
+    icon: "tag",
+    tone: "sync",
+    title: "Global or per project",
+    body: "Facts about you reach every project. Conventions, decisions, and gotchas stay with their repo. Both arrive in get_context, and sync to your phone through the vault.",
+  },
+];
+
 const ROAM = [
   {
     n: "01",
@@ -399,6 +419,35 @@ export default function Home() {
           </div>
         </section>
 
+        <section className="features hairline" id="memory">
+          <div className="wrap">
+            <Reveal>
+              <div className="section-head">
+                <p className="eyebrow">Memory import · free</p>
+                <h2>Your assistant already knows you. Now every agent does.</h2>
+                <p>
+                  Months of &ldquo;always do this, never do that&rdquo; live inside one chat product. ctxfile
+                  imports that memory once and hands it to every agent you use, in any tool, reviewed first.{" "}
+                  <Link href="/docs/memory">How memory import works</Link>.
+                </p>
+              </div>
+            </Reveal>
+            <Reveal delay={80}>
+              <SpotlightGrid className="feature-grid">
+                {MEMORY.map((f) => (
+                  <div className="feature spot" key={f.title} data-tone={f.tone}>
+                    <span className="f-icon">
+                      <Icon name={f.icon} />
+                    </span>
+                    <h3>{f.title}</h3>
+                    <p>{f.body}</p>
+                  </div>
+                ))}
+              </SpotlightGrid>
+            </Reveal>
+          </div>
+        </section>
+
         <section className="horizon hairline">
           <div className="wrap">
             <Reveal>
@@ -449,6 +498,7 @@ export default function Home() {
                     <li>Threads: save_session and continue_thread, local</li>
                     <li>File, git, Notion, Ollama connectors</li>
                     <li>Session ingest for any harness</li>
+                    <li>Memory import from any assistant</li>
                     <li>Cloud export with redaction profiles</li>
                     <li>Local dashboard</li>
                   </ul>

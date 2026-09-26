@@ -4,7 +4,7 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "MCP surface",
   description:
-    "Every tool, resource, and prompt ctxfile exposes over MCP: get_context, save_session, continue_thread, list_threads, ingest_context, the context:// resources, the prompts, and the Pro tools.",
+    "Every tool, resource, and prompt ctxfile exposes over MCP: get_context, save_session, continue_thread, list_threads, ingest_context, ingest_memory, the context:// resources, the prompts, and the Pro tools.",
 };
 
 export default function McpSurface() {
@@ -13,8 +13,8 @@ export default function McpSurface() {
       <h1>MCP surface</h1>
       <p className="lede">
         ctxfile speaks MCP (spec 2025-11-25) over stdio and, with Pro&apos;s <code>ctxfile serve</code>, over
-        Streamable HTTP. The free core exposes exactly five tools: one read, two thread verbs, one list, and
-        one bulk-ingest door, plus three resources and three prompts. An active Pro license adds up to five
+        Streamable HTTP. The free core exposes exactly six tools: one read, two thread verbs, one list, one
+        bulk-ingest door, and one memory-import door, plus three resources and four prompts. An active Pro license adds up to five
         more tools on the stdio surface, gated per licensed feature. Everything below is inspectable live with{" "}
         <code>npx @modelcontextprotocol/inspector ctxfile</code>.
       </p>
@@ -23,7 +23,7 @@ export default function McpSurface() {
         <p>
           Tool descriptions are the UI for models: each one is written as an instruction (when to use it, what
           a complete call contains), so any agent on any harness can be pointed at ctxfile cold and know what
-          to do. That is the design rule for this surface, and why it stays at five tools.
+          to do. That is the design rule for this surface, and why it stays at six tools.
         </p>
       </div>
 
@@ -49,7 +49,8 @@ export default function McpSurface() {
       <h3>save_session</h3>
       <pre>
         <code>{`save_session({ summary, thread?, key_decisions?, files_touched?, open_items?,
-               continues_from?, handoff?, state?, gotchas?, artifacts?, suggested_first_prompt? })`}</code>
+               continues_from?, handoff?, state?, gotchas?, artifacts?, suggested_first_prompt?,
+               user_directives? })`}</code>
       </pre>
       <p>
         The conversational write door: the agent summarizes <em>this</em> conversation and stores it. No
@@ -59,7 +60,9 @@ export default function McpSurface() {
         <code>handoff: true</code>; validation then requires the complete handoff package (state, decisions
         with rationale, ordered open items, gotchas, artifacts with roles, a suggested first prompt) and
         rejects anything less with per-section errors the agent self-corrects from. Details:{" "}
-        <Link href="/docs/threads">Threads &amp; handoff</Link>.
+        <Link href="/docs/threads">Threads &amp; handoff</Link>. <code>user_directives</code> carries rules the
+        user stated in the session, in their exact words; each becomes a pending project instruction in{" "}
+        <Link href="/docs/memory">imported memory</Link>.
       </p>
 
       <h3>continue_thread</h3>
@@ -96,6 +99,23 @@ export default function McpSurface() {
         agent-reported untrusted data wherever they surface. Review with <code>ctxfile ingest list</code> /{" "}
         <code>rm</code>. Full schema and per-harness prompt snippets:{" "}
         <Link href="/docs/ingest">Agent-assisted sessions</Link>.
+      </p>
+
+      <h3>ingest_memory</h3>
+      <pre>
+        <code>{`ingest_memory({ scope: "global" | "project", complete?, part?, source?,
+                entries: [{ category, text, verbatim?, origin?, date?, project? }] })`}</code>
+      </pre>
+      <p>
+        The memory-import door: an assistant exports what it has stored or learned about the user, one fact per
+        entry, up to 100 entries per call (<code>complete: false</code> asks for the next batch). Categories are
+        instruction, preference, identity, career, project, convention, decision, gotcha, and fact; identity,
+        career, and project are global-only. <code>instruction</code> and <code>identity</code> entries wait for
+        the user&apos;s approval before any agent sees them; everything else is active immediately and labeled
+        agent-reported. Duplicates merge across assistants, and a rejected entry stays rejected on re-import. The
+        harness is inferred from the client when omitted. Active memory reaches agents in the{" "}
+        <code>memory</code> block of <code>get_context</code>. Full schema, prompt, and review model:{" "}
+        <Link href="/docs/memory">Memory import</Link>.
       </p>
 
       <h2>Resources</h2>
@@ -142,15 +162,22 @@ export default function McpSurface() {
         (optional <code>thread</code> argument) instructs it to call continue_thread and resume from the
         result.
       </p>
+      <h3>ctx-import-memory</h3>
+      <p>
+        Instructs the assistant to export what it knows about you through ingest_memory. Optional{" "}
+        <code>scope</code> argument: <code>global</code> (default, about you) or <code>project</code>. The text
+        is the same prompt <code>ctxfile memory prompt</code> prints; see{" "}
+        <Link href="/docs/memory">Memory import</Link>.
+      </p>
 
       <h2>Scopes on the HTTP door</h2>
       <p>
         Over <code>ctxfile serve</code>, each bearer token carries scopes: <code>read:context</code> covers
         get_context, continue_thread, list_threads, the resources, and load-context;{" "}
-        <code>write:sessions</code> covers save_session and ingest_context. A token defaults to both; restrict
+        <code>write:sessions</code> covers save_session, ingest_context, and ingest_memory. A token defaults to both; restrict
         one to <code>[&quot;read:context&quot;]</code> and every write on that connection is refused with an
         explanation. Sessions are bound to the token that opened them. Pro tools do not appear on the HTTP
-        surface; the remote surface is exactly the five core tools.
+        surface; the remote surface is exactly the six core tools.
       </p>
 
       <h2>The ContextObject</h2>
@@ -169,7 +196,9 @@ export default function McpSurface() {
                 "untracked": [], "ahead": 0, "behind": 0,
                 "commits": [...], "diffSummary": "..." },
   "notionPages": [],                    // opt-in connector
-  "sessions": [ ... ],                  // Pro session connectors
+  "sessions": [ ... ],                  // Pro session connectors + ingested digests
+  "memory": { "pending": 0, "global": [...], "project": [...] },
+                                        // imported memory, full scope only
   "sessionSummary": null                // opt-in local Ollama summary
 }`}</code>
       </pre>
@@ -233,9 +262,9 @@ export default function McpSurface() {
 
       <h2>Tool count and client caps</h2>
       <p>
-        Core exposes 5 tools; a fully licensed Pro install exposes 10 over stdio and 5 over HTTP. Comfortably
-        under every client&apos;s tool cap (Cursor&apos;s is 40), and small enough that schema tokens stay
-        cheap.
+        Core exposes 6 tools, over stdio and HTTP alike. Pro adds its licensed tools on stdio only, so the HTTP
+        surface stays at 6. Comfortably under every client&apos;s tool cap (Cursor&apos;s is 40), and small
+        enough that schema tokens stay cheap.
       </p>
     </>
   );

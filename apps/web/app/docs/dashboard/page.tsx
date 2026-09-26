@@ -72,11 +72,12 @@ ctxfile ui --port 5000    # explicit port (default 4747)`}</code>
               </td>
             </tr>
             <tr>
-              <td>Memory (Pro)</td>
+              <td>Memory</td>
               <td>
-                Every memory entry grouped by the agent that wrote it, collapsible per agent, with provenance
-                and timestamps. Search highlights matches; forget (permanently delete) any entry behind a
-                confirmation.
+                Free: <Link href="/docs/memory">imported memory</Link> by scope (global and this project), a
+                pending queue with approve and reject, and an Import sheet that copies the export prompt and takes a
+                pasted reply. Pro adds the encrypted memory entries below it, grouped by the agent that wrote them,
+                with provenance, search, and forget behind a confirmation.
               </td>
             </tr>
             <tr>

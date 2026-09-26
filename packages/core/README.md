@@ -41,8 +41,10 @@ Or click: [Add to Cursor](cursor://anysphere.cursor-deeplink/mcp/install?name=ct
 | `continue_thread` tool | Merged, chronological, provenance-labeled history of a thread — resume work started on any other agent |
 | `list_threads` tool | The user's threads with session counts and last-active times |
 | `ingest_context` tool | Enveloped bulk door, same schema family — universal session capture for harnesses without a parser ([schema + prompt snippets](https://ctxfile.dev/docs/ingest)) |
+| `ingest_memory` tool | Import what an assistant knows about the user, at `global` or `project` scope; instructions and identity stay pending until approved ([memory import](https://ctxfile.dev/docs/memory)) |
 | `load-context` prompt | Injects the snapshot into the conversation |
 | `ctx-save` / `ctx-continue` prompts | One-tap save/resume on clients that surface MCP prompts |
+| `ctx-import-memory` prompt | Asks the assistant to export its memory of you through `ingest_memory` |
 
 The `ContextObject`:
 
@@ -53,6 +55,7 @@ The `ContextObject`:
   "keyFiles": [{ "path": "src/index.ts", "tokens": 812, "truncated": false, "redactions": 0, "content": "..." }],
   "gitState": { "branch": "main", "staged": [], "modified": [], "untracked": [], "commits": [...], "diffSummary": "..." },
   "notionPages": [],                    // opt-in
+  "memory": { "pending": 0, "global": [...], "project": [...] }, // imported memory, when any
   "sessionSummary": null                // opt-in (local Ollama)
 }
 ```
@@ -63,7 +66,9 @@ With an active [Pro](https://ctxfile.dev/pricing) license the server also regist
 
 On any *other* harness (or when a parser breaks), the free fallback is `ingest_context`: paste a short prompt, the agent digests its own session and pushes it in — strict schema, redacted, provenance-stamped `reported_by: agent`, reviewable via `ctxfile ingest list` / `rm <id>`. Parsers win on conflicts. The prompt is the adapter, so every MCP-speaking harness is supported, including ones that don't exist yet.
 
-**Threads** make that portable across providers: save a session to a named thread ("Q3 campaign") from one agent, and `continue_thread` hands the merged, provenance-labeled history to the next one — different harness, different model provider, cold start. When the user hands work to another agent or person, `handoff: true` makes validation require the full takeover package (state, decisions with rationale, ordered open items, gotchas, artifacts with roles, a suggested first prompt), so any agent produces the same artifact. Pro also gets `ctxfile serve`: the same five tools over Streamable HTTP with scoped bearer tokens — the local door of the [Sync & roaming](https://ctxfile.dev/docs/sync) lane.
+**Memory import** carries what your assistants already know about you. `ctxfile memory prompt` prints one prompt for ChatGPT, Grok, Claude or any other assistant; it exports one fact per entry through `ingest_memory` (or as a JSON block for `ctxfile memory import`). Two scopes: `global` (you; every project sees it) and `project`. Instructions and identity stay pending until `ctxfile memory approve`; duplicates from different assistants merge; a rejected entry stays rejected on re-import. Active entries ride every `get_context` in a `memory` block, and `ctxfile memory export` prints them back out as dated lines. Sessions can carry `user_directives`, which become pending project instructions. Free core.
+
+**Threads** make that portable across providers: save a session to a named thread ("Q3 campaign") from one agent, and `continue_thread` hands the merged, provenance-labeled history to the next one — different harness, different model provider, cold start. When the user hands work to another agent or person, `handoff: true` makes validation require the full takeover package (state, decisions with rationale, ordered open items, gotchas, artifacts with roles, a suggested first prompt), so any agent produces the same artifact. Pro also gets `ctxfile serve`: the same six tools over Streamable HTTP with scoped bearer tokens — the local door of the [Sync & roaming](https://ctxfile.dev/docs/sync) lane.
 
 ## Cloud agents: `ctxfile export`
 

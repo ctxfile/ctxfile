@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { CopyCommand } from "@/components/CopyCommand";
 
 export const metadata: Metadata = {
@@ -64,7 +65,7 @@ export default function WebChatbotsPage() {
       <p>
         This is the Sync path (<a href="/docs/sync">Sync &amp; roaming</a>): your machines push encrypted
         context to a relay, and chat surfaces read it back over MCP. The relay&apos;s <code>/mcp</code> door
-        serves the five remote tools plus a <code>search</code>/<code>fetch</code> pair built for web-chatbot
+        serves the six remote tools plus a <code>search</code>/<code>fetch</code> pair built for web-chatbot
         connectors: the assistant searches your threads and pulls full session histories on demand.
       </p>
       <ol>
@@ -157,6 +158,16 @@ export default function WebChatbotsPage() {
         threads are what you resume by name from any surface. A save without one lands as a loose session,
         and the tool will remind you it can re-file it if you give a name. From a
         paste-only surface, ask the model for a handoff summary and hand it to any connected agent to save.
+      </p>
+
+      <h2>Bringing its memory along</h2>
+      <p>
+        The assistant you have used for months already knows how you like things done. On a connected surface,
+        paste the prompt from <code>ctxfile memory prompt</code> and it exports that knowledge into your vault
+        through <code>ingest_memory</code>. Instructions and identity entries wait until you approve them on
+        your own machine, then every agent sees them. On a paste-only surface, use{" "}
+        <code>ctxfile memory prompt --paste</code> and import the reply locally with{" "}
+        <code>ctxfile memory import</code>. See <Link href="/docs/memory">Memory import</Link>.
       </p>
     </>
   );

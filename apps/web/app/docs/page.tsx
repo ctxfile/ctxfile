@@ -77,6 +77,13 @@ export default function Quickstart() {
               </td>
             </tr>
             <tr>
+              <td>ingest_memory</td>
+              <td>
+                Any assistant exports what it knows about you, reviewed before it steers anything. See{" "}
+                <Link href="/docs/memory">Memory import</Link>.
+              </td>
+            </tr>
+            <tr>
               <td>context://current</td>
               <td>Resource returning the full ContextObject as JSON.</td>
             </tr>

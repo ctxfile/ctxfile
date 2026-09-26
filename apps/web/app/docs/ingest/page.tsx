@@ -143,7 +143,9 @@ export default function IngestDocs() {
     "state": "done / in progress / not started",
     "gotchas": ["what the next agent would trip on"],
     "artifacts": [{ "ref": "src/api.ts", "role": "endpoint being migrated" }],
-    "suggested_first_prompt": "the prompt whoever resumes should start from"
+    "suggested_first_prompt": "the prompt whoever resumes should start from",
+    // rules the user stated, exact words; each becomes a pending project instruction
+    "user_directives": ["Always run lint before committing"]
   }
 }`}</pre>
       <p>
@@ -154,6 +156,28 @@ export default function IngestDocs() {
         <Link href="/docs/threads">Threads &amp; handoff</Link>.
       </p>
 
+      <h2>User directives</h2>
+      <p>
+        When the user states a durable rule mid-session (&ldquo;always use pnpm here&rdquo;, &ldquo;never push
+        to main&rdquo;), the agent can put it in <code>user_directives</code>, in the user&apos;s exact words: up
+        to 20 per save, 500 characters each. Each directive becomes a project-scope instruction in{" "}
+        <Link href="/docs/memory">imported memory</Link>, staged as pending until the user approves it, because an
+        agent-reported rule should not steer other agents on its own say-so. The tool response says how many
+        were staged. Both doors accept the field, locally and on the relay.
+      </p>
+
+      <h2>The paste door</h2>
+      <p>
+        Chats with no MCP connection can still hand over a session: ask them for an{" "}
+        <code>ingest_context</code> payload, then import it.
+      </p>
+      <pre>{`pbpaste | ctxfile ingest import
+ctxfile ingest import --file session.json`}</pre>
+      <p>
+        It accepts raw JSON or a whole reply with a <code>```json</code> block inside, and validates against the
+        same strict schema, with the same field-by-field errors.
+      </p>
+
       <h2>Provenance and review</h2>
       <p>
         <code>ingest_context</code> is a write path fed by LLM output, so every record carries provenance from
@@ -162,7 +186,8 @@ export default function IngestDocs() {
         everything else in a snapshot. Review and prune any time:
       </p>
       <pre>{`ctxfile ingest list        # id, harness, session, revision, updated, summary
-ctxfile ingest rm <id>     # delete one record`}</pre>
+ctxfile ingest rm <id>     # delete one record
+ctxfile ingest import      # paste door: stdin or --file`}</pre>
       <p>
         Dedup: records are identified by the harness&apos;s native session id (or a content hash). Re-ingesting
         the same session updates the record with history rather than duplicating it, and if a Pro parser

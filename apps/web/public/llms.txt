@@ -11,6 +11,7 @@ Key facts: install with `npm install -g ctxfile`; works with any MCP client (Cla
 - [Web chatbots](https://ctxfile.dev/docs/webchat): connect Grok, ChatGPT, Claude web, Perplexity via MCP connectors; export and paste for Gemini and any prompt box
 - [Local models](https://ctxfile.dev/docs/local-models): Ollama setup, local summaries and consult, a fully local agent with OpenCode, which models support tool calling
 - [Playbooks](https://ctxfile.dev/docs/playbooks): reusable prompts an AI distills from your own sessions (Pro)
+- [Memory import](https://ctxfile.dev/docs/memory): move what ChatGPT, Grok, Claude, or any assistant knows about you into ctxfile (`ingest_memory`), at global or project scope; instructions and identity wait for your approval; free core
 - [Threads and handoff](https://ctxfile.dev/docs/threads): durable cross-provider work identity, handoff packages, grants
 - [Sync and roaming](https://ctxfile.dev/docs/sync): the encrypted vault, standard vs strict mode, self-hosting the relay
 - [The .ctxfile convention](https://ctxfile.dev/convention): the versioned context artifact for tool authors
@@ -46,13 +47,14 @@ The relay needs a public HTTPS URL; chatbots connect from their own cloud, not y
 
 ## MCP tools exposed
 
-- Free core: `get_context`, `save_session`, `continue_thread`, `list_threads`, `ingest_context`
+- Free core: `get_context`, `save_session`, `continue_thread`, `list_threads`, `ingest_context`, `ingest_memory`
 - Pro adds: `remember`, `recall`, `forget`, `consult`, `distill_playbook`, `list_playbooks`, `get_playbook`, `rm_playbook`, `transcribe_voice`
 
 ## Guides
 
 Long-form answers to the questions that bring people here. Each ends in a runnable install.
 
+- [Export your ChatGPT memory to every AI agent](https://ctxfile.dev/blog/export-chatgpt-memory-to-every-ai-agent): one prompt exports what ChatGPT, Grok or Claude knows about you; review, scopes, and every MCP agent reading it
 - [Share context between Claude Code and Cursor](https://ctxfile.dev/blog/share-context-between-claude-code-and-cursor): why neither tool reads the other, and how to point both at one local MCP server
 - [Claude Code /compact vs /clear](https://ctxfile.dev/blog/claude-code-compact-vs-clear): what each command does, when to use which, and the cross-session gap neither closes
 - [Switch from Cursor to Claude Code without losing context](https://ctxfile.dev/blog/switch-cursor-to-claude-code-without-losing-context): what does not transfer (`.cursor/rules/*.mdc` vs `CLAUDE.md`) and how to carry working state across

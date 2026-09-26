@@ -21,6 +21,50 @@ export default function Changelog() {
 
         <div className="log-list">
           <article className="log-entry">
+            <span className="log-date">2026-09-25</span>
+            <div className="log-body">
+              <span className="log-tag">v0.6.0 · relay 0.4.0</span>
+              <h2>Bring your assistant&apos;s memory to every agent</h2>
+              <p>
+                ChatGPT, Grok, Claude, and the rest each learn how you work, then keep it to themselves. ctxfile
+                now imports that memory, at the scope it belongs to, and nothing that could steer an agent goes
+                live until you approve it. Free core.
+              </p>
+              <ul>
+                <li>
+                  New tool <code>ingest_memory</code> and prompt <code>ctx-import-memory</code>: an assistant
+                  exports what it knows as one fact per entry, in batches of up to 100, against a strict schema
+                  with field-by-field errors. Two scopes: <code>global</code> (about you, every project sees it) and{" "}
+                  <code>project</code>.
+                </li>
+                <li>
+                  Review built in: instructions and identity entries wait for your approval. Duplicates from
+                  different assistants merge into one entry; a rejected entry stays rejected on re-import.
+                </li>
+                <li>
+                  <code>get_context</code> carries active memory in a new <code>memory</code> block, attached at
+                  read time so approvals show immediately, capped at 4,000 tokens.
+                </li>
+                <li>
+                  <code>ctxfile memory prompt|import|list|approve|reject|export</code>, plus an import and review
+                  section in the dashboard Memory view. <code>export</code> prints dated lines under category
+                  headers, ready to paste into another assistant or an AGENTS.md.
+                </li>
+                <li>
+                  Sessions: <code>user_directives</code> on <code>save_session</code> and{" "}
+                  <code>ingest_context</code> turns rules you state mid-session into pending instructions, and{" "}
+                  <code>ctxfile ingest import</code> takes a pasted session from chats without MCP.
+                </li>
+                <li>
+                  Sync and relay: memory syncs end-to-end encrypted, global memory rides every vault, and the relay
+                  serves <code>ingest_memory</code> so ChatGPT, Grok, and claude.ai can export straight into your
+                  vault. Handoff grants and org federation never see memory.
+                </li>
+              </ul>
+            </div>
+          </article>
+
+          <article className="log-entry">
             <span className="log-date">2026-09-13</span>
             <div className="log-body">
               <span className="log-tag">v0.5.0</span>

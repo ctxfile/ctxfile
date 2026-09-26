@@ -4,7 +4,7 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "CLI reference",
   description:
-    "Every ctxfile command, flag, and environment variable: server, serve, ui, export, hooks, ingest, threads, activate.",
+    "Every ctxfile command, flag, and environment variable: server, serve, ui, export, hooks, ingest, memory, threads, activate.",
 };
 
 export default function Cli() {
@@ -74,7 +74,7 @@ ctxfile resume            # re-enable`}</code>
         </table>
       </div>
       <p>
-        The HTTP door: the same five core tools over Streamable HTTP, one MCP session per client, each session
+        The HTTP door: the same six core tools over Streamable HTTP, one MCP session per client, each session
         bound to the bearer token that opened it. Tokens are named env vars with{" "}
         <code>read:context</code>/<code>write:sessions</code> scopes; without tokens the server is
         loopback-only and DNS-rebinding-protected. Pro tools stay on stdio. See{" "}
@@ -167,13 +167,36 @@ ctxfile hooks uninstall   # remove it`}</code>
 
       <h2>ctxfile ingest</h2>
       <pre>
-        <code>{`ctxfile ingest list       # this project's agent-reported sessions
-ctxfile ingest rm <id>    # delete one record by its listed id`}</code>
+        <code>{`ctxfile ingest list                  # this project's agent-reported sessions
+ctxfile ingest rm <id>               # delete one record by its listed id
+ctxfile ingest import [--file <f>]   # import an ingest_context payload (stdin or file)`}</code>
       </pre>
       <p>
         Reviews what agents pushed through <code>ingest_context</code> or <code>save_session</code>: id,
-        harness, session id, revision, last update, thread (when attached), and the summary head. Provenance
-        and the full flow: <Link href="/docs/ingest">Agent-assisted sessions</Link>.
+        harness, session id, revision, last update, thread (when attached), and the summary head.{" "}
+        <code>import</code> is the paste door for chats without MCP: it accepts raw JSON or a whole reply
+        containing a <code>```json</code> block, validated against the same schema. Provenance and the full
+        flow: <Link href="/docs/ingest">Agent-assisted sessions</Link>.
+      </p>
+
+      <h2>ctxfile memory</h2>
+      <pre>
+        <code>{`ctxfile memory prompt [--scope global|project] [--paste] [--harness <id>]
+ctxfile memory import [--file <f>] [--harness <id>]   # stdin or file
+ctxfile memory list [--scope global|project|all] [--pending]
+ctxfile memory approve <id> | --all
+ctxfile memory reject <id>
+ctxfile memory export [--format md|json] [--scope global|project|all]`}</code>
+      </pre>
+      <p>
+        Imported memory: what assistants know about you (<code>global</code>) or this project (
+        <code>project</code>). <code>prompt</code> prints the export prompt to paste into any assistant (
+        <code>--paste</code> asks for a <code>```json</code> block instead of a tool call).{" "}
+        <code>import</code> reads that block from stdin or a file. <code>list</code> shows id, scope, category,
+        status, date, and reporting assistants. Instructions and identity entries stay pending until{" "}
+        <code>approve</code>; <code>reject</code> is permanent, even on re-import. <code>export</code> prints
+        approved and active entries as dated lines under category headers, or JSON. See{" "}
+        <Link href="/docs/memory">Memory import</Link>.
       </p>
 
       <h2>ctxfile threads</h2>

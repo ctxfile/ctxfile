@@ -31,7 +31,7 @@ export interface BlogPost {
 
 /**
  * Every claim in these posts is checked against the shipped source, not the
- * roadmap. The five MCP tools are the ones `packages/core/src/server.ts`
+ * roadmap. The six MCP tools are the ones `packages/core/src/server.ts`
  * actually registers; the relay's extra `search`/`fetch` pair is the ChatGPT
  * connector contract in `packages/relay/src/mcp.ts`; the vault ranking is the
  * tier order in `connectors/vault.ts`. The honest boundaries (reduced
@@ -40,6 +40,144 @@ export interface BlogPost {
  * audience costs more than it wins.
  */
 export const blogPosts: BlogPost[] = [
+  {
+    slug: "export-chatgpt-memory-to-every-ai-agent",
+    title: "Export your ChatGPT memory and give it to every AI agent",
+    metaTitle: "Export ChatGPT Memory (and Grok, Claude) to Every AI Agent",
+    metaDescription:
+      "How to export what ChatGPT, Grok or Claude remembers about you and move that memory between AI assistants: one prompt, a strict schema, approval before any rule takes effect, and every MCP agent reading it through ctxfile. Free and open source.",
+    excerpt:
+      "Every chat assistant you use builds up a picture of you: your rules, your preferences, your projects. None of them share it. Here is how to export that memory with one prompt, review it, and hand it to Claude Code, Cursor, Codex and every other agent you use.",
+    category: "Memory",
+    date: "2026-09-25",
+    readTime: "8 min read",
+    primaryKeyword: "export chatgpt memory",
+    faq: [
+      {
+        q: "Can I export my ChatGPT memory?",
+        a: "Yes, by asking for it. Assistants with a memory feature can list what they have stored about you when prompted. ctxfile's memory prompt asks for that list in a fixed shape: one fact per entry, a category, your exact words for instructions, and a date only when the assistant actually knows it. A connected assistant sends it straight to ctxfile's ingest_memory tool; any other assistant prints a JSON block you import with ctxfile memory import.",
+      },
+      {
+        q: "How do I move memory between AI assistants?",
+        a: "Export it from the assistant that has it into ctxfile, then let every other agent read it. ctxfile merges duplicates from different assistants into one entry, keeps personal facts in a global scope and project rules in a project scope, and serves the active entries to any MCP client in get_context. ctxfile memory export also prints the memory as dated lines you can paste into another assistant's memory settings or an AGENTS.md.",
+      },
+      {
+        q: "Is it safe to import rules an AI wrote about me?",
+        a: "Only with review, which is why ctxfile does not apply them automatically. Instructions and identity entries land as pending and no agent sees them until you approve them. Everything else is labeled agent-reported untrusted data. If you reject an entry it stays rejected, even when another assistant reports it again later.",
+      },
+      {
+        q: "Does my memory leave my machine?",
+        a: "Not unless you set up sync. Imported memory is stored locally in ~/.ctxfile and redacted on write. With an encrypted ctxfile vault configured, it syncs end to end encrypted like sessions do, and hosted assistants such as ChatGPT, Grok and claude.ai can export into the vault through the relay.",
+      },
+      {
+        q: "Is memory import a paid feature?",
+        a: "No. Memory import is part of the free, Apache-2.0 ctxfile core: the ingest_memory tool, the review queue, the CLI and the dashboard view. Pro's encrypted remember and recall memory is a separate feature.",
+      },
+    ],
+    body: `If you have used ChatGPT for a year, it knows things about you that took a year to teach. You don't like emoji. You want the critical answer, not the encouraging one. You are building a fintech backend and a side project, and it knows which is which.
+
+Then you open Claude Code, or Cursor, or a fresh Grok chat, and you start from zero. Every assistant builds its own picture of you, and none of them share it. The knowledge is real and it is yours, but it lives inside one product.
+
+This post covers how to get it out, check it, and give it to every agent you use.
+
+## What "memory" actually is here
+
+Most chat assistants now keep some form of saved memory: short facts about you that they carry between conversations. On top of that, they can often infer more from past chats if you ask. Both are useful. Both are also unverified. An assistant can misremember, overgeneralize, or record something you said once as a rule you live by.
+
+That second point matters more than it sounds. A memory that says "always push straight to main" is an instruction. If it moves from one assistant into every agent you run, it starts steering real work. So an export is not enough. You need an export you can review.
+
+## The shape of a good export
+
+The prompt below is what ctxfile hands you. It asks for the same things a careful person would:
+
+- **Fixed categories.** Instructions, preferences, identity, career and projects for you as a person. Conventions, decisions, gotchas and facts for a single project.
+- **Your exact words for instructions.** A paraphrased rule is a different rule. The prompt asks for verbatim text and a \`verbatim: true\` flag.
+- **Stored versus inferred.** Did the assistant save this, or is it deducing it? That goes in \`origin\`.
+- **A date only when it is known.** \`null\` otherwise. A guessed date sorts wrong forever.
+- **Batches with a completeness flag.** Up to 100 entries per call, and \`complete: false\` when more remain, so a partial export never passes for a whole one.
+
+Get it with one command:
+
+~~~
+npm install -g ctxfile
+ctxfile memory prompt
+~~~
+
+Add \`--scope project\` for a project export, or \`--paste\` when the assistant has no connection to ctxfile.
+
+## Two ways in
+
+**Connected assistants call the tool directly.** Claude Code, Cursor and other local MCP clients talk to ctxfile already. ChatGPT, Grok and claude.ai can reach it through the relay of an encrypted ctxfile vault. Paste the prompt, and the assistant calls \`ingest_memory\` with the export. If it gets a field wrong, the tool answers with the exact path and problem (\`entries.3.date: must be a calendar date\`) and the assistant fixes it and calls again.
+
+**Everything else pastes.** With \`--paste\`, the prompt asks for one JSON code block. Copy the whole reply, prose and all, and pipe it in:
+
+~~~
+pbpaste | ctxfile memory import
+~~~
+
+The importer finds the JSON block inside the reply on its own.
+
+::demo:memory-import::
+
+## Review before anything steers
+
+Here is what happens to an import:
+
+1. **Everything is validated and redacted.** Unknown fields are rejected. Secrets pass the same redaction as files and session digests.
+2. **Duplicates merge.** The same preference from ChatGPT and Grok becomes one entry that lists both as sources. Case, spacing and a trailing full stop don't create a second copy.
+3. **Instructions and identity wait.** They land as pending. No agent sees them until you approve them.
+4. **Rejections stick.** Reject an entry and it becomes a tombstone. If any assistant reports the same fact later, the import skips it and says so.
+
+Review from the terminal or the dashboard's Memory view:
+
+~~~
+ctxfile memory list --pending
+ctxfile memory approve 4
+ctxfile memory reject 7
+~~~
+
+## Global and project memory
+
+Not everything an assistant knows belongs everywhere. ctxfile keeps two scopes.
+
+**Global** is you: how you like to work, your background, your projects. Every project on your machine sees it. **Project** is one repository: its conventions, decisions already made, traps already found. Only that project sees it.
+
+Personal categories are global-only on purpose. A project scope can be shared with a team through a hub, and your career history has no business in a shared repo's context. When the two scopes disagree, agents are told the project entry wins.
+
+## What your agents receive
+
+Once entries are active, every \`get_context\` call carries a \`memory\` block: your approved instructions first, then preferences, down to biography last, capped at 4,000 tokens with project entries filled first. It is attached when the call happens rather than cached, so an approval shows up on the very next call. Claude Code, Cursor, Codex, Gemini CLI and any other MCP client get the same block.
+
+Sessions feed it too. When you tell an agent "always run the linter before committing", it can save that sentence in \`user_directives\` with the session, and ctxfile stages it as a pending project instruction.
+
+## Take it back out
+
+Memory import is not a one-way door. \`ctxfile memory export\` prints what is approved and active as category headers with dated lines, oldest first:
+
+~~~
+### Instructions
+
+[2026-01-05] - Never add attribution lines to commits
+[unknown] - Be critical of my ideas
+~~~
+
+Paste that into another assistant's memory settings, a CLAUDE.md, or an AGENTS.md.
+
+## The honest limits
+
+The export is only as good as what the assistant can recall and is willing to write down. "This is the complete set" is the assistant's claim, and nothing can verify it. The review step exists because the content is agent-reported. Treat the first import as a draft of yourself, and prune it.
+
+What you get in return is a single place where that draft lives, under your control, readable by every agent you use.
+
+## Try it
+
+~~~
+npm install -g ctxfile
+ctxfile memory prompt
+~~~
+
+Memory import is part of the free, open-source core. The [memory docs](/docs/memory) cover the schema, the scopes, and sync. The [live demo](/demo/) shows the dashboard over a sample project before you install anything.`,
+  },
   {
     slug: "ai-playbooks-reusable-prompts-from-agent-sessions",
     title: "AI playbooks: turn your best agent sessions into reusable prompts",
@@ -387,7 +525,7 @@ claude mcp add ctxfile -- ctxfile --root .
 }
 ~~~
 
-That is the whole setup. Both tools now have five tools available to them: \`get_context\`, \`save_session\`, \`continue_thread\`, \`list_threads\` and \`ingest_context\`.
+That is the whole setup. Both tools now have six tools available to them: \`get_context\`, \`save_session\`, \`continue_thread\`, \`list_threads\`, \`ingest_context\` and \`ingest_memory\`.
 
 ## The test that proves it works
 
@@ -1004,7 +1142,7 @@ You need HTTP when the client is not on the machine — a browser-based chat pro
 
 ## A worked example
 
-[ctxfile](https://github.com/ctxfile/ctxfile) is an Apache-2.0 local-first MCP server built on these rules, and the source is public if you want to see them applied at more than tutorial scale. It snapshots a project's working state — plan, ranked key files, git state, session digests — and serves it to any MCP client through five tools: \`get_context\`, \`save_session\`, \`continue_thread\`, \`list_threads\` and \`ingest_context\`.
+[ctxfile](https://github.com/ctxfile/ctxfile) is an Apache-2.0 local-first MCP server built on these rules, and the source is public if you want to see them applied at more than tutorial scale. It snapshots a project's working state — plan, ranked key files, git state, session digests — and serves it to any MCP client through six tools: \`get_context\`, \`save_session\`, \`continue_thread\`, \`list_threads\`, \`ingest_context\` and \`ingest_memory\`.
 
 Things worth reading in it: the redaction pass and deny-path handling, the token-budgeted file selection (choosing which files matter is most of the difficulty), and the export path, which produces a repo-safe context file containing a manifest of key files rather than their contents.
 

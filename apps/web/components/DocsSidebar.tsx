@@ -37,6 +37,7 @@ const DOCS_NAV: DocGroup[] = [
     title: "Guides",
     links: [
       { href: "/docs/ingest", label: "Session sync" },
+      { href: "/docs/memory", label: "Memory import" },
       { href: "/docs/threads", label: "Threads & handoff" },
       { href: "/docs/export", label: "Cloud agents" },
       { href: "/docs/local-models", label: "Local models" },
