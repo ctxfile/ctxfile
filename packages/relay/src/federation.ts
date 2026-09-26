@@ -56,6 +56,8 @@ export async function redeemFederatedGrant(options: RedeemOptions): Promise<{ th
 
   let imported = 0;
   for (const payload of result.payloads) {
+    // A grant is one thread; memory is never federated, even if a peer sends it.
+    if (payload.kind === "memory") continue;
     const naturalId =
       payload.kind === "thread" ? `thread:${payload.title.toLowerCase()}` : `session:${payload.harness}:${payload.session_id}`;
     const blobId = await deriveBlobId(dataKey, naturalId);

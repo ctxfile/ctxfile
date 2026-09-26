@@ -631,8 +631,13 @@ async function handleFederationRedeem(ctx: RelayContext, req: http.IncomingMessa
   const dataKey = unwrapDataKey(ctx.keyring, vault);
   const payloads = await loadVaultPayloads(db, dataKey, vault);
   const wanted = doc.thread_title.toLowerCase();
+  // Thread-scoped: imported memory (person/project-wide) never crosses orgs.
   const scoped = payloads.filter((p) =>
-    p.kind === "thread" ? p.title.toLowerCase() === wanted : p.thread_title?.toLowerCase() === wanted
+    p.kind === "thread"
+      ? p.title.toLowerCase() === wanted
+      : p.kind === "session"
+        ? p.thread_title?.toLowerCase() === wanted
+        : false
   );
   db.audit({
     vaultId: vault.id,

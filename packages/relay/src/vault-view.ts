@@ -3,8 +3,13 @@ import {
   decryptBlob,
   deriveBlobId,
   encryptBlob,
+  initialMemoryStatus,
+  memoryId,
   parseSyncPayload,
   redactContent,
+  type MemoryImportResult,
+  type MemoryInput,
+  type MemorySyncPayload,
   type SessionSyncPayload,
   type SyncPayload,
   type ThreadSyncPayload,
@@ -172,4 +177,76 @@ async function upsertThreadBlob(db: RelayDb, dataKey: Uint8Array, vault: VaultRo
   }
   const data = await encryptBlob(dataKey, textEncoder.encode(JSON.stringify(payload)), blobId);
   db.putBlob(vault.id, blobId, { id: blobId, version: payload.last_active, deleted: false }, data);
+}
+
+/** The relay-side memory write path (chat surfaces importing through /mcp):
+    same semantics as the local MemoryStore — merge duplicates, keep status,
+    never resurrect a rejected (tombstoned) memory, stage instructions and
+    identity as pending. Approval happens on the user's own device and syncs. */
+export async function writeMemories(
+  db: RelayDb,
+  keyring: KeyProvider,
+  vault: VaultRow,
+  input: MemoryInput,
+  now = Date.now()
+): Promise<MemoryImportResult> {
+  const dataKey = unwrapDataKey(keyring, vault);
+  const result: MemoryImportResult = { created: 0, merged: 0, pending: 0, skippedRejected: 0 };
+  const harness = input.source.harness;
+  for (const entry of input.entries) {
+    const text = redact(entry.text);
+    const id = memoryId(input.scope, entry.category, text);
+    const blobId = await deriveBlobId(dataKey, `memory:${input.scope}:${id}`);
+    let prior: MemorySyncPayload | null = null;
+    const existing = db.getBlob(vault.id, blobId);
+    if (existing) {
+      try {
+        const parsed = parseSyncPayload(await decryptBlob(dataKey, existing.data, blobId));
+        if (parsed?.kind === "memory") prior = parsed;
+      } catch {
+        /* unreadable prior blob: replace it */
+      }
+    }
+    if (prior?.deleted) {
+      result.skippedRejected += 1;
+      continue;
+    }
+    let payload: MemorySyncPayload;
+    if (prior) {
+      payload = {
+        ...prior,
+        verbatim: prior.verbatim || entry.verbatim,
+        origin: prior.origin === "stored" || entry.origin === "stored" ? "stored" : "inferred",
+        date: prior.date ?? entry.date,
+        sources: prior.sources.includes(harness) ? prior.sources : [...prior.sources, harness],
+        seen_count: prior.seen_count + 1,
+        updated_at: Math.max(prior.updated_at + 1, now),
+      };
+      result.merged += 1;
+    } else {
+      const status = initialMemoryStatus(entry.category);
+      payload = {
+        kind: "memory",
+        scope: input.scope,
+        memory_id: id,
+        category: entry.category,
+        text,
+        verbatim: entry.verbatim,
+        origin: entry.origin,
+        date: entry.date,
+        project: entry.project ? redact(entry.project) : null,
+        status,
+        sources: [harness],
+        seen_count: 1,
+        created_at: now,
+        updated_at: now,
+        deleted: false,
+      };
+      result.created += 1;
+      if (status === "pending") result.pending += 1;
+    }
+    const data = await encryptBlob(dataKey, textEncoder.encode(JSON.stringify(payload)), blobId);
+    db.putBlob(vault.id, blobId, { id: blobId, version: payload.updated_at, deleted: false }, data);
+  }
+  return result;
 }

@@ -6,7 +6,15 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 export { StreamableHTTPServerTransport };
 export type VaultMcpServer = McpServer;
 import {
+  buildContextMemory,
+  describeDirectives,
+  describeMemoryImport,
   formatIngestErrors,
+  formatMemoryErrors,
+  MEMORY_SCHEMA_VERSION,
+  memoryImportPrompt,
+  memoryInputSchema,
+  withMemoryDefaults,
   inferHarnessFromClientName,
   INGEST_SCHEMA_VERSION,
   ingestInputSchema,
@@ -21,7 +29,7 @@ import {
 import { z } from "zod";
 import type { KeyProvider } from "./keyring.js";
 import type { RelayDb, VaultRow } from "./store.js";
-import { loadView, writeSession } from "./vault-view.js";
+import { loadView, writeMemories, writeSession } from "./vault-view.js";
 
 /**
  * The five-tool remote surface (§5), served from a vault instead of a local
@@ -111,6 +119,16 @@ export function createVaultMcpServer(options: VaultServerOptions): McpServer {
           last_surface: t.lastHarness,
         })),
         recent_sessions: sessions.slice(-5).map((s) => ingestToSessionDigest(s, 400)),
+        // Imported memory is person/project-wide; a thread-scoped grant never sees it.
+        ...(grant
+          ? {}
+          : {
+              memory: buildContextMemory(
+                v.memories.filter((m) => m.scope === "global"),
+                v.memories.filter((m) => m.scope === "project"),
+                v.memories.filter((m) => m.status === "pending").length
+              ),
+            }),
       });
       record("mcp.get_context", { threads: threads.length });
       return { content: [{ type: "text", text: context }], structuredContent: { context } };
@@ -149,6 +167,10 @@ export function createVaultMcpServer(options: VaultServerOptions): McpServer {
             "OPT-IN: the full conversation text, verbatim, when the user asks to save the whole conversation. " +
               "Not loaded into future contexts automatically; retrieved only via fetch. For very long conversations save in parts (part 1/2...)."
           ),
+        user_directives: z
+          .array(z.string())
+          .optional()
+          .describe("Durable rules the user stated in this session, in their EXACT words; staged as pending instructions"),
         harness: z.string().optional().describe("Client surface id; inferred from the connected client if omitted"),
       },
       outputSchema: {
@@ -192,6 +214,17 @@ export function createVaultMcpServer(options: VaultServerOptions): McpServer {
         trigger: session.trigger,
       }, now);
       record("mcp.save_session", { session: result.sessionId, thread: result.threadTitle, handoff: session.handoff === true, trigger: session.trigger ?? "manual" });
+      // Grants stay thread-scoped: their directives are not promoted to vault-wide memory.
+      const directives =
+        !grant && session.user_directives && session.user_directives.length > 0
+          ? await writeMemories(db, keyring, vault, {
+              ctxfile_memory_schema: MEMORY_SCHEMA_VERSION,
+              source: { harness },
+              scope: "project",
+              complete: true,
+              entries: session.user_directives.map((text) => ({ category: "instruction", text, verbatim: true, origin: "stored", date: null })),
+            }, now)
+          : null;
       const text = [
         // B4 parity with the local server: auto saves lead with the
         // announcement line, ready for the agent to echo verbatim.
@@ -201,6 +234,7 @@ export function createVaultMcpServer(options: VaultServerOptions): McpServer {
             : "✓ Checkpointed to ctxfile"
           : null,
         session.handoff === true ? "Handoff package stored." : null,
+        directives ? describeDirectives(directives) : null,
         result.threadTitle
           ? `Saved session ${result.sessionId} (rev ${result.revision}) to thread "${result.threadTitle}" in the vault.`
           : `Saved session ${result.sessionId} (rev ${result.revision}) to the vault.`,
@@ -479,6 +513,89 @@ export function createVaultMcpServer(options: VaultServerOptions): McpServer {
         ],
       };
     }
+  );
+
+  server.registerTool(
+    "ingest_memory",
+    {
+      title: "Import Memory",
+      description:
+        "Export what you have stored or learned about the user into their ctxfile vault so every agent, in any tool, starts with it. " +
+        'scope "global" = about the person (instructions, preferences, identity, career, projects); ' +
+        'scope "project" = this vault\'s project (instructions, conventions, decisions, gotchas, facts). ' +
+        "One fact per entry; instructions in the user's exact words with verbatim: true; date YYYY-MM-DD or null (never guess); " +
+        'origin "stored" (in your saved memory) or "inferred". Max 100 entries per call: set complete: false and call again for the rest. ' +
+        "Instructions and identity entries wait for the user's approval on their own device before any agent sees them.",
+      inputSchema: {
+        ctxfile_memory_schema: z.string().optional().describe(`"${MEMORY_SCHEMA_VERSION}"`),
+        source: z.object({}).passthrough().optional().describe("{ harness?, harness_version? }; inferred from the client if omitted"),
+        scope: z.string().describe('"global" | "project"'),
+        complete: z.boolean().optional().describe("false when more entries remain after this batch"),
+        part: z.object({}).passthrough().optional().describe("{ index, total } when sending batches"),
+        entries: z
+          .array(z.object({}).passthrough())
+          .describe(
+            "[{ category: instruction|preference|identity|career|project|convention|decision|gotcha|fact, text, verbatim?, origin?: stored|inferred, date?: YYYY-MM-DD|null, project? }]"
+          ),
+      },
+      outputSchema: {
+        stored: z.boolean(),
+        created: z.number(),
+        merged: z.number(),
+        pending: z.number(),
+        skipped_rejected: z.number(),
+        complete: z.boolean(),
+      },
+    },
+    async (args) => {
+      if (grant) return fail("this handoff grant is scoped to one thread and cannot write memory");
+      if (!allowed("write:sessions")) return fail("this token lacks the write:sessions scope; the vault is read-only here");
+      if (vault.mode === "strict") return fail("strict vault: the relay cannot write readable content; import on one of your own devices and sync");
+      const now = Date.now();
+      if (overWriteLimit(now)) return fail("ingest_memory rate limit reached (20/minute). Wait, then send the next batch.");
+      const parsed = memoryInputSchema.safeParse(withMemoryDefaults(args, server.server.getClientVersion()?.name));
+      if (!parsed.success) return fail(formatMemoryErrors(parsed.error));
+      recordWrite(now);
+      const result = await writeMemories(db, keyring, vault, parsed.data, now);
+      record("mcp.ingest_memory", {
+        scope: parsed.data.scope,
+        created: result.created,
+        merged: result.merged,
+        pending: result.pending,
+        complete: parsed.data.complete,
+      });
+      return {
+        content: [{ type: "text", text: describeMemoryImport(result, parsed.data.scope, parsed.data.complete, parsed.data.part) }],
+        structuredContent: {
+          stored: true,
+          created: result.created,
+          merged: result.merged,
+          pending: result.pending,
+          skipped_rejected: result.skippedRejected,
+          complete: parsed.data.complete,
+        },
+      };
+    }
+  );
+
+  server.registerPrompt(
+    "ctx-import-memory",
+    {
+      title: "Import Memory into ctxfile",
+      description: "Export what the assistant knows about you (or this project) via ingest_memory.",
+      argsSchema: { scope: z.enum(["global", "project"]).optional() },
+    },
+    ({ scope }) => ({
+      messages: [
+        {
+          role: "user" as const,
+          content: {
+            type: "text" as const,
+            text: memoryImportPrompt({ scope: scope ?? "global", mode: "mcp", projectName: vault.name }),
+          },
+        },
+      ],
+    })
   );
 
   server.registerPrompt(

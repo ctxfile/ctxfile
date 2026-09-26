@@ -591,4 +591,103 @@ describe("the relay (M3-M5 + federation), end to end", () => {
     expect(write.isError).toBe(true);
     await client.close();
   });
+
+  it("imports memory through a chat surface: pending until approved on the desk, never shown to grants or federated", async () => {
+    // A hosted assistant exports what it knows about the user.
+    const chat = await connectMcp(hubA.running.publicUrl, vaultA.token, "connectors-manager");
+    const imported = await chat.callTool({
+      name: "ingest_memory",
+      arguments: {
+        scope: "global",
+        entries: [
+          { category: "instruction", text: "Never add attribution lines to commits", verbatim: true, origin: "stored" },
+          { category: "career", text: "Runs ctxfile", origin: "stored", date: "2026-01-10" },
+        ],
+      },
+    });
+    expect(imported.isError ?? false).toBe(false);
+    expect(imported.structuredContent).toMatchObject({ created: 2, pending: 1, complete: true });
+    // Same fact again from the same surface merges instead of duplicating.
+    const again = await chat.callTool({
+      name: "ingest_memory",
+      arguments: { scope: "global", entries: [{ category: "career", text: "runs ctxfile." }] },
+    });
+    expect(again.structuredContent).toMatchObject({ created: 0, merged: 1 });
+    // A save with user directives stages them as pending project instructions.
+    const saved = await chat.callTool({
+      name: "save_session",
+      arguments: { summary: "Planned the launch.", thread: "Q3 campaign", user_directives: ["Always cc legal on launch copy"] },
+    });
+    expect(text(saved)).toContain("1 user directive staged");
+    // Validation errors come back field-by-field.
+    const bad = await chat.callTool({ name: "ingest_memory", arguments: { scope: "project", entries: [{ category: "identity", text: "x" }] } });
+    expect(bad.isError).toBe(true);
+    expect(text(bad)).toContain("global-only");
+
+    // get_context shows only what is active; pending instructions stay out.
+    const ctx = JSON.parse(text(await chat.callTool({ name: "get_context", arguments: {} }))) as {
+      memory?: { global: { text: string; sources: string[] }[]; pending: number };
+    };
+    expect(ctx.memory?.global.map((m) => m.text)).toEqual(["Runs ctxfile"]);
+    expect(ctx.memory?.global[0]?.sources).toEqual(["grok"]);
+    expect(ctx.memory?.pending).toBe(2);
+    await chat.close();
+
+    // The desk pulls, approves the instruction, pushes; the relay now serves it.
+    await (await openVaultSync(vaultA, PASSPHRASE, storeA, rootA)).sync();
+    const pending = storeA.memory.list(rootA, { status: "pending" });
+    expect(pending.map((m) => m.scope).sort()).toEqual(["global", "project"]);
+    const instruction = pending.find((m) => m.scope === "global")!;
+    expect(storeA.memory.approve(rootA, instruction.id)).toBe(true);
+    await (await openVaultSync(vaultA, PASSPHRASE, storeA, rootA)).sync();
+    const chat2 = await connectMcp(hubA.running.publicUrl, vaultA.token, "chatgpt");
+    const ctx2 = JSON.parse(text(await chat2.callTool({ name: "get_context", arguments: {} }))) as {
+      memory?: { global: { text: string; approved?: boolean }[]; pending: number };
+    };
+    expect(ctx2.memory?.global[0]).toMatchObject({ text: "Never add attribution lines to commits", approved: true });
+    expect(ctx2.memory?.pending).toBe(1);
+    await chat2.close();
+
+    // A handoff grant sees the thread, never the person's memory, and cannot write it.
+    const grantResponse = await fetch(`${hubA.running.publicUrl}/v1/grants`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${vaultA.token}`, "content-type": "application/json" },
+      body: JSON.stringify({ thread: "Q3 campaign", days: 7, permission: "read+ingest" }),
+    });
+    const { grant_token } = (await grantResponse.json()) as { grant_token: string };
+    const contractor = await connectMcp(hubA.running.publicUrl, grant_token, "contractor-agent");
+    const grantCtx = JSON.parse(text(await contractor.callTool({ name: "get_context", arguments: {} }))) as { memory?: unknown };
+    expect(grantCtx.memory).toBeUndefined();
+    const denied = await contractor.callTool({ name: "ingest_memory", arguments: { scope: "global", entries: [{ category: "fact", text: "x" }] } });
+    expect(denied.isError).toBe(true);
+    expect(text(denied)).toContain("cannot write memory");
+    await contractor.close();
+
+    // Federation carries the thread, never memory.
+    const vaultB2 = await createVault({
+      relayUrl: hubB.running.publicUrl,
+      name: "partner-vault-2",
+      mode: "standard",
+      passphrase: PASSPHRASE,
+      kdf: TEST_KDF,
+      configPath: path.join(dirs[2] as string, "vault-b2.json"),
+    });
+    const issue = await fetch(`${hubA.running.publicUrl}/v1/federation/grants`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${vaultA.token}`, "content-type": "application/json" },
+      body: JSON.stringify({ thread: "Q3 campaign", audience_org: "org-beta", days: 7 }),
+    });
+    const { grant_b64 } = (await issue.json()) as { grant_b64: string };
+    await redeemFederatedGrant({
+      db: hubB.ctx.db,
+      keyring: hubB.ctx.keyring,
+      org: hubB.ctx.org,
+      grantB64: grant_b64,
+      targetVaultId: vaultB2.config.vaultId,
+    });
+    const partner = await connectMcp(hubB.running.publicUrl, vaultB2.config.token, "partner-agent");
+    const partnerCtx = JSON.parse(text(await partner.callTool({ name: "get_context", arguments: {} }))) as { memory?: unknown };
+    expect(partnerCtx.memory).toBeUndefined();
+    await partner.close();
+  });
 });
