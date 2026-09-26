@@ -92,6 +92,19 @@ export function createSnapshotService(
     return rebuildWith(computeHints(), onEvent);
   }
 
+  /** Memory is attached after the cache, never stored in it: an approval or
+      import must show on the very next call, not after cacheMaxAgeMs. */
+  function withMemory(ctx: ContextObject, scope: ContextScope): ContextObject {
+    if (scope !== "full" || !ingest) return ctx;
+    try {
+      const memory = ingest.memory.contextMemory(config.root);
+      return memory ? { ...ctx, memory } : ctx;
+    } catch {
+      // A broken memory table must never fail a snapshot.
+      return ctx;
+    }
+  }
+
   return {
     rebuild,
     async getContext(scope: ContextScope = "full"): Promise<ContextObject> {
@@ -100,12 +113,12 @@ export function createSnapshotService(
       // twice per miss was a redundant query on every cache miss.
       const hints = computeHints();
       const cached = cache?.latest(config.root, config.cacheMaxAgeMs, fingerprintFor(hints));
-      if (cached) return filterScope(cached, scope);
-      return filterScope(await rebuildWith(hints), scope);
+      if (cached) return withMemory(filterScope(cached, scope), scope);
+      return withMemory(filterScope(await rebuildWith(hints), scope), scope);
     },
     getCached(scope: ContextScope = "full"): ContextObject | null {
       const cached = cache?.latest(config.root, config.cacheMaxAgeMs, fingerprintFor(computeHints()));
-      return cached ? filterScope(cached, scope) : null;
+      return cached ? withMemory(filterScope(cached, scope), scope) : null;
     },
     latestCached(): ContextObject | null {
       if (!cache) return null;

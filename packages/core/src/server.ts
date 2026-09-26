@@ -1,6 +1,7 @@
 // The ONLY module allowed to import @modelcontextprotocol/sdk (spec-churn adapter).
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import http from "node:http";
+import path from "node:path";
 import type { AddressInfo } from "node:net";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
@@ -19,6 +20,15 @@ import {
   saveSessionSchema,
   type IngestInput,
 } from "./ingest.js";
+import {
+  describeDirectives,
+  describeMemoryImport,
+  formatMemoryErrors,
+  MEMORY_SCHEMA_VERSION,
+  memoryImportPrompt,
+  memoryInputSchema,
+  withMemoryDefaults,
+} from "./memory.js";
 import { createRuntime, type Runtime, type RuntimeOptions } from "./runtime.js";
 import { VERSION } from "./version.js";
 
@@ -161,6 +171,13 @@ export function createServerForRuntime(
           .enum(["auto", "manual"])
           .optional()
           .describe('"auto" for behavior-layer ambient checkpoints (subject to pause/private/debounce); default "manual"'),
+        user_directives: z
+          .array(z.string())
+          .optional()
+          .describe(
+            'Durable rules the user stated in this session, in their EXACT words ("always use pnpm", "never push to main"). ' +
+              "Staged as pending project instructions until the user approves them."
+          ),
         harness: z.string().optional().describe("Client surface id; inferred from the connected client if omitted"),
       },
       outputSchema: {
@@ -221,6 +238,7 @@ export function createServerForRuntime(
         lines.push(result.threadTitle ? `✓ Checkpointed to ctxfile (thread: ${result.threadTitle})` : "✓ Checkpointed to ctxfile");
       }
       if (session.handoff === true) lines.push("Handoff package stored.");
+      if (result.directives) lines.push(describeDirectives(result.directives));
       lines.push(
         result.threadTitle
           ? `Saved session ${result.sessionId} (rev ${result.revision}, ${result.action}) to thread "${result.threadTitle}".`
@@ -416,7 +434,7 @@ export function createServerForRuntime(
           .passthrough()
           .describe(
             "{ session_id?, started_at?, ended_at?, summary (required), key_decisions?: string[], files_touched?: string[], open_items?: string[], " +
-              "thread?, continues_from?, handoff?, state?, gotchas?: string[], artifacts?: {ref,role}[], suggested_first_prompt? }"
+              "thread?, continues_from?, handoff?, state?, gotchas?: string[], artifacts?: {ref,role}[], suggested_first_prompt?, user_directives?: string[] }"
           ),
       },
     },
@@ -443,12 +461,94 @@ export function createServerForRuntime(
               revision: result.revision,
               action: result.action,
               thread: result.threadTitle,
+              ...(result.directives ? { directives: describeDirectives(result.directives) } : {}),
               note: "Visible to agents on the next snapshot; review with 'ctxfile ingest list'.",
             }),
           },
         ],
       };
     }
+  );
+
+  // Memory import: what an assistant already knows about the user, at global
+  // (person) or project scope. Instructions/identity stage as pending.
+  server.registerTool(
+    "ingest_memory",
+    {
+      title: "Import Memory",
+      description:
+        "Export what you have stored or learned about the user into ctxfile so every agent, in any tool, starts with it. " +
+        'scope "global" = about the person (instructions, preferences, identity, career, projects); ' +
+        'scope "project" = this project (instructions, conventions, decisions, gotchas, facts). ' +
+        "One fact per entry; instructions in the user's exact words with verbatim: true; date YYYY-MM-DD or null (never guess); " +
+        'origin "stored" (in your saved memory) or "inferred". Max 100 entries per call: set complete: false and call again for the rest. ' +
+        "Instructions and identity entries wait for the user's approval before any agent sees them.",
+      inputSchema: {
+        ctxfile_memory_schema: z.string().optional().describe(`"${MEMORY_SCHEMA_VERSION}"`),
+        source: z
+          .object({})
+          .passthrough()
+          .optional()
+          .describe("{ harness?, harness_version? }; harness is inferred from the connected client if omitted"),
+        scope: z.string().describe('"global" | "project"'),
+        complete: z.boolean().optional().describe("false when more entries remain after this batch"),
+        part: z.object({}).passthrough().optional().describe("{ index, total } when sending batches"),
+        entries: z
+          .array(z.object({}).passthrough())
+          .describe(
+            "[{ category: instruction|preference|identity|career|project|convention|decision|gotcha|fact, text, verbatim?, origin?: stored|inferred, date?: YYYY-MM-DD|null, project? }]"
+          ),
+      },
+      outputSchema: {
+        stored: z.boolean(),
+        created: z.number(),
+        merged: z.number(),
+        pending: z.number(),
+        skipped_rejected: z.number(),
+        complete: z.boolean(),
+      },
+    },
+    async (args) => {
+      if (!allowed("write:sessions")) return fail("this connection's token lacks the write:sessions scope; memory is read-only here");
+      if (ingest === null) return fail("ingest_memory is unavailable: the local store is disabled in this run.");
+      const now = Date.now();
+      if (overWriteLimit(now)) return fail("ingest_memory rate limit reached (20/minute). Wait, then send the next batch.");
+      const parsed = memoryInputSchema.safeParse(withMemoryDefaults(args, server.server.getClientVersion()?.name));
+      if (!parsed.success) return fail(formatMemoryErrors(parsed.error));
+      writeTimestamps.push(now);
+      const result = ingest.memory.import(config.root, parsed.data, now);
+      return {
+        content: [{ type: "text", text: describeMemoryImport(result, parsed.data.scope, parsed.data.complete, parsed.data.part) }],
+        structuredContent: {
+          stored: true,
+          created: result.created,
+          merged: result.merged,
+          pending: result.pending,
+          skipped_rejected: result.skippedRejected,
+          complete: parsed.data.complete,
+        },
+      };
+    }
+  );
+
+  server.registerPrompt(
+    "ctx-import-memory",
+    {
+      title: "Import Memory into ctxfile",
+      description: "Tells the assistant to export what it knows about you (or this project) via ingest_memory.",
+      argsSchema: { scope: z.enum(["global", "project"]).optional().describe('"global" (about you, default) or "project"') },
+    },
+    ({ scope }) => ({
+      messages: [
+        {
+          role: "user" as const,
+          content: {
+            type: "text" as const,
+            text: memoryImportPrompt({ scope: scope ?? "global", mode: "mcp", projectName: path.basename(config.root) }),
+          },
+        },
+      ],
+    })
   );
 
   server.registerPrompt(

@@ -126,13 +126,14 @@ describe("ctxfile serve (the HTTP door)", () => {
     await ro.client.close();
   });
 
-  it("keeps Pro off the HTTP surface: exactly the five-tool remote surface", async () => {
+  it("keeps Pro off the HTTP surface: exactly the six-tool remote surface", async () => {
     const c = await connect("tok-full-secret", "surface-check");
     const { tools } = await c.client.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual([
       "continue_thread",
       "get_context",
       "ingest_context",
+      "ingest_memory",
       "list_threads",
       "save_session",
     ]);

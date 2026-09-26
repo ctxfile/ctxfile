@@ -1,4 +1,5 @@
 import type { IngestArtifact, IngestedSession, ThreadSummary } from "../ingest.js";
+import { MEMORY_CATEGORIES, type MemoryCategory, type MemoryRecord } from "../memory.js";
 
 /**
  * The plaintext shapes that travel inside encrypted sync blobs, shared by the
@@ -50,7 +51,27 @@ export interface ThreadSyncPayload {
   private?: boolean;
 }
 
-export type SyncPayload = SessionSyncPayload | ThreadSyncPayload;
+/** One imported memory. `scope` routes it on apply: global memories land in
+    the device's person-level store whichever vault carried them. */
+export interface MemorySyncPayload {
+  kind: "memory";
+  scope: "global" | "project";
+  memory_id: string;
+  category: string;
+  text: string;
+  verbatim: boolean;
+  origin: "stored" | "inferred";
+  date: string | null;
+  project: string | null;
+  status: "pending" | "active";
+  sources: string[];
+  seen_count: number;
+  created_at: number;
+  updated_at: number;
+  deleted: boolean;
+}
+
+export type SyncPayload = SessionSyncPayload | ThreadSyncPayload | MemorySyncPayload;
 
 const textDecoder = new TextDecoder();
 
@@ -59,7 +80,7 @@ export function parseSyncPayload(payload: Uint8Array): SyncPayload | null {
     const parsed: unknown = JSON.parse(textDecoder.decode(payload));
     if (typeof parsed !== "object" || parsed === null) return null;
     const kind = (parsed as { kind?: unknown }).kind;
-    return kind === "session" || kind === "thread" ? (parsed as SyncPayload) : null;
+    return kind === "session" || kind === "thread" || kind === "memory" ? (parsed as SyncPayload) : null;
   } catch {
     return null;
   }
@@ -96,10 +117,35 @@ export function sessionPayloadToIngestedSession(payload: SessionSyncPayload, id:
   };
 }
 
+export function memoryPayloadToRecord(payload: MemorySyncPayload, id: number, root = "vault"): MemoryRecord {
+  const category: MemoryCategory = (MEMORY_CATEGORIES as readonly string[]).includes(payload.category)
+    ? (payload.category as MemoryCategory)
+    : "fact";
+  return {
+    id,
+    root,
+    scope: payload.scope === "global" ? "global" : "project",
+    memoryId: payload.memory_id,
+    category,
+    text: payload.text,
+    verbatim: payload.verbatim,
+    origin: payload.origin === "stored" ? "stored" : "inferred",
+    date: payload.date,
+    project: payload.project,
+    status: payload.status === "pending" ? "pending" : "active",
+    sources: payload.sources,
+    seenCount: payload.seen_count,
+    createdAt: new Date(payload.created_at).toISOString(),
+    updatedAt: new Date(payload.updated_at).toISOString(),
+  };
+}
+
 export interface VaultView {
   threads: ThreadSummary[];
   /** Live sessions, chronological (oldest first), threadTitle populated. */
   sessions: IngestedSession[];
+  /** Live (non-rejected) memories, oldest first, both scopes. */
+  memories: MemoryRecord[];
 }
 
 /** Rebuilds the queryable view a local IngestStore would give, from nothing
@@ -148,5 +194,9 @@ export function buildVaultView(payloads: SyncPayload[]): VaultView {
     };
   });
   threads.sort((a, b) => b.lastActiveAt.localeCompare(a.lastActiveAt));
-  return { threads, sessions };
+  const memories = payloads
+    .filter((p): p is MemorySyncPayload => p.kind === "memory" && !p.deleted)
+    .sort((a, b) => a.created_at - b.created_at || a.memory_id.localeCompare(b.memory_id))
+    .map((p, index) => memoryPayloadToRecord(p, index + 1));
+  return { threads, sessions, memories };
 }

@@ -3,9 +3,11 @@ import path from "node:path";
 import Database from "better-sqlite3";
 import type { IngestArtifact, IngestDoor, IngestedSession, IngestInput, ThreadSummary } from "../ingest.js";
 import { ingestSessionId } from "../ingest.js";
+import { MEMORY_SCHEMA_VERSION } from "../memory.js";
 import { redactContent } from "../redact.js";
 import type { LocalBlobSource, SyncEntry } from "../sync/client.js";
 import { parseSyncPayload, type SessionSyncPayload, type SyncPayload, type ThreadSyncPayload } from "../sync/payload.js";
+import { MemoryStore, type MemoryImportResult } from "./memory-store.js";
 
 /**
  * Persistence for agent-reported session digests (`ingest_context` and
@@ -25,6 +27,8 @@ export interface IngestResult {
   action: "created" | "updated";
   threadId: number | null;
   threadTitle: string | null;
+  /** Set when the session carried user_directives (staged as pending memory). */
+  directives?: MemoryImportResult;
 }
 
 function redact(text: string): string {
@@ -165,6 +169,8 @@ const textEncoder = new TextEncoder();
 
 export class IngestStore {
   private readonly db: Database.Database;
+  /** Imported memory, same database file (one connection, one WAL). */
+  readonly memory: MemoryStore;
 
   constructor(dbPath: string) {
     mkdirSync(path.dirname(dbPath), { recursive: true });
@@ -194,6 +200,7 @@ export class IngestStore {
         ON ingest_sessions (root, updated_at DESC);
     `);
     this.migrate();
+    this.memory = new MemoryStore(this.db);
   }
 
   /** Idempotent v2 migration: column-presence checks, never version guesses,
@@ -290,8 +297,27 @@ export class IngestStore {
     return row?.title ?? null;
   }
 
-  /** Upsert on (root, harness, session_id): re-ingest updates with history. */
+  /** Upsert on (root, harness, session_id): re-ingest updates with history.
+      user_directives ride along as pending project-scope instruction memory. */
   ingest(root: string, input: IngestInput, now = Date.now(), door: IngestDoor = "ingest_context"): IngestResult {
+    const result = this.upsertSession(root, input, now, door);
+    const directives = input.session.user_directives ?? [];
+    if (directives.length === 0) return result;
+    const imported = this.memory.import(
+      root,
+      {
+        ctxfile_memory_schema: MEMORY_SCHEMA_VERSION,
+        source: input.source,
+        scope: "project",
+        complete: true,
+        entries: directives.map((text) => ({ category: "instruction", text, verbatim: true, origin: "stored", date: null })),
+      },
+      now
+    );
+    return { ...result, directives: imported };
+  }
+
+  private upsertSession(root: string, input: IngestInput, now: number, door: IngestDoor): IngestResult {
     const sessionId = ingestSessionId(input);
     // Everything ingested is redacted at write, like every other connector.
     const session = input.session;
@@ -499,9 +525,9 @@ export class IngestStore {
   // that sync through the same vault converge regardless of order.
   // -------------------------------------------------------------------------
 
-  /** Everything syncable for this root, tombstones included. */
+  /** Everything syncable for this root, tombstones included (plus global memory). */
   exportSyncEntries(root: string): SyncEntry[] {
-    const entries: SyncEntry[] = [];
+    const entries: SyncEntry[] = this.memory.exportSyncEntries(root);
     const sessionRows = this.db.prepare(`${SESSION_SELECT} WHERE s.root = ?`).all(root) as Row[];
     for (const row of sessionRows) {
       const payload: SessionSyncPayload = {
@@ -583,6 +609,7 @@ export class IngestStore {
     }
     for (const payload of payloads) {
       if (payload.kind === "session") applied += this.applySessionPayload(root, payload);
+      else if (payload.kind === "memory") applied += this.memory.applySyncPayload(root, payload);
     }
     return applied;
   }

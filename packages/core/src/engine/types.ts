@@ -1,3 +1,5 @@
+import type { ContextMemory } from "../memory.js";
+
 export interface ConnectorStatus {
   name: string;
   status: "ok" | "skipped" | "error";
@@ -96,6 +98,9 @@ export interface ContextObject {
   sessions?: SessionDigest[];
   /** Vault notes surfaced by note connectors (e.g. the Obsidian vault connector). */
   notes?: VaultNote[];
+  /** Imported memory (global + this project), attached at read time on the
+      "full" scope; absent when nothing was ever imported. */
+  memory?: ContextMemory;
   sessionSummary: string | null;
 }
 

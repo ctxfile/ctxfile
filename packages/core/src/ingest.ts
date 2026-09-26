@@ -104,6 +104,9 @@ const ingestSessionBase = z
     /** Behavior-layer provenance: "auto" for skill-driven ambient checkpoints
         (subject to pause/private/debounce guardrails), default "manual". */
     trigger: z.enum(["auto", "manual"]).optional(),
+    /** Durable rules the user stated in this session, in their exact words.
+        Each becomes a project-scope instruction memory, pending approval. */
+    user_directives: z.array(z.string().trim().min(1).max(500)).max(20).optional(),
   })
   .strict();
 

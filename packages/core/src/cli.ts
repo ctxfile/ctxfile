@@ -39,6 +39,7 @@ import {
 import { sendPingIfDue } from "./telemetry.js";
 import { storeLicenseKey } from "./license-store.js";
 import { appendVaultToConfig, detectVaultNear, paraDefaultExcludes, tildeRelative } from "./vault-detect.js";
+import { MEMORY_USAGE, runIngestImport, runMemory } from "./cli-memory.js";
 import { generateToken } from "./ui/security.js";
 import { createUiServer, DEFAULT_UI_PORT, listenOnAvailablePort } from "./ui/server.js";
 import { VERSION } from "./version.js";
@@ -52,7 +53,8 @@ Usage: ctxfile [options]
        ctxfile ui [options]
        ctxfile export [options]
        ctxfile hooks install|uninstall [options]
-       ctxfile ingest list|rm <id> [options]
+       ctxfile ingest list|rm <id>|import [options]
+       ctxfile memory prompt|import|list|approve|reject|export [options]
        ctxfile threads [options]
        ctxfile vault create|join|recover|status [options]
        ctxfile sync [options]
@@ -83,7 +85,9 @@ hooks:
 ingest (agent-reported sessions via ingest_context / save_session):
   list              Show this project's ingested session digests
   rm <id>           Delete one record by the id shown in list
+  import            Import a session digest (ingest_context JSON) from stdin or --file
 
+${MEMORY_USAGE}
 init (the behavior layer: agents checkpoint automatically, announced, never silent):
   --yes             Consent to auto-capture and install the skill for detected harnesses
   --no-auto         Record that auto-capture stays OFF (skills not installed)
@@ -241,6 +245,7 @@ async function runUi(args: CliArgs): Promise<void> {
     proActive: runtime.proActive,
     token,
     staticDir: existsSync(staticDir) ? staticDir : undefined,
+    memory: runtime.ingest?.memory ?? null,
   });
   const port = await listenOnAvailablePort(server, args.port ?? DEFAULT_UI_PORT);
   // Token travels in the URL FRAGMENT: fragments never appear in logs or Referer headers.
@@ -721,7 +726,7 @@ function runIngest(argv: string[]): void {
       console.error(removed ? `ctxfile: removed ingest record #${id}` : `ctxfile: no ingest record #${id}`);
       return;
     }
-    throw new Error(`ingest requires "list" or "rm <id>" (see --help)`);
+    throw new Error(`ingest requires "list", "rm <id>", or "import" (see --help)`);
   } finally {
     store.close();
   }
@@ -733,8 +738,16 @@ async function main(): Promise<void> {
     activate(argv[1]);
     return;
   }
+  if (argv[0] === "ingest" && argv[1] === "import") {
+    runIngestImport(argv.slice(2));
+    return;
+  }
   if (argv[0] === "ingest") {
     runIngest(argv.slice(1));
+    return;
+  }
+  if (argv[0] === "memory") {
+    runMemory(argv.slice(1));
     return;
   }
   if (argv[0] === "init") {

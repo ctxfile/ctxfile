@@ -8,12 +8,16 @@ import { CONTEXT_SCOPES, type ContextObject, type ContextScope } from "../engine
 import type { SnapshotService } from "../engine/service.js";
 import { inspectLicenseKey } from "../license-inspect.js";
 import { storeLicenseKey } from "../license-store.js";
+import { extractJsonPayload, memoryImportPrompt, memoryInputSchema, withMemoryDefaults } from "../memory.js";
 import type { ProModule, ProUiFeatures } from "../plugin.js";
+import type { MemoryListScope, MemoryListStatus, MemoryStore } from "../storage/memory-store.js";
 import { VERSION } from "../version.js";
 import { hostAllowed, tokenMatches } from "./security.js";
 
 export const DEFAULT_UI_PORT = 4747;
 const MAX_BODY_BYTES = 64 * 1024;
+/** A pasted memory export can hold 100 entries of up to 1,000 chars each. */
+const MAX_IMPORT_BODY_BYTES = 512 * 1024;
 const NO_FEATURES: ProUiFeatures = { sessions: false, memory: false, consult: false, voice: false };
 const CONTENT_TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -36,6 +40,8 @@ export interface UiServerDeps {
   token: string;
   staticDir?: string;
   homedir?: string;
+  /** Free imported memory (core, not Pro); null/absent when the store is off. */
+  memory?: MemoryStore | null;
 }
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
@@ -43,12 +49,12 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
   res.end(JSON.stringify(body));
 }
 
-async function readJsonBody(req: IncomingMessage): Promise<unknown> {
+async function readJsonBody(req: IncomingMessage, maxBytes = MAX_BODY_BYTES): Promise<unknown> {
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const chunk of req) {
     size += (chunk as Buffer).length;
-    if (size > MAX_BODY_BYTES) throw new Error("request body too large");
+    if (size > maxBytes) throw new Error("request body too large");
     chunks.push(chunk as Buffer);
   }
   const text = Buffer.concat(chunks).toString("utf8");
@@ -198,6 +204,11 @@ export function createUiServer(deps: UiServerDeps): Server {
       return;
     }
 
+    if (url.pathname === "/api/internal/memories" || url.pathname.startsWith("/api/internal/memories/")) {
+      await handleMemories(req, res, url);
+      return;
+    }
+
     if (route === "GET /api/internal/playbooks") {
       const ui = proGate(deps, "memory", res);
       if (ui) {
@@ -337,6 +348,74 @@ export function createUiServer(deps: UiServerDeps): Server {
       return true;
     }
     return false;
+  }
+
+  /** Free imported memory: list, prompt, paste-import, approve, reject. */
+  async function handleMemories(req: IncomingMessage, res: ServerResponse, url: URL): Promise<void> {
+    const store = deps.memory ?? null;
+    const root = deps.config.root;
+    const method = req.method ?? "GET";
+    const sub = url.pathname.slice("/api/internal/memories".length);
+
+    if (method === "GET" && sub === "/prompt") {
+      const scope = url.searchParams.get("scope") === "project" ? "project" : "global";
+      const mode = url.searchParams.get("mode") === "paste" ? "paste" : "mcp";
+      sendJson(res, 200, { prompt: memoryImportPrompt({ scope, mode, projectName: path.basename(root) }) });
+      return;
+    }
+    if (!store) {
+      if (method === "GET" && sub === "") sendJson(res, 200, { available: false, entries: [], pending: 0 });
+      else sendJson(res, 503, { error: "memory store unavailable in this run" });
+      return;
+    }
+    if (method === "GET" && sub === "") {
+      const scopeParam = url.searchParams.get("scope");
+      const statusParam = url.searchParams.get("status");
+      const scope: MemoryListScope = scopeParam === "global" || scopeParam === "project" ? scopeParam : "all";
+      const status: MemoryListStatus = statusParam === "pending" || statusParam === "active" ? statusParam : "all";
+      sendJson(res, 200, { available: true, entries: store.list(root, { scope, status }), pending: store.pendingCount(root) });
+      return;
+    }
+    if (method === "POST" && sub === "/import") {
+      let raw: unknown;
+      try {
+        const body = (await readJsonBody(req, MAX_IMPORT_BODY_BYTES)) as { text?: unknown; harness?: unknown };
+        raw = typeof body.text === "string" ? extractJsonPayload(body.text) : body;
+      } catch {
+        sendJson(res, 400, { error: "Could not read that export. Paste the ```json block the assistant produced." });
+        return;
+      }
+      if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+        sendJson(res, 400, { error: "The export must be a JSON object." });
+        return;
+      }
+      const parsed = memoryInputSchema.safeParse(withMemoryDefaults(raw as Record<string, unknown>, "dashboard"));
+      if (!parsed.success) {
+        sendJson(res, 400, {
+          error: "The export does not match the memory schema.",
+          issues: parsed.error.issues.slice(0, 10).map((i) => ({ path: i.path.join("."), message: i.message })),
+        });
+        return;
+      }
+      const result = store.import(root, parsed.data);
+      sendJson(res, 200, { ...result, complete: parsed.data.complete, scope: parsed.data.scope });
+      return;
+    }
+    if (method === "POST" && sub === "/approve-all") {
+      sendJson(res, 200, { approved: store.approveAllPending(root) });
+      return;
+    }
+    const match = /^\/(\d{1,12})(\/approve)?$/.exec(sub);
+    const id = match ? Number(match[1]) : NaN;
+    if (match && method === "POST" && match[2] === "/approve") {
+      sendJson(res, 200, { approved: store.approve(root, id) });
+      return;
+    }
+    if (match && method === "DELETE" && match[2] === undefined) {
+      sendJson(res, 200, { rejected: store.reject(root, id) });
+      return;
+    }
+    sendJson(res, 404, { error: "not found" });
   }
 
   async function streamConsult(req: IncomingMessage, res: ServerResponse, ui: NonNullable<ProModule["ui"]>): Promise<void> {

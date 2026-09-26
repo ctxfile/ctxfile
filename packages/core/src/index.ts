@@ -93,6 +93,35 @@ export {
 } from "./ingest.js";
 export { IngestStore, type IngestResult } from "./storage/ingest-store.js";
 export {
+  buildContextMemory,
+  describeDirectives,
+  describeMemoryImport,
+  extractJsonPayload,
+  formatMemoryErrors,
+  GLOBAL_MEMORY_ROOT,
+  initialMemoryStatus,
+  MEMORY_CATEGORIES,
+  MEMORY_SCHEMA_VERSION,
+  MEMORY_SCOPES,
+  memoryEntrySchema,
+  memoryId,
+  memoryImportPrompt,
+  memoryInputSchema,
+  renderMemoryMarkdown,
+  withMemoryDefaults,
+  type ContextMemory,
+  type MemoryCategory,
+  type MemoryImportResult,
+  type MemoryInput,
+  type MemoryItem,
+  type MemoryOrigin,
+  type MemoryPromptOptions,
+  type MemoryRecord,
+  type MemoryScope,
+  type MemoryStatus,
+} from "./memory.js";
+export { MemoryStore, type MemoryListScope, type MemoryListStatus } from "./storage/memory-store.js";
+export {
   SyncClient,
   type LocalBlobSource,
   type RelayStore,
@@ -119,8 +148,10 @@ export {
 export { HttpRelayStore, type HttpRelayStoreOptions } from "./sync/http-relay.js";
 export {
   buildVaultView,
+  memoryPayloadToRecord,
   parseSyncPayload,
   sessionPayloadToIngestedSession,
+  type MemorySyncPayload,
   type SessionSyncPayload,
   type SyncPayload,
   type ThreadSyncPayload,
