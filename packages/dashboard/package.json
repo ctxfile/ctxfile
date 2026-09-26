@@ -8,7 +8,7 @@
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "build:demo": "VITE_DEMO=1 vite build --base=/demo/ --outDir ../../apps/web/public/demo --emptyOutDir"
+    "build:demo": "vite build --mode demo --base=/demo/ --outDir ../../apps/web/public/demo --emptyOutDir"
   },
   "dependencies": {
     "react": "^19.0.0",

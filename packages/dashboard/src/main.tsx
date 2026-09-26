@@ -9,7 +9,8 @@ import "./styles.css";
  * the real dashboard can be explored without installing anything. The flag is
  * baked in at build time; a normal `ctxfile ui` build never includes the mock.
  */
-const DEMO = import.meta.env["VITE_DEMO"] === "1";
+// `vite build --mode demo` (portable: no shell env syntax, so Windows CI builds it too).
+const DEMO = import.meta.env.MODE === "demo";
 
 async function boot(): Promise<void> {
   let requestedView: string | null = null;
