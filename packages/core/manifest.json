@@ -2,9 +2,9 @@
   "manifest_version": "0.3",
   "name": "ctxfile",
   "display_name": "ctxfile",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Local-first MCP server that snapshots your project's working state (files, git, Notion, local-LLM summary) into a structured context object.",
-  "long_description": "ctxfile assembles a structured snapshot of a project \u2014 plan documents, key files (gitignore-aware, secret-redacted, token-budgeted), git state, and optionally Notion pages and a local Ollama summary \u2014 and serves it over stdio as MCP resources (context://current, context://plan, context://git), a get_context tool, and a load-context prompt. Nothing leaves your machine by default.",
+  "long_description": "ctxfile assembles a structured snapshot of a project \u2014 plan documents, key files (gitignore-aware, secret-redacted, token-budgeted), git state, and optionally Notion pages and a local Ollama summary \u2014 and serves it over stdio as MCP resources (context://current, context://plan, context://git), the get_context, save_session, continue_thread, list_threads, ingest_context and ingest_memory tools (cross-tool threads and imported memory from any assistant), and a load-context prompt. Nothing leaves your machine by default.",
   "author": {
     "name": "ctxfile"
   },
@@ -14,7 +14,8 @@
     "local-first",
     "git",
     "notion",
-    "ollama"
+    "ollama",
+    "memory"
   ],
   "server": {
     "type": "node",
