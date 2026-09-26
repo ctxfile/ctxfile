@@ -28,8 +28,9 @@ export const VIEWS: readonly ViewDef[] = [
   { id: "overview", label: "Overview", description: "Snapshot health, connectors, token budget", group: "workspace", shortcut: "1" },
   { id: "context", label: "Context", description: "Browse the captured ContextObject", group: "workspace", shortcut: "2" },
   { id: "git", label: "Git", description: "Branch, changes, commits, diff summary", group: "workspace", shortcut: "3" },
-  { id: "sessions", label: "Sessions", description: "Agent session digests, redacted", group: "pro", shortcut: "4", pro: "sessions" },
-  { id: "memory", label: "Memory", description: "Encrypted cross-session memory", group: "pro", shortcut: "5", pro: "memory" },
+  // Free: imported memory lives here; the Pro encrypted store is a section inside.
+  { id: "memory", label: "Memory", description: "Imported memory, plus encrypted Pro memory", group: "workspace", shortcut: "4" },
+  { id: "sessions", label: "Sessions", description: "Agent session digests, redacted", group: "pro", shortcut: "5", pro: "sessions" },
   { id: "playbooks", label: "Playbooks", description: "Reusable prompts distilled from sessions", group: "pro", shortcut: "6", pro: "memory" },
   { id: "consult", label: "Consult", description: "Ask several providers over live context", group: "pro", shortcut: "7", pro: "consult" },
   { id: "settings", label: "Settings", description: "Configuration, license, privacy", group: "system", shortcut: "8" },

@@ -9,8 +9,8 @@ import { Markdown } from "../components/Markdown";
 import { ProLock } from "../components/ProLock";
 import { SearchInput } from "../components/SearchInput";
 import { Sheet } from "../components/Sheet";
-import { ViewSkeleton } from "../components/Skeleton";
 import { useToast } from "../components/Toast";
+import { ImportedMemory } from "./ImportedMemory";
 
 const FIXTURE_ENTRIES: MemoryEntry[] = [
   {
@@ -34,7 +34,23 @@ export interface MemoryProps {
   onServerGone: () => void;
 }
 
+/** Memory: free imported memory on top, the Pro encrypted store below. */
 export function Memory({ features, onServerGone }: MemoryProps) {
+  return (
+    <div className="view">
+      <header className="view-header">
+        <div>
+          <h1>Memory</h1>
+          <p className="view-sub">What your assistants know about you, and what your agents remember between sessions.</p>
+        </div>
+      </header>
+      <ImportedMemory onServerGone={onServerGone} />
+      <ProMemory features={features} onServerGone={onServerGone} />
+    </div>
+  );
+}
+
+function ProMemory({ features, onServerGone }: MemoryProps) {
   const [entries, setEntries] = useState<MemoryEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [locked, setLocked] = useState(!features.memory);
@@ -55,7 +71,10 @@ export function Memory({ features, onServerGone }: MemoryProps) {
         if (cancelled) return;
         if (err instanceof ServerGoneError) onServerGone();
         if (err instanceof ApiError && err.status === 403) setLocked(true);
-        else setError(err instanceof Error ? err.message : "failed to load memory");
+        else {
+          console.error("ctxfile ui: failed to load Pro memory", err);
+          setError("Could not load agent memory. Please try again.");
+        }
       });
     return () => {
       cancelled = true;
@@ -89,7 +108,8 @@ export function Memory({ features, onServerGone }: MemoryProps) {
       })
       .catch((err: unknown) => {
         if (err instanceof ServerGoneError) onServerGone();
-        setError(err instanceof Error ? err.message : "failed to forget entry");
+        console.error("ctxfile ui: failed to forget memory", err);
+        setError("Could not forget that entry. Please try again.");
       });
   };
 
@@ -102,15 +122,21 @@ export function Memory({ features, onServerGone }: MemoryProps) {
     });
   };
 
+  const heading = (
+    <div>
+      <h2 className="section-heading">Agent memory · Pro</h2>
+      <p className="view-sub">
+        {locked || entries === null
+          ? "What your agents remember between sessions, encrypted at rest."
+          : `${entries.length.toLocaleString()} entr${entries.length === 1 ? "y" : "ies"} across ${grouped.length} agent${grouped.length === 1 ? "" : "s"}`}
+      </p>
+    </div>
+  );
+
   if (locked) {
     return (
-      <div className="view">
-        <header className="view-header">
-          <div>
-            <h1>Memory</h1>
-            <p className="view-sub">What your agents remember between sessions.</p>
-          </div>
-        </header>
+      <section className="pro-memory">
+        {heading}
         <ProLock
           feature="memory"
           pitch="Persistent agent memory: encrypted at rest, provenance on every entry, forget anything anytime."
@@ -118,27 +144,27 @@ export function Memory({ features, onServerGone }: MemoryProps) {
         >
           <MemoryGroups groups={[["claude-code", FIXTURE_ENTRIES]]} collapsed={new Set()} onToggle={() => undefined} onForget={() => undefined} query="" />
         </ProLock>
-      </div>
+      </section>
     );
   }
 
-  if (entries === null && error === null) return <ViewSkeleton title="Memory" />;
-
-  const total = entries?.length ?? 0;
+  if (entries === null && error === null) {
+    return (
+      <section className="pro-memory">
+        {heading}
+        <div className="skeleton import-memory-skeleton" aria-label="Loading agent memory" />
+      </section>
+    );
+  }
 
   return (
-    <div className="view">
-      <header className="view-header">
-        <div>
-          <h1>Memory</h1>
-          <p className="view-sub">
-            {total.toLocaleString()} entr{total === 1 ? "y" : "ies"} across {grouped.length} agent{grouped.length === 1 ? "" : "s"}
-          </p>
-        </div>
+    <section className="pro-memory">
+      <div className="imported-memory-head">
+        {heading}
         <div className="header-actions">
           <SearchInput value={query} onChange={setQuery} placeholder="Filter memory…" ariaLabel="Filter memory entries" slashShortcut />
         </div>
-      </header>
+      </div>
 
       <div className="trust-strip">
         <Icon name="shield" size={13} />
@@ -181,7 +207,7 @@ export function Memory({ features, onServerGone }: MemoryProps) {
           </div>
         </Sheet>
       )}
-    </div>
+    </section>
   );
 }
 

@@ -184,3 +184,71 @@ export type BuildEvent =
   | { type: "tokens"; tokensUsed: number; tokenBudget: number }
   | { type: "done"; generatedAt: string }
   | { type: "error"; message: string };
+
+/* ---------- imported memory (free, core) ---------- */
+
+export type MemoryScope = "global" | "project";
+
+export type MemoryCategory =
+  | "instruction"
+  | "preference"
+  | "convention"
+  | "decision"
+  | "gotcha"
+  | "fact"
+  | "project"
+  | "career"
+  | "identity";
+
+/** Render order: what steers behavior first, biography last (mirrors core). */
+export const MEMORY_CATEGORY_ORDER: readonly MemoryCategory[] = [
+  "instruction",
+  "preference",
+  "convention",
+  "decision",
+  "gotcha",
+  "fact",
+  "project",
+  "career",
+  "identity",
+];
+
+export interface ImportedMemory {
+  id: number;
+  scope: MemoryScope;
+  memoryId: string;
+  category: MemoryCategory;
+  text: string;
+  verbatim: boolean;
+  origin: "stored" | "inferred";
+  date: string | null;
+  project: string | null;
+  status: "pending" | "active";
+  sources: string[];
+  seenCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ImportedMemoryList {
+  available: boolean;
+  entries: ImportedMemory[];
+  pending: number;
+}
+
+export interface MemoryImportSummary {
+  created: number;
+  merged: number;
+  pending: number;
+  skippedRejected: number;
+  complete: boolean;
+  scope: MemoryScope;
+}
+
+export type MemoryPromptMode = "mcp" | "paste";
+
+/** One schema problem returned by a 400 import. */
+export interface ApiIssue {
+  path: string;
+  message: string;
+}

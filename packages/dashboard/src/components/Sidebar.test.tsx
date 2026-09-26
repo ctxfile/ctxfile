@@ -39,6 +39,12 @@ describe("Sidebar", () => {
     expect(screen.getByRole("button", { name: /playbooks/i })).not.toHaveClass("is-locked");
   });
 
+  it("never locks Memory: imported memory is free even without Pro", () => {
+    renderSidebar({ features: { sessions: false, memory: false, consult: false, voice: false } });
+    expect(screen.getByRole("button", { name: /memory/i })).not.toHaveClass("is-locked");
+    expect(screen.getByRole("button", { name: /playbooks/i })).toHaveClass("is-locked");
+  });
+
   it("navigates and closes the mobile drawer on click", () => {
     const props = renderSidebar({ mobileOpen: true });
     fireEvent.click(screen.getByRole("button", { name: /^git/i }));

@@ -81,4 +81,34 @@ describe("api client", () => {
     const [url] = fetchMock.mock.calls[0] as [string];
     expect(url).toBe("/api/internal/memory/id%20with%2Fslash");
   });
+
+  it("carries schema issues on a 400 memory import", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        jsonResponse(400, { error: "bad export", issues: [{ path: "scope", message: "must be global" }, { junk: true }] })
+      )
+    );
+    const err = (await api.importMemory("{}").catch((e: unknown) => e)) as ApiError;
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.issues).toEqual([{ path: "scope", message: "must be global" }]);
+  });
+
+  it("hits the imported memory routes with the right methods", async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => jsonResponse(200, {}));
+    vi.stubGlobal("fetch", fetchMock);
+    await api.memories();
+    await api.memoryPrompt("project", "paste");
+    await api.approveMemory(7);
+    await api.approveAllMemories();
+    await api.rejectMemory(7);
+    const calls = (fetchMock.mock.calls as [string, RequestInit][]).map(([url, init]) => `${init.method ?? "GET"} ${url}`);
+    expect(calls).toEqual([
+      "GET /api/internal/memories",
+      "GET /api/internal/memories/prompt?scope=project&mode=paste",
+      "POST /api/internal/memories/7/approve",
+      "POST /api/internal/memories/approve-all",
+      "DELETE /api/internal/memories/7",
+    ]);
+  });
 });

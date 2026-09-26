@@ -11,8 +11,10 @@ import type {
   ContextObject,
   ContextScope,
   DashboardState,
+  ImportedMemory,
   LicenseState,
   MemoryEntry,
+  MemoryImportSummary,
   PlaybookEntry,
 } from "../lib/types";
 
@@ -450,6 +452,115 @@ function consultStream(question: string): Response {
   return new Response(stream, { status: 200, headers: { "Content-Type": "text/event-stream" } });
 }
 
+/* --------------------------------------------------------- imported memory */
+
+let nextImportedId = 7;
+const importedMemory = (
+  id: number,
+  fields: Pick<ImportedMemory, "scope" | "category" | "text"> & Partial<ImportedMemory>
+): ImportedMemory => ({
+  id,
+  memoryId: `mem-demo${id}`,
+  verbatim: false,
+  origin: "inferred",
+  date: null,
+  project: null,
+  status: "active",
+  sources: ["chatgpt"],
+  seenCount: 1,
+  createdAt: iso((10 - id) * DAY),
+  updatedAt: iso((10 - id) * DAY),
+  ...fields,
+});
+
+let imported: ImportedMemory[] = [
+  importedMemory(1, { scope: "global", category: "instruction", text: "Be critical of my ideas; do not just agree with me.", verbatim: true, origin: "stored", date: "2026-03-02", sources: ["chatgpt", "grok"], seenCount: 2 }),
+  importedMemory(2, { scope: "global", category: "preference", text: "Prefers concise answers with the recommendation first.", sources: ["claude"] }),
+  importedMemory(3, { scope: "global", category: "career", text: "Founder building developer tools.", origin: "stored", date: "2025-11-18" }),
+  importedMemory(4, { scope: "project", category: "convention", text: "Webhook handlers verify the signature before any side effect.", sources: ["claude-code"] }),
+  importedMemory(5, { scope: "project", category: "gotcha", text: "Receipt tests fail on Node 26 until better-sqlite3 is rebuilt.", sources: ["cursor"] }),
+  importedMemory(6, { scope: "global", category: "instruction", text: "Never add attribution lines to commit messages.", verbatim: true, origin: "stored", status: "pending", sources: ["grok"] }),
+];
+
+const DEMO_PROMPT = (scope: string, mode: string): string =>
+  [
+    `Export ${scope === "project" ? "everything you know about this project" : "everything you have stored in memory about me"} into ctxfile.`,
+    "Preserve my words verbatim where possible, especially for instructions and preferences.",
+    "",
+    "Categories: instruction, preference, identity, career, project (or convention, decision, gotcha, fact for a project).",
+    'date: "YYYY-MM-DD" or null. Never guess. origin: "stored" or "inferred".',
+    "",
+    mode === "paste"
+      ? "Output the whole export as ONE ```json code block, then say whether this is the complete set."
+      : "Then call the ctxfile ingest_memory tool with exactly that shape.",
+  ].join("\n");
+
+function importDemoMemory(text: string): Response {
+  const fence = /```(?:json)?\s*\n([\s\S]*?)```/.exec(text);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(fence?.[1] ?? text);
+  } catch {
+    return json({ error: "Could not read that export. Paste the ```json block the assistant produced." }, 400);
+  }
+  const body = parsed as { scope?: unknown; entries?: unknown; complete?: unknown };
+  const scope = body.scope === "project" ? "project" : "global";
+  if (!Array.isArray(body.entries) || body.entries.length === 0) {
+    return json({ error: "The export does not match the memory schema.", issues: [{ path: "entries", message: "entries must contain at least one memory" }] }, 400);
+  }
+  let created = 0;
+  let pending = 0;
+  for (const raw of body.entries as { category?: unknown; text?: unknown }[]) {
+    if (typeof raw.text !== "string" || typeof raw.category !== "string") continue;
+    const category = raw.category as ImportedMemory["category"];
+    const status = category === "instruction" || category === "identity" ? "pending" : "active";
+    imported = [...imported, importedMemory(nextImportedId++, { scope, category, text: raw.text, status, sources: ["demo"], createdAt: iso(0) })];
+    created += 1;
+    if (status === "pending") pending += 1;
+  }
+  const summary: MemoryImportSummary = { created, merged: 0, pending, skippedRejected: 0, complete: body.complete !== false, scope };
+  return json(summary);
+}
+
+function importedRoute(path: string, method: string, parsed: URL, init?: RequestInit): Response | null {
+  if (path === "/api/internal/memories" && method === "GET") {
+    return json({ available: true, entries: imported, pending: imported.filter((e) => e.status === "pending").length });
+  }
+  if (path === "/api/internal/memories/prompt" && method === "GET") {
+    return json({ prompt: DEMO_PROMPT(parsed.searchParams.get("scope") ?? "global", parsed.searchParams.get("mode") ?? "mcp") });
+  }
+  if (path === "/api/internal/memories/import" && method === "POST") {
+    let text = "";
+    try {
+      const body = JSON.parse(typeof init?.body === "string" ? init.body : "{}") as { text?: unknown };
+      if (typeof body.text === "string") text = body.text;
+    } catch {
+      // fall through to the empty-input error
+    }
+    return importDemoMemory(text);
+  }
+  if (path === "/api/internal/memories/approve-all" && method === "POST") {
+    const count = imported.filter((e) => e.status === "pending").length;
+    imported = imported.map((e) => ({ ...e, status: "active" }));
+    return json({ approved: count });
+  }
+  const match = /^\/api\/internal\/memories\/(\d+)(\/approve)?$/.exec(path);
+  if (match) {
+    const id = Number(match[1]);
+    if (method === "POST" && match[2] === "/approve") {
+      const found = imported.some((e) => e.id === id && e.status === "pending");
+      imported = imported.map((e) => (e.id === id ? { ...e, status: "active" } : e));
+      return json({ approved: found });
+    }
+    if (method === "DELETE" && match[2] === undefined) {
+      const before = imported.length;
+      imported = imported.filter((e) => e.id !== id);
+      return json({ rejected: imported.length < before });
+    }
+  }
+  return null;
+}
+
 /* ------------------------------------------------------------------ router */
 
 function json(data: unknown, status = 200): Response {
@@ -476,6 +587,8 @@ async function route(input: RequestInfo | URL, init?: RequestInit): Promise<Resp
     return json({ jobId: Date.now(), alreadyRunning: already });
   }
   if (path === "/api/internal/events" && method === "GET") return eventsStream();
+  const importedResponse = importedRoute(path, method, parsed, init);
+  if (importedResponse !== null) return importedResponse;
   if (path === "/api/internal/memory" && method === "GET") return json({ entries: memory });
   if (path.startsWith("/api/internal/memory/") && method === "DELETE") {
     const id = decodeURIComponent(path.slice("/api/internal/memory/".length));
