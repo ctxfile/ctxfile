@@ -282,7 +282,7 @@ async function runServe(args: CliArgs): Promise<void> {
   if (!runtime.proActive) {
     throw new Error(
       "ctxfile serve requires an active Pro license ('ctxfile activate <key>', https://ctxfile.dev/pricing). " +
-        "All five tools, threads included, stay free over stdio."
+        "All six tools, threads and memory included, stay free over stdio."
     );
   }
   const tokens: ResolvedServeToken[] = [];
@@ -307,7 +307,7 @@ async function runServe(args: CliArgs): Promise<void> {
       ? `  auth: bearer tokens (${tokens.map((t) => `${t.name}: ${t.scopes.join("+")}`).join("; ")})`
       : "  auth: none (loopback only; configure serve.tokens before exposing further)"
   );
-  console.error("  tools: get_context, save_session, continue_thread, list_threads, ingest_context");
+  console.error("  tools: get_context, save_session, continue_thread, list_threads, ingest_context, ingest_memory");
   const shutdown = (): void => {
     void running.close().then(() => process.exit(0));
   };

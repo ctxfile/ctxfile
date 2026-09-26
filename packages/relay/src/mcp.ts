@@ -32,7 +32,7 @@ import type { RelayDb, VaultRow } from "./store.js";
 import { loadView, writeMemories, writeSession } from "./vault-view.js";
 
 /**
- * The five-tool remote surface (§5), served from a vault instead of a local
+ * The six-tool remote surface (§5), served from a vault instead of a local
  * project. One McpServer per HTTP session; the view is rebuilt per call so a
  * save on one surface is visible to the next call on another. Handoff-grant
  * sessions get the same tools scoped to a single thread, read-only unless the

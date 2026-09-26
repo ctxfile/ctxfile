@@ -53,7 +53,7 @@ export function createServer(config: ResolvedConfig, options: ServerOptions = {}
 
 export interface CreateServerForRuntimeOptions {
   scopes?: ServeScope[];
-  /** The HTTP door exposes only the five-tool remote surface; Pro tools stay
+  /** The HTTP door exposes only the six-tool remote surface; Pro tools stay
       on the stdio door until they get their own remote scope story. */
   surface?: "stdio" | "http";
 }

@@ -4,7 +4,7 @@ import { MEMORY_CATEGORIES, type MemoryCategory, type MemoryRecord } from "../me
 /**
  * The plaintext shapes that travel inside encrypted sync blobs, shared by the
  * local store (export/import) and the relay (which reconstructs a vault view
- * from decrypted payloads to serve the five MCP tools in Standard mode).
+ * from decrypted payloads to serve the MCP tools in Standard mode).
  * Every payload carries its own natural identity, so applies are
  * order-independent and never depend on relay-visible ids.
  */

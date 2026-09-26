@@ -24,9 +24,9 @@ import { createServer } from "../src/server.js";
 import { IngestStore } from "../src/storage/ingest-store.js";
 
 describe("behavior pack (renders + install)", () => {
-  it("renders every harness format from the canonical spec, with B1-B5 intact", () => {
+  it("renders every harness format from the canonical spec, with B1-B7 intact", () => {
     const canonical = loadCanonicalBehaviors();
-    for (const marker of ["B1", "B2", "B3", "B4", "B5", "B6", "✓ Checkpointed to ctxfile", 'trigger: "auto"', "Never save silently", "NEVER ask for, echo, or handle the passphrase"]) {
+    for (const marker of ["B1", "B2", "B3", "B4", "B5", "B6", "B7", "user_directives", "approved: true", "✓ Checkpointed to ctxfile", 'trigger: "auto"', "Never save silently", "NEVER ask for, echo, or handle the passphrase"]) {
       expect(canonical).toContain(marker);
     }
     const renders = renderAllBehaviors(canonical);

@@ -75,7 +75,7 @@ async function main(): Promise<void> {
     console.error(`ctxfile-relay v${VERSION} (org "${ctx.org.orgId}") on ${running.publicUrl}`);
     console.error(`  MCP endpoint: ${running.publicUrl}/mcp (bearer: vault or grant token)`);
     console.error(`  data dir: ${config.dataDir} · registration: ${config.registration} · keyring: ${ctx.keyring.name}`);
-    console.error("  Standard vaults serve the five tools; strict vaults sync ciphertext only.");
+    console.error("  Standard vaults serve the six tools; strict vaults sync ciphertext only.");
     const shutdown = (): void => {
       void running.close().then(() => process.exit(0));
     };
