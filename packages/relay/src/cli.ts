@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { loadRelayConfig, type RelayConfigOverrides } from "./config.js";
 import { redeemFederatedGrant } from "./federation.js";
 import { createRelayContext, startRelay } from "./http.js";
+import { relayGateStats } from "./stats.js";
 import { VERSION } from "./version.js";
 
 const USAGE = `ctxfile-relay v${VERSION} — the ctxfile relay / self-hosted hub
@@ -18,6 +19,7 @@ Usage: ctxfile-relay start [options]          Run the relay (default command)
        ctxfile-relay federation redeem --grant-file <f>|--grant <b64> --into <vault-id>
        ctxfile-relay audit tail [--vault <id>] [--limit 50]
        ctxfile-relay audit export [--out audit.jsonl]
+       ctxfile-relay stats [--days 30]       Cross-vendor handoff counts (all vaults, counts only)
 
 Options (start):
   --port <n>          Port (default 5959; env CTXFILE_RELAY_PORT)
@@ -75,7 +77,7 @@ async function main(): Promise<void> {
     console.error(`ctxfile-relay v${VERSION} (org "${ctx.org.orgId}") on ${running.publicUrl}`);
     console.error(`  MCP endpoint: ${running.publicUrl}/mcp (bearer: vault or grant token)`);
     console.error(`  data dir: ${config.dataDir} · registration: ${config.registration} · keyring: ${ctx.keyring.name}`);
-    console.error("  Standard vaults serve the six tools; strict vaults sync ciphertext only.");
+    console.error("  Standard vaults serve the MCP tools (context, threads, memory, tasks); strict vaults sync ciphertext only.");
     const shutdown = (): void => {
       void running.close().then(() => process.exit(0));
     };
@@ -185,6 +187,11 @@ async function main(): Promise<void> {
       if (!grantB64 || !flags.into) throw new Error("federation redeem requires --grant (or --grant-file) and --into <vault-id>");
       const result = await redeemFederatedGrant({ db: ctx.db, keyring: ctx.keyring, org: ctx.org, grantB64, targetVaultId: flags.into });
       console.error(`ctxfile-relay: imported thread "${result.thread}" (${result.imported} records) into vault ${flags.into}`);
+      return;
+    }
+    if (command === "stats") {
+      const days = Math.min(Math.max(Number(flags.days ?? 30), 1), 365);
+      process.stdout.write(`${JSON.stringify(relayGateStats(ctx.db, days), null, 2)}\n`);
       return;
     }
     if (command === "audit" && sub === "tail") {

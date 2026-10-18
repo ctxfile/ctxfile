@@ -4,6 +4,8 @@ import { loadOrCreateApprovalKey } from "./approval-keys.js";
 import { loadConfig, type ResolvedConfig } from "./config.js";
 import { IngestStore } from "./storage/ingest-store.js";
 import { readTasksSwitch, writeTasksSwitch } from "./storage/task-store.js";
+import { addPushTarget, listPushTargets, removePushTarget, testPushTarget, type PushTargetKind } from "./sync/push-targets.js";
+import { loadVaultConfig, type VaultConfig } from "./sync/vault.js";
 import {
   A2A_TASK_STATE,
   formatTaskErrors,
@@ -45,6 +47,11 @@ export const TASKS_USAGE = `tasks (cross-agent tasks: agents leave work for each
   freeze <thread>   Cancel a thread's open tasks and block new ones ('--off' lifts it)
   off | on          Turn every task tool off, or back on
   status            Show whether tasks are on, and counts
+  target add        (Sync) Wake an agent when a task is approved for it (asks to confirm):
+                    --kind webhook --url <https-url> [--to <client|any>] [--name <n>]
+                      prints a whsec_ signing secret once (Standard Webhooks)
+                    --kind claude-code-routine --url <routine fire URL> --token-env <VAR> [--to claude-code]
+  target list | rm <id> | test <id>
 `;
 
 interface TaskArgs {
@@ -61,6 +68,10 @@ interface TaskArgs {
   text?: string;
   file?: string;
   reason?: string;
+  kind?: string;
+  url?: string;
+  name?: string;
+  tokenEnv?: string;
   positional: string[];
 }
 
@@ -120,6 +131,18 @@ export function parseTaskArgs(argv: string[]): TaskArgs {
       case "--reason":
         args.reason = value(argv, ++i, arg);
         break;
+      case "--kind":
+        args.kind = value(argv, ++i, arg);
+        break;
+      case "--url":
+        args.url = value(argv, ++i, arg);
+        break;
+      case "--name":
+        args.name = value(argv, ++i, arg);
+        break;
+      case "--token-env":
+        args.tokenEnv = value(argv, ++i, arg);
+        break;
       default:
         if (arg.startsWith("--")) throw new Error(`unknown option "${arg}" (see 'ctxfile --help')`);
         args.positional.push(arg);
@@ -129,6 +152,10 @@ export function parseTaskArgs(argv: string[]): TaskArgs {
 }
 
 export interface TasksCliDeps {
+  /** Vault config override (tests); defaults to ~/.ctxfile/vault.json. */
+  vault?: VaultConfig | null;
+  fetchImpl?: typeof fetch;
+  env?: NodeJS.ProcessEnv;
   /** Asks a yes/no question on an interactive terminal; throws when there is none. */
   confirm?: (question: string) => Promise<boolean>;
   /** Reads the task text from stdin when neither --text nor --file is given. */
@@ -205,6 +232,11 @@ export async function runTasks(argv: string[], deps: TasksCliDeps = {}): Promise
   const now = (deps.now ?? Date.now)();
   const out = deps.out ?? ((text: string) => void process.stdout.write(`${text}\n`));
   const confirm = deps.confirm ?? confirmOnTerminal;
+
+  if (sub === "target") {
+    await runTarget(args, deps, confirm, out);
+    return;
+  }
 
   if (sub === "off" || sub === "on") {
     if (sub === "on" && !(await confirm("Turn cross-agent tasks back on for every agent?"))) {
@@ -290,6 +322,10 @@ export async function runTasks(argv: string[], deps: TasksCliDeps = {}): Promise
           { now, defaultTtlDays: config.tasks.defaultTtlDays }
         );
         if (!result.ok) throw new Error(result.error);
+        // Sign it too, so a relay can verify it came from this device before
+        // waking an agent for it (push trusts signatures, not origin labels).
+        const signed = store.tasks.humanAction(config.root, result.task.task_id, { kind: "approve" }, human("cli"));
+        if (!signed.ok) throw new Error(signed.error);
         console.error(`ctxfile: posted ${result.task.task_id} for ${result.task.assignee} on thread "${result.task.thread}"`);
         return;
       }
@@ -356,5 +392,70 @@ export async function runTasks(argv: string[], deps: TasksCliDeps = {}): Promise
     }
   } finally {
     store.close();
+  }
+}
+
+/** `ctxfile tasks target ...`: push targets on the vault's relay (Sync). */
+async function runTarget(
+  args: TaskArgs,
+  deps: TasksCliDeps,
+  confirm: (question: string) => Promise<boolean>,
+  out: (text: string) => void
+): Promise<void> {
+  const action = args.positional[0];
+  const vault = deps.vault === undefined ? loadVaultConfig() : deps.vault;
+  if (!vault) throw new Error("push needs a Sync vault; run 'ctxfile vault create' or 'ctxfile vault join' first");
+  if (vault.mode !== "standard") throw new Error("push needs a standard vault: a strict vault's relay cannot read a task to decide whether to wake anyone");
+  const fetchImpl = deps.fetchImpl ?? fetch;
+  switch (action) {
+    case "add": {
+      const kind = args.kind as PushTargetKind | undefined;
+      if (kind !== "webhook" && kind !== "claude-code-routine") throw new Error('target add requires --kind webhook or --kind claude-code-routine');
+      if (!args.url) throw new Error("target add requires --url");
+      let token: string | undefined;
+      if (kind === "claude-code-routine") {
+        if (!args.tokenEnv) throw new Error("a routine target needs --token-env <VAR>, the env var holding the routine's API token (never put it on the command line)");
+        token = (deps.env ?? process.env)[args.tokenEnv]?.trim();
+        if (!token) throw new Error(`env var ${args.tokenEnv} is empty`);
+      }
+      const assignee = args.to ?? (kind === "claude-code-routine" ? "claude-code" : "any");
+      if (!(await confirm(`Let the relay wake ${args.url} when a task for ${assignee} is approved?`))) {
+        console.error("ctxfile: no target added");
+        return;
+      }
+      const { target, secret } = await addPushTarget(vault, { kind, url: args.url, name: args.name, assignee, token }, fetchImpl);
+      console.error(`ctxfile: push target ${target.id} added (${target.kind}, wakes for ${target.assignee})`);
+      if (secret) {
+        console.error("  Signing secret (shown once; verify the webhook-signature header with it):");
+        out(secret);
+      }
+      return;
+    }
+    case "list": {
+      const targets = await listPushTargets(vault, fetchImpl);
+      if (targets.length === 0) {
+        console.error("ctxfile: no push targets ('ctxfile tasks target add ...')");
+        return;
+      }
+      for (const t of targets) {
+        out(`${t.id}  ${t.kind}  "${t.name}"  for ${t.assignee}  ${t.url}  last: ${t.last_status ?? "never"}`);
+      }
+      return;
+    }
+    case "rm": {
+      const id = args.positional[1];
+      if (!id) throw new Error("target rm requires a target id");
+      console.error((await removePushTarget(vault, id, fetchImpl)) ? `ctxfile: target ${id} removed` : `ctxfile: no target ${id}`);
+      return;
+    }
+    case "test": {
+      const id = args.positional[1];
+      if (!id) throw new Error("target test requires a target id");
+      const result = await testPushTarget(vault, id, fetchImpl);
+      console.error(result.ok ? `ctxfile: test delivered (HTTP ${result.status})` : `ctxfile: test failed: ${result.error ?? `HTTP ${result.status}`}`);
+      return;
+    }
+    default:
+      throw new Error('tasks target requires "add", "list", "rm <id>", or "test <id>"');
   }
 }

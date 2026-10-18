@@ -18,6 +18,10 @@ export interface RelayConfig {
       "closed": vault creation disabled (hosted mode gates it on subscription
       via out-of-band provisioning). */
   registration: "open" | "closed";
+  /** Push to http:// targets (self-hosted LANs and tests only; default off). */
+  pushAllowHttp: boolean;
+  /** Push to private/loopback addresses (self-hosted LANs and tests only; default off). */
+  pushAllowPrivate: boolean;
 }
 
 export interface RelayConfigOverrides {
@@ -26,6 +30,8 @@ export interface RelayConfigOverrides {
   port?: number;
   orgId?: string;
   registration?: "open" | "closed";
+  pushAllowHttp?: boolean;
+  pushAllowPrivate?: boolean;
 }
 
 export const DEFAULT_RELAY_PORT = 5959;
@@ -46,5 +52,7 @@ export function loadRelayConfig(overrides: RelayConfigOverrides = {}, env: NodeJ
     port: portRaw,
     orgId: overrides.orgId ?? env.CTXFILE_RELAY_ORG ?? "org-local",
     registration,
+    pushAllowHttp: overrides.pushAllowHttp ?? env.CTXFILE_RELAY_PUSH_ALLOW_HTTP === "1",
+    pushAllowPrivate: overrides.pushAllowPrivate ?? env.CTXFILE_RELAY_PUSH_ALLOW_PRIVATE === "1",
   };
 }

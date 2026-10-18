@@ -1,12 +1,13 @@
-import { randomUUID } from "node:crypto";
+import { createPublicKey, randomUUID } from "node:crypto";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
-import type { SyncBlobMeta } from "ctxfile";
+import { approvalKeyId, type SyncBlobMeta, type TaskRecord } from "ctxfile";
 import type { RelayConfig } from "./config.js";
 import { LocalKeyProvider, type KeyProvider } from "./keyring.js";
 import {
   createVaultMcpServer,
   StreamableHTTPServerTransport,
+  TASK_POSTS_PER_MINUTE_PER_TOKEN,
   WRITE_MAX_PER_MINUTE,
   type GrantScope,
   type VaultMcpServer,
@@ -19,6 +20,7 @@ import {
   type FederationGrantDoc,
   type OrgIdentity,
 } from "./org.js";
+import { PushService, type AddTargetInput } from "./push.js";
 import { RelayDb, type TokenRow, type VaultRow } from "./store.js";
 import { loadVaultPayloads, unwrapDataKey } from "./vault-view.js";
 import { VERSION } from "./version.js";
@@ -51,15 +53,38 @@ export interface RelayContext {
   org: OrgIdentity;
   /** How this relay names itself in federation grants (redeemers call it back here). */
   publicUrl: string;
+  /** Hooks push (push.ts) attaches to: a device stored a blob; a relay-side
+      task tool wrote a task. Both run after the write, never block it. */
+  onBlobStored?: (vault: VaultRow, blobId: string) => void;
+  onTaskWritten?: (vault: VaultRow, task: TaskRecord) => void;
+  /** Wakes agents for approved tasks (webhooks, Claude Code Routines). */
+  push: PushService;
 }
 
 export function createRelayContext(config: RelayConfig, publicUrl?: string): RelayContext {
+  const db = new RelayDb(config.dataDir);
+  const keyring = new LocalKeyProvider(config.dataDir);
+  const push = new PushService(db, keyring, { allowHttp: config.pushAllowHttp, allowPrivate: config.pushAllowPrivate });
   return {
     config,
-    db: new RelayDb(config.dataDir),
-    keyring: new LocalKeyProvider(config.dataDir),
+    db,
+    keyring,
     org: loadOrCreateOrgIdentity(config.dataDir, config.orgId),
     publicUrl: publicUrl ?? process.env.CTXFILE_RELAY_PUBLIC_URL ?? `http://${config.host}:${config.port}`,
+    push,
+    // Push decisions run after the write and never fail it.
+    onBlobStored: (vault, blobId) => {
+      void push.onBlobStored(vault, blobId).catch((error: unknown) => {
+        console.error(`ctxfile-relay: push check failed: ${error instanceof Error ? error.message : String(error)}`);
+      });
+    },
+    onTaskWritten: (vault, task) => {
+      try {
+        push.onTask(vault, task);
+      } catch (error) {
+        console.error(`ctxfile-relay: push check failed: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    },
   };
 }
 
@@ -115,6 +140,7 @@ export async function startRelay(ctx: RelayContext): Promise<RunningRelay> {
   const blobWriteTimestamps = new Map<string, number[]>();
   const vaultCreateTimestamps = new Map<string, number[]>();
   const mcpWriteTimestamps = new Map<string, number[]>();
+  const taskPostTimestamps = new Map<string, number[]>();
   let boundPort = config.port;
 
   /** Sliding-window rate check. `record` true consumes a slot when under the
@@ -159,6 +185,7 @@ export async function startRelay(ctx: RelayContext): Promise<RunningRelay> {
   const clientAddr = (req: http.IncomingMessage): string => req.socket.remoteAddress ?? "unknown";
 
   // Sweep idle MCP sessions so init-without-close cannot pin memory forever.
+  ctx.push.start();
   const sweeper = setInterval(() => {
     const cutoff = Date.now() - SESSION_IDLE_MS;
     for (const [id, entry] of sessions) {
@@ -318,6 +345,40 @@ export async function startRelay(ctx: RelayContext): Promise<RunningRelay> {
       return;
     }
 
+    if (pathname === "/v1/vaults/approver-keys" && method === "POST") {
+      if (!canWrite) {
+        json(res, 403, { error: "enrolling an approval key requires a device token with write:sessions" });
+        return;
+      }
+      const body = (await readBody(req)) as { key_id?: string; public_key_b64?: string };
+      if (typeof body.key_id !== "string" || typeof body.public_key_b64 !== "string") {
+        json(res, 400, { error: "approver key requires key_id and public_key_b64 (Ed25519 SPKI DER, base64)" });
+        return;
+      }
+      let valid = false;
+      try {
+        const key = createPublicKey({ key: Buffer.from(body.public_key_b64, "base64"), format: "der", type: "spki" });
+        valid = key.asymmetricKeyType === "ed25519" && approvalKeyId(body.public_key_b64) === body.key_id;
+      } catch {
+        valid = false;
+      }
+      if (!valid) {
+        json(res, 400, { error: "public_key_b64 must be an Ed25519 SPKI key and key_id its ctxfile key id" });
+        return;
+      }
+      const added = db.addApproverKey(vault.id, body.key_id, body.public_key_b64, token.name);
+      if (added) db.audit({ vaultId: vault.id, actor: token.name, action: "approver_key.add", detail: { key_id: body.key_id } });
+      json(res, 200, { ok: true, added });
+      return;
+    }
+
+    if (pathname === "/v1/vaults/approver-keys" && method === "GET") {
+      json(res, 200, {
+        keys: db.listApproverKeys(vault.id).map((k) => ({ key_id: k.key_id, added_by: k.added_by, added_at: k.added_at })),
+      });
+      return;
+    }
+
     if (pathname === "/v1/blobs" && method === "GET") {
       if (!canRead) {
         json(res, 403, { error: "token lacks read:context" });
@@ -357,10 +418,35 @@ export async function startRelay(ctx: RelayContext): Promise<RunningRelay> {
           json(res, 400, { error: "blob put requires version (number) and data_b64" });
           return;
         }
+        // Compare-and-set (tasks): If-Match names the version this relay must
+        // still hold; If-None-Match: * means the blob must not exist yet.
+        const ifMatch = req.headers["if-match"];
+        const ifNoneMatch = req.headers["if-none-match"];
+        let expected: number | null | undefined;
+        if (typeof ifNoneMatch === "string" && ifNoneMatch.trim() === "*") expected = null;
+        if (typeof ifMatch === "string") {
+          const parsedVersion = Number(ifMatch.trim().replace(/^W\//, "").replace(/^"|"$/g, ""));
+          if (!Number.isFinite(parsedVersion)) {
+            json(res, 400, { error: 'If-Match must be a quoted version number, e.g. "1760000000000"' });
+            return;
+          }
+          expected = parsedVersion;
+        }
         const meta: SyncBlobMeta = { id: blobId, version: body.version, deleted: body.deleted === true };
-        const stored = db.putBlob(vault.id, blobId, meta, new Uint8Array(Buffer.from(body.data_b64, "base64")));
-        db.audit({ vaultId: vault.id, actor: token.name, action: "blob.push", detail: { id: blobId.slice(0, 8), stored } });
-        json(res, 200, { stored });
+        const data = new Uint8Array(Buffer.from(body.data_b64, "base64"));
+        const result = db.putBlobIf(vault.id, blobId, meta, data, expected);
+        db.audit({
+          vaultId: vault.id,
+          actor: token.name,
+          action: "blob.push",
+          detail: { id: blobId.slice(0, 8), stored: result === "stored", ...(expected !== undefined ? { cas: result } : {}) },
+        });
+        if (result === "conflict") {
+          json(res, 409, { error: "blob changed since your base version", current: db.getBlobMeta(vault.id, blobId) });
+          return;
+        }
+        if (result === "stored") ctx.onBlobStored?.(vault, blobId);
+        json(res, 200, { stored: result === "stored" });
         return;
       }
     }
@@ -463,6 +549,69 @@ export async function startRelay(ctx: RelayContext): Promise<RunningRelay> {
       return;
     }
 
+    if (pathname === "/v1/push/targets" && method === "POST") {
+      if (!canWrite) {
+        json(res, 403, { error: "push targets need a device token with write:sessions" });
+        return;
+      }
+      const body = (await readBody(req)) as Partial<AddTargetInput>;
+      const result = ctx.push.addTarget(
+        vault,
+        {
+          kind: body.kind as AddTargetInput["kind"],
+          name: typeof body.name === "string" ? body.name : undefined,
+          url: typeof body.url === "string" ? body.url : "",
+          assignee: typeof body.assignee === "string" ? body.assignee : undefined,
+          token: typeof body.token === "string" ? body.token : undefined,
+        },
+        token.name
+      );
+      if (!result.ok) {
+        json(res, 400, { error: result.error });
+        return;
+      }
+      json(res, 200, { target: result.target, secret: result.secret });
+      return;
+    }
+
+    if (pathname === "/v1/push/targets" && method === "GET") {
+      json(res, 200, { targets: ctx.push.listTargets(vault.id) });
+      return;
+    }
+
+    if (pathname === "/v1/push/outbox" && method === "GET") {
+      json(res, 200, {
+        events: ctx.push.outbox(vault.id).map((e) => ({
+          event_id: e.event_id,
+          type: e.event_type,
+          task_id: e.task_id,
+          target_id: e.target_id,
+          status: e.status,
+          attempts: e.attempts,
+          next_attempt_at: e.next_attempt_at,
+          last_error: e.last_error,
+        })),
+      });
+      return;
+    }
+
+    const targetMatch = pathname.match(/^\/v1\/push\/targets\/([0-9a-f-]{36})(\/test)?$/);
+    if (targetMatch) {
+      if (!canWrite) {
+        json(res, 403, { error: "push targets need a device token with write:sessions" });
+        return;
+      }
+      const targetId = targetMatch[1] as string;
+      if (method === "DELETE" && !targetMatch[2]) {
+        json(res, 200, { removed: ctx.push.removeTarget(vault.id, targetId, token.name) });
+        return;
+      }
+      if (method === "POST" && targetMatch[2]) {
+        json(res, 200, await ctx.push.test(vault, targetId, token.name));
+        return;
+      }
+    }
+
     if (pathname === "/v1/audit" && method === "GET") {
       json(res, 200, { audit: db.auditRows(vault.id) });
       return;
@@ -545,6 +694,10 @@ export async function startRelay(ctx: RelayContext): Promise<RunningRelay> {
           // fresh sessions cannot reset the budget.
           overWriteLimit: (now) => !withinWindow(mcpWriteTimestamps, token.id, now, 60_000, WRITE_MAX_PER_MINUTE, false),
           recordWrite: (now) => void withinWindow(mcpWriteTimestamps, token.id, now, 60_000, WRITE_MAX_PER_MINUTE, true),
+          overPostLimit: (now) =>
+            !withinWindow(taskPostTimestamps, token.id, now, 60_000, TASK_POSTS_PER_MINUTE_PER_TOKEN, false),
+          recordPost: (now) => void withinWindow(taskPostTimestamps, token.id, now, 60_000, TASK_POSTS_PER_MINUTE_PER_TOKEN, true),
+          onTaskWritten: (task) => ctx.onTaskWritten?.(vault, task),
         }),
         tokenId: token.id,
         lastSeen: Date.now(),
@@ -583,6 +736,7 @@ export async function startRelay(ctx: RelayContext): Promise<RunningRelay> {
     publicUrl,
     close: async () => {
       clearInterval(sweeper);
+      ctx.push.stop();
       for (const entry of sessions.values()) {
         await entry.server.close().catch(() => undefined);
       }

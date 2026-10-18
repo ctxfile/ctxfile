@@ -266,6 +266,7 @@ export {
   assertPassphraseStrength,
   createVault,
   DEFAULT_VAULT_CONFIG_PATH,
+  enrollApprovalKey,
   fetchVaultMeta,
   joinVault,
   loadVaultConfig,
@@ -280,6 +281,15 @@ export {
   type VaultConfig,
   type VaultMeta,
 } from "./sync/vault.js";
+export {
+  addPushTarget,
+  listPushTargets,
+  removePushTarget,
+  testPushTarget,
+  type AddPushTargetInput,
+  type PushTarget,
+  type PushTargetKind,
+} from "./sync/push-targets.js";
 export { isDeniedPath, redactContent } from "./redact.js";
 export { createServer, SERVER_INSTRUCTIONS, type ServerOptions } from "./server.js";
 export { SnapshotCache } from "./storage/cache.js";

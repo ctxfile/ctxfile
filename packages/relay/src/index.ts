@@ -13,6 +13,42 @@ export {
   type FederationGrantDoc,
   type OrgIdentity,
 } from "./org.js";
-export { hashToken, mintToken, RelayDb, type AuditRow, type FederationGrantRow, type TokenRow, type VaultRow } from "./store.js";
-export { loadVaultPayloads, loadView, unwrapDataKey, writeSession, type WriteSessionInput } from "./vault-view.js";
+export {
+  DEVICE_SCOPES,
+  hashToken,
+  mintToken,
+  RelayDb,
+  type ApproverKeyRow,
+  type AuditRow,
+  type BlobPutResult,
+  type FederationGrantRow,
+  type TokenRow,
+  type VaultRow,
+} from "./store.js";
+export {
+  clearViewCache,
+  loadVaultPayloads,
+  loadView,
+  readTask,
+  unwrapDataKey,
+  writeSession,
+  writeTask,
+  type WriteSessionInput,
+} from "./vault-view.js";
+export {
+  guardedPost,
+  isPrivateAddress,
+  newWebhookSecret,
+  PUSH_RETRY_SCHEDULE_MS,
+  PushService,
+  signWebhook,
+  validateTargetUrl,
+  type AddTargetInput,
+  type PushEventType,
+  type PushOptions,
+  type PushOutboxRow,
+  type PushTargetKind,
+  type PushTargetRow,
+} from "./push.js";
+export { relayGateStats, type RelayGateStats } from "./stats.js";
 export { VERSION } from "./version.js";

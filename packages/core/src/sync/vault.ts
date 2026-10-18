@@ -262,6 +262,28 @@ export async function unlockVault(config: VaultConfig, passphrase: string, fetch
   return unlockWithMeta(meta, passphrase);
 }
 
+/** Enrolls this device's approval public key with the vault, so the relay
+    can tell real approvals (signed on one of the user's devices) from
+    anything else before it wakes an agent. Idempotent. Returns false when
+    the relay predates approver keys (404) instead of failing the sync. */
+export async function enrollApprovalKey(
+  config: VaultConfig,
+  key: { keyId: string; publicKey: string },
+  fetchImpl: typeof fetch = fetch
+): Promise<boolean> {
+  const response = await fetchImpl(`${config.relayUrl.replace(/\/+$/, "")}/v1/vaults/approver-keys`, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${config.token}` },
+    body: JSON.stringify({ key_id: key.keyId, public_key_b64: key.publicKey }),
+  });
+  if (response.status === 404) return false;
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+    throw new Error(`relay /v1/vaults/approver-keys failed: ${response.status} ${body.slice(0, 200)}`);
+  }
+  return true;
+}
+
 /** Everything wired: unlock, point the local store at the relay, sync. */
 export async function openVaultSync(
   config: VaultConfig,

@@ -225,6 +225,43 @@ describe("ctxfile tasks (the human side)", () => {
     expect(listing).toContain("Posted by the user");
   });
 
+  it("manages push targets on the vault's relay, keeping routine tokens off argv", async () => {
+    const calls: { url: string; body: unknown }[] = [];
+    const fetchImpl = (async (url: string, init?: RequestInit) => {
+      calls.push({ url: String(url), body: init?.body ? JSON.parse(String(init.body)) : null });
+      return new Response(JSON.stringify({ target: { id: "t1", kind: "webhook", assignee: "any" }, secret: "whsec_abc" }), { status: 200 });
+    }) as typeof fetch;
+    const vault = { relayUrl: "https://relay.example", vaultId: "v", name: "v", mode: "standard" as const, token: "ctx_device" };
+    const printed: string[] = [];
+    await runTasks(["target", "add", "--kind", "webhook", "--url", "https://hooks.example/x", "--root", dir], {
+      ...deps(true),
+      vault,
+      fetchImpl,
+      out: (t) => void printed.push(t),
+    });
+    expect(calls[0]?.url).toBe("https://relay.example/v1/push/targets");
+    expect(calls[0]?.body).toMatchObject({ kind: "webhook", url: "https://hooks.example/x", assignee: "any" });
+    expect(printed).toEqual(["whsec_abc"]);
+
+    await expect(
+      runTasks(["target", "add", "--kind", "claude-code-routine", "--url", "https://api.anthropic.com/v1/claude_code/routines/trig_1/fire", "--root", dir], {
+        ...deps(true),
+        vault,
+        fetchImpl,
+      })
+    ).rejects.toThrow(/--token-env/);
+    await runTasks(
+      ["target", "add", "--kind", "claude-code-routine", "--url", "https://api.anthropic.com/v1/claude_code/routines/trig_1/fire", "--token-env", "ROUTINE_TOKEN", "--root", dir],
+      { ...deps(true), vault, fetchImpl, env: { ROUTINE_TOKEN: "sk-ant-oat01-secret" } }
+    );
+    expect(calls[1]?.body).toMatchObject({ kind: "claude-code-routine", token: "sk-ant-oat01-secret", assignee: "claude-code" });
+
+    await expect(
+      runTasks(["target", "list", "--root", dir], { ...deps(true), vault: { ...vault, mode: "strict" }, fetchImpl })
+    ).rejects.toThrow(/standard vault/);
+    await expect(runTasks(["target", "list", "--root", dir], { ...deps(true), vault: null, fetchImpl })).rejects.toThrow(/Sync vault/);
+  });
+
   it("turns tasks off without asking, and on only after a yes", async () => {
     await runTasks(["off", "--root", dir], { out: () => undefined });
     expect(readTasksSwitch(config.cacheDir).off).toBe(true);

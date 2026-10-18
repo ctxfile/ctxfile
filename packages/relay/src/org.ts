@@ -1,6 +1,7 @@
 import { createPrivateKey, createPublicKey, generateKeyPairSync, sign, verify, type KeyObject } from "node:crypto";
 import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { canonicalJson as jcs } from "ctxfile";
 
 /**
  * Org identity (Enterprise PRD §4.1): every hub carries an org_id and an
@@ -51,8 +52,11 @@ export interface FederationGrantDoc {
   exp: number;
 }
 
+/** RFC 8785-style canonical JSON (core's canonicalizer). The old flat-only
+    form silently dropped nested keys; for the flat grant documents signed so
+    far both produce identical bytes, so existing signatures still verify. */
 export function canonicalJson(value: Record<string, unknown>): string {
-  return JSON.stringify(value, Object.keys(value).sort());
+  return jcs(value);
 }
 
 export function signGrantDoc(identity: OrgIdentity, doc: FederationGrantDoc): string {

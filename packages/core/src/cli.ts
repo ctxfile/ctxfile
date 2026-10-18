@@ -27,9 +27,11 @@ import {
 } from "./behavior.js";
 import { createRuntime } from "./runtime.js";
 import { createServer, startHttpServer, type ResolvedServeToken } from "./server.js";
+import { loadOrCreateApprovalKey } from "./approval-keys.js";
 import {
   createVault,
   DEFAULT_VAULT_CONFIG_PATH,
+  enrollApprovalKey,
   fetchVaultMeta,
   joinVault,
   loadVaultConfig,
@@ -576,6 +578,13 @@ async function runSync(argv: string[]): Promise<void> {
   const passphrase = requireVaultPassphrase();
   const store = new IngestStore(path.join(config.cacheDir, "ingest.db"));
   try {
+    // Approvals made on this device only count on the relay (and only wake
+    // agents) once its approval key is enrolled with the vault.
+    try {
+      await enrollApprovalKey(vault, loadOrCreateApprovalKey(config.cacheDir));
+    } catch (error) {
+      console.error(`ctxfile: could not enroll this device's approval key: ${error instanceof Error ? error.message : String(error)}`);
+    }
     const client = await openVaultSync(vault, passphrase, store, config.root);
     const result = await client.sync();
     console.error(
