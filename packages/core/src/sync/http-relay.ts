@@ -14,6 +14,7 @@ export interface HttpRelayStoreOptions {
 export class HttpRelayStore implements RelayStore {
   private readonly base: string;
   private readonly fetchImpl: typeof fetch;
+  private warnedNoCas = false;
 
   constructor(relayUrl: string, private readonly token: string, options: HttpRelayStoreOptions = {}) {
     this.base = relayUrl.replace(/\/+$/, "");
@@ -50,7 +51,7 @@ export class HttpRelayStore implements RelayStore {
     return { meta: body.meta, data: new Uint8Array(Buffer.from(body.data_b64, "base64")) };
   }
 
-  async put(id: string, meta: SyncBlobMeta, data: Uint8Array, options: RelayPutOptions = {}): Promise<void> {
+  async put(id: string, meta: SyncBlobMeta, data: Uint8Array, options: RelayPutOptions = {}): Promise<boolean> {
     // Compare-and-set rides standard conditional headers: If-Match names the
     // version the relay must still hold; If-None-Match: * means "must not
     // exist yet". Relays that predate compare-and-set ignore both.
@@ -72,5 +73,15 @@ export class HttpRelayStore implements RelayStore {
       const body = (await response.json().catch(() => ({}))) as { current?: SyncBlobMeta | null };
       throw new RelayConflictError(id, body.current ?? null);
     }
+    // A relay that honors compare-and-set says so. One that does not (older
+    // than 0.5.0) silently falls back to last-write-wins, so say so once.
+    if (options.ifVersion !== undefined && response.headers.get("x-ctxfile-cas") !== "1" && !this.warnedNoCas) {
+      this.warnedNoCas = true;
+      console.error(
+        "ctxfile sync: this relay ignores compare-and-set (upgrade it to @ctxfile/relay 0.5.0+); task claims across devices fall back to last-write-wins"
+      );
+    }
+    const body = (await response.json().catch(() => ({}))) as { stored?: boolean };
+    return body.stored !== false;
   }
 }

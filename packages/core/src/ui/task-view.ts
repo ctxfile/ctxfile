@@ -6,6 +6,7 @@ import {
   isTaskApproved,
   provenanceLine,
   sanitizeTaskText,
+  singleLine,
   taskContentHash,
   type TaskActor,
   type TaskCapability,
@@ -121,6 +122,11 @@ function clean(text: string): string {
   return sanitizeTaskText(text);
 }
 
+/** Fields the UI shows on one line. */
+function line(text: string): string {
+  return singleLine(text);
+}
+
 function artifacts(list: TaskViewArtifact[]): TaskViewArtifact[] {
   return list.map((a) => ({ ref: clean(a.ref), role: clean(a.role) }));
 }
@@ -131,8 +137,8 @@ export function taskView(task: TaskRecord, now: number, threadFrozen: boolean): 
   const effect = task.pending_effect;
   return {
     task_id: task.task_id,
-    thread: clean(task.thread),
-    title: clean(task.title),
+    thread: line(task.thread),
+    title: line(task.title),
     instructions: clean(task.instructions),
     input_artifacts: artifacts(task.input_artifacts),
     assignee: task.assignee,
@@ -142,7 +148,7 @@ export function taskView(task: TaskRecord, now: number, threadFrozen: boolean): 
     a2a_state: A2A_TASK_STATE[task.state],
     open: isOpenState(task.state),
     origin: task.origin,
-    from: task.origin === "human" ? "user" : (task.posted_by.harness ?? "unknown agent"),
+    from: task.origin === "human" && approved ? "user" : (task.posted_by.harness ?? "unknown agent"),
     posted_by: {
       kind: task.posted_by.kind,
       harness: task.posted_by.harness,
@@ -163,7 +169,7 @@ export function taskView(task: TaskRecord, now: number, threadFrozen: boolean): 
           expires_at: iso(approval.expires_at),
           signed: verifyTaskApproval(task, null),
           key_id: approval.key_id,
-          current: task.origin === "agent" ? approved : true,
+          current: approved,
         }
       : null,
     pending_effect: effect

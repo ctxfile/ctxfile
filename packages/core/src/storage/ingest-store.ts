@@ -293,6 +293,10 @@ export class IngestStore {
         at INTEGER NOT NULL
       );
       CREATE INDEX IF NOT EXISTS idx_thread_events_at ON thread_events (at);
+      CREATE TABLE IF NOT EXISTS trusted_approver_keys (
+        key_id TEXT PRIMARY KEY,
+        learned_at INTEGER NOT NULL
+      );
       CREATE TABLE IF NOT EXISTS sync_skipped (
         blob_id TEXT PRIMARY KEY,
         version INTEGER NOT NULL,
@@ -327,6 +331,20 @@ export class IngestStore {
         handoff?.suggested_first_prompt ? 1 : 0,
         now
       );
+  }
+
+  /** Approval key ids the vault trusts (learned at sync from the relay).
+      Replaces the set: a key removed from the vault stops counting here. */
+  setTrustedApproverKeys(keyIds: string[], now = Date.now()): void {
+    this.db.transaction(() => {
+      this.db.prepare("DELETE FROM trusted_approver_keys").run();
+      const insert = this.db.prepare("INSERT OR IGNORE INTO trusted_approver_keys (key_id, learned_at) VALUES (?, ?)");
+      for (const id of keyIds) insert.run(id, now);
+    })();
+  }
+
+  trustedApproverKeyIds(): string[] {
+    return (this.db.prepare("SELECT key_id FROM trusted_approver_keys").all() as { key_id: string }[]).map((r) => r.key_id);
   }
 
   /** The four gate counters, across every project in this store. */
@@ -687,7 +705,6 @@ export class IngestStore {
       last_active: number;
       deleted: number;
       private: number;
-      tasks_frozen: number;
     }[];
     for (const row of threadRows) {
       const payload: ThreadSyncPayload = {
@@ -699,7 +716,6 @@ export class IngestStore {
         last_active: row.last_active,
         deleted: row.deleted === 1,
         private: row.private === 1,
-        tasks_frozen: row.tasks_frozen === 1,
       };
       entries.push({
         naturalId: `thread:${row.title.toLowerCase()}`,
@@ -708,7 +724,7 @@ export class IngestStore {
         payload: textEncoder.encode(JSON.stringify(payload)),
       });
     }
-    entries.push(...this.tasks.exportSyncEntries(root));
+    entries.push(...this.tasks.exportSyncEntries(root), ...this.tasks.exportFreezeEntries(root));
     return entries;
   }
 
@@ -730,6 +746,7 @@ export class IngestStore {
       if (payload.kind === "session") applied += this.applySessionPayload(root, payload);
       else if (payload.kind === "memory") applied += this.memory.applySyncPayload(root, payload);
       else if (payload.kind === "task") applied += this.tasks.applySyncPayload(root, payload);
+      else if (payload.kind === "task_freeze") applied += this.tasks.applyFreezePayload(root, payload);
     }
     return applied;
   }
@@ -745,6 +762,7 @@ export class IngestStore {
       },
       skipped: async () => this.skippedBlobs(),
       recordSkipped: async (entries) => this.recordSkippedBlobs(entries),
+      takeConflicts: () => this.tasks.takeConflicts(),
       markSynced: async (entries) => {
         for (const entry of entries) {
           if (entry.naturalId.startsWith("task:")) this.tasks.markSynced(root, entry.naturalId.slice("task:".length), entry.version);
@@ -785,19 +803,16 @@ export class IngestStore {
       .prepare("SELECT id, last_active FROM threads WHERE root = ? AND lower(title) = lower(?)")
       .get(root, payload.title) as { id: number; last_active: number } | undefined;
     const isPrivate = payload.private ? 1 : 0;
-    const frozen = payload.tasks_frozen ? 1 : 0;
     if (!existing) {
       this.db
-        .prepare(
-          "INSERT INTO threads (root, title, status, tags, created_at, last_active, deleted, private, tasks_frozen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
-        )
-        .run(root, payload.title, payload.status, JSON.stringify(payload.tags), payload.created_at, payload.last_active, payload.deleted ? 1 : 0, isPrivate, frozen);
+        .prepare("INSERT INTO threads (root, title, status, tags, created_at, last_active, deleted, private) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+        .run(root, payload.title, payload.status, JSON.stringify(payload.tags), payload.created_at, payload.last_active, payload.deleted ? 1 : 0, isPrivate);
       return 1;
     }
     if (payload.last_active <= existing.last_active) return 0;
     this.db
-      .prepare("UPDATE threads SET status = ?, tags = ?, last_active = ?, deleted = ?, private = ?, tasks_frozen = ? WHERE id = ?")
-      .run(payload.status, JSON.stringify(payload.tags), payload.last_active, payload.deleted ? 1 : 0, isPrivate, frozen, existing.id);
+      .prepare("UPDATE threads SET status = ?, tags = ?, last_active = ?, deleted = ?, private = ? WHERE id = ?")
+      .run(payload.status, JSON.stringify(payload.tags), payload.last_active, payload.deleted ? 1 : 0, isPrivate, existing.id);
     return 1;
   }
 

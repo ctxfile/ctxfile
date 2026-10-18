@@ -3,6 +3,7 @@ import { loadRelayConfig, type RelayConfigOverrides } from "./config.js";
 import { redeemFederatedGrant } from "./federation.js";
 import { createRelayContext, startRelay } from "./http.js";
 import { relayGateStats } from "./stats.js";
+import { DEVICE_SCOPES } from "./store.js";
 import { VERSION } from "./version.js";
 
 const USAGE = `ctxfile-relay v${VERSION} — the ctxfile relay / self-hosted hub
@@ -105,7 +106,7 @@ async function main(): Promise<void> {
     }
     if (command === "tokens" && sub === "create") {
       if (!flags.vault || !flags.name) throw new Error("tokens create requires --vault and --name");
-      const scopes = (flags.scopes ?? "read:context,write:sessions").split(",").map((s) => s.trim());
+      const scopes = (flags.scopes ?? DEVICE_SCOPES.join(",")).split(",").map((s) => s.trim());
       const token = ctx.db.createToken(flags.vault, flags.name, scopes);
       ctx.db.audit({ vaultId: flags.vault, actor: "cli", action: "token.create", detail: { name: flags.name, scopes } });
       process.stdout.write(`${token}\n`);

@@ -32,6 +32,7 @@ import {
   createVault,
   DEFAULT_VAULT_CONFIG_PATH,
   enrollApprovalKey,
+  fetchApproverKeyIds,
   fetchVaultMeta,
   joinVault,
   loadVaultConfig,
@@ -584,8 +585,11 @@ async function runSync(argv: string[]): Promise<void> {
     // agents) once its approval key is enrolled with the vault.
     try {
       await enrollApprovalKey(vault, loadOrCreateApprovalKey(config.cacheDir));
+      // Learn which devices' approvals to trust here.
+      const trusted = await fetchApproverKeyIds(vault);
+      if (trusted) store.setTrustedApproverKeys(trusted);
     } catch (error) {
-      console.error(`ctxfile: could not enroll this device's approval key: ${error instanceof Error ? error.message : String(error)}`);
+      console.error(`ctxfile: could not exchange approval keys with the vault: ${error instanceof Error ? error.message : String(error)}`);
     }
     const client = await openVaultSync(vault, passphrase, store, config.root);
     const result = await client.sync();

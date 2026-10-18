@@ -92,6 +92,58 @@ describe("push wire format and safety", () => {
     expect(isPrivateAddress("2606:2800:220:1:248:1893:25c8:1946")).toBe(false);
   });
 
+  it("treats every IPv6 address outside plain global unicast as private", () => {
+    const privateOnes = [
+      "::",
+      "::1",
+      "::ffff:127.0.0.1",
+      "::ffff:c0a8:101", // 192.168.1.1, as URL parsing normalizes it
+      "::ffff:a9fe:a9fe", // 169.254.169.254
+      "::127.0.0.1", // IPv4-compatible
+      "fe80::1",
+      "fc00::1",
+      "ff02::1",
+      "2001:db8::1",
+      "2001:0:4136:e378:8000:63bf:3fff:fdd2", // Teredo
+      "2002:c0a8:101::1", // 6to4 around 192.168.1.1
+      "64:ff9b::7f00:1", // NAT64 around 127.0.0.1
+      "not-an-ip",
+    ];
+    for (const ip of privateOnes) expect(isPrivateAddress(ip), ip).toBe(true);
+    expect(isPrivateAddress("::ffff:5db8:d822")).toBe(false); // 93.184.216.34
+    expect(isPrivateAddress("2a00:1450:4001:81b::200e")).toBe(false);
+  });
+
+  it("gives up on a target that drips its response, at an absolute deadline", async () => {
+    const sockets = new Set<import("node:net").Socket>();
+    const server = http.createServer((_req, res) => {
+      res.writeHead(200, { "content-type": "text/plain" });
+      const drip = setInterval(() => res.write("."), 20);
+      res.on("close", () => clearInterval(drip));
+    });
+    server.on("connection", (socket) => sockets.add(socket));
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const { port } = server.address() as AddressInfo;
+    const started = Date.now();
+    await guardedPost(new URL(`http://127.0.0.1:${port}/hook`), {}, "{}", { allowHttp: true, allowPrivate: true, sendTimeoutMs: 300 });
+    expect(Date.now() - started).toBeLessThan(2_000);
+    for (const socket of sockets) socket.destroy();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  });
+
+  it("reports a target that never answers as a timeout", async () => {
+    const sockets = new Set<import("node:net").Socket>();
+    const server = http.createServer(() => undefined);
+    server.on("connection", (socket) => sockets.add(socket));
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const { port } = server.address() as AddressInfo;
+    const result = await guardedPost(new URL(`http://127.0.0.1:${port}/hook`), {}, "{}", { allowHttp: true, allowPrivate: true, sendTimeoutMs: 200 });
+    expect(result.status).toBeNull();
+    expect(result.error).toMatch(/timed out/);
+    for (const socket of sockets) socket.destroy();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  });
+
   it("only accepts a real Claude Code Routine fire URL for routine targets", () => {
     expect(validateTargetUrl("https://api.anthropic.com/v1/claude_code/routines/trig_01ABCDEF/fire", "claude-code-routine").ok).toBe(true);
     expect(validateTargetUrl("https://evil.example.com/v1/claude_code/routines/trig_01ABCDEF/fire", "claude-code-routine").ok).toBe(false);
@@ -313,6 +365,53 @@ describe("push retries, forged approvals, and stale events", () => {
     expect(await push.tick()).toBe(0);
     expect(hook.got.length).toBe(before);
     expect(push.outbox(vault.id)[0]?.status).toBe("skipped");
+  });
+
+  it("never crashes on a malformed task blob: nothing is queued, a queued event is skipped", async () => {
+    const push = new PushService(db, keyring, { allowHttp: true, allowPrivate: true, now: () => clock });
+    const vault = freshVault();
+    const key = loadOrCreateApprovalKey(path.join(dir, "k3"));
+    db.addApproverKey(vault.id, key.keyId, key.publicKey, "device-1");
+    push.addTarget(vault, { kind: "webhook", url: hook.url }, "device-1");
+    const task = approvedTask(key);
+    await writeTask(db, keyring, vault, task, null);
+    push.onTask(vault, task);
+    expect(push.outbox(vault.id)).toHaveLength(1);
+    // A device (or anyone holding the vault key) replaces it with garbage.
+    const hostile = { ...task, updated_at: task.updated_at + 1, title: 42, capabilities: "everything", state: "claimed", lease: { harness: 7 } };
+    expect(await writeTask(db, keyring, vault, hostile as unknown as TaskRecord, task.updated_at)).toBe(true);
+    const blobId = db.listBlobs(vault.id).find((b) => b.version === hostile.updated_at)!.id;
+    await expect(push.onBlobStored(vault, blobId)).resolves.toBeUndefined();
+    expect(push.outbox(vault.id)).toHaveLength(1);
+    const before = hook.got.length;
+    expect(await push.tick()).toBe(0);
+    expect(hook.got.length).toBe(before);
+    expect(push.outbox(vault.id)[0]?.status).toBe("skipped");
+  });
+
+  it("fails one event, not the relay, when delivery hits an internal error", async () => {
+    const push = new PushService(db, keyring, { allowHttp: true, allowPrivate: true, now: () => clock });
+    const vault = freshVault();
+    const key = loadOrCreateApprovalKey(path.join(dir, "k4"));
+    db.addApproverKey(vault.id, key.keyId, key.publicKey, "device-1");
+    push.addTarget(vault, { kind: "webhook", url: hook.url }, "device-1");
+    const task = approvedTask(key);
+    await writeTask(db, keyring, vault, task, null);
+    push.onTask(vault, task);
+    // The vault's wrapped data key goes bad (a botched restore).
+    db.setWrappedDataKey(vault.id, "bm90IGEgd3JhcHBlZCBrZXk=");
+    const errors: unknown[] = [];
+    const original = console.error;
+    console.error = (...args: unknown[]) => void errors.push(args);
+    try {
+      expect(await push.tick()).toBe(0);
+    } finally {
+      console.error = original;
+    }
+    const [row] = push.outbox(vault.id);
+    expect(row?.status).toBe("failed");
+    expect(row?.last_error).toMatch(/^internal: /);
+    expect(errors.length).toBe(1);
   });
 
   it("refuses push targets on strict vaults", () => {

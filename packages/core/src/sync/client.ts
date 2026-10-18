@@ -43,7 +43,9 @@ export class RelayConflictError extends Error {
 export interface RelayStore {
   list(): Promise<SyncBlobMeta[]>;
   get(id: string): Promise<{ meta: SyncBlobMeta; data: Uint8Array } | null>;
-  put(id: string, meta: SyncBlobMeta, data: Uint8Array, options?: RelayPutOptions): Promise<void>;
+  /** Resolves false when the relay kept a newer version instead (plain
+      last-write-wins refusal); void counts as stored. */
+  put(id: string, meta: SyncBlobMeta, data: Uint8Array, options?: RelayPutOptions): Promise<boolean | void>;
 }
 
 /** One syncable record, plaintext side. The payload carries its own natural
@@ -80,6 +82,9 @@ export interface LocalBlobSource {
   recordSkipped?(entries: { blobId: string; version: number; kind: string | null }[]): Promise<void>;
   /** Optional: a compare-and-set push succeeded; the relay now holds `version`. */
   markSynced?(entries: { naturalId: string; version: number }[]): Promise<void>;
+  /** Optional: how many local, never-pushed changes the last applies replaced
+      with the relay's version (they lost a race); resets the count. */
+  takeConflicts?(): number;
 }
 
 export interface SyncResult {
@@ -116,20 +121,36 @@ export class SyncClient {
     const synced: { naturalId: string; version: number }[] = [];
     for (const [id, entry] of local) {
       const theirs = remote.get(id);
-      if (theirs && theirs.version >= entry.version) continue;
-      const data = await encryptBlob(this.key, entry.payload, id);
       const cas = entry.baseVersion !== undefined;
+      // A compare-and-set record has news only if it moved past the version
+      // both sides agreed on. Comparing clocks instead would miss two devices
+      // that bumped the same base to the same number.
+      if (cas ? entry.baseVersion === entry.version : theirs !== undefined && theirs.version >= entry.version) continue;
+      const data = await encryptBlob(this.key, entry.payload, id);
+      const meta = { id, version: entry.version, deleted: entry.deleted };
+      let stored: boolean;
       try {
-        await this.relay.put(
-          id,
-          { id, version: entry.version, deleted: entry.deleted },
-          data,
-          cas ? { ifVersion: entry.baseVersion ?? null } : undefined
-        );
+        stored = (await this.relay.put(id, meta, data, cas ? { ifVersion: entry.baseVersion ?? null } : undefined)) !== false;
       } catch (error) {
         if (!(error instanceof RelayConflictError)) throw error;
-        conflicts += 1;
-        await this.applyRemote(id);
+        // The relay lost the blob this record was based on (restore, migration):
+        // re-create it rather than conflicting on every sync forever.
+        if (error.current === null && entry.baseVersion !== null && (await this.relay.get(id)) === null) {
+          try {
+            stored = (await this.relay.put(id, meta, data, { ifVersion: null })) !== false;
+          } catch (retryError) {
+            if (!(retryError instanceof RelayConflictError)) throw retryError;
+            stored = false;
+          }
+        } else {
+          stored = false;
+        }
+      }
+      if (!stored) {
+        if (cas) {
+          conflicts += 1;
+          await this.applyRemote(id);
+        }
         continue;
       }
       pushed += 1;
@@ -156,7 +177,13 @@ export class SyncClient {
     const unusable: { blobId: string; version: number; kind: string | null }[] = [];
     for (const meta of await this.relay.list()) {
       const mine = local.get(meta.id);
-      if (mine && mine.version >= meta.version) continue;
+      if (mine) {
+        // Compare-and-set records compare against the agreed version: the
+        // relay moved on if it holds anything newer than that, whatever the
+        // local clock says.
+        const agreed = mine.baseVersion !== undefined ? mine.baseVersion : mine.version;
+        if (agreed !== null && agreed >= meta.version) continue;
+      }
       const skippedAt = skipped.get(meta.id);
       if (skippedAt !== undefined && skippedAt >= meta.version) continue;
       const blob = await this.relay.get(meta.id);
@@ -183,7 +210,10 @@ export class SyncClient {
   /** Pull first (so local LWW sees the freshest remote), then push. */
   async sync(): Promise<SyncResult> {
     const applied = await this.pull();
-    const { pushed, conflicts } = await this.push();
-    return { pushed, applied, conflicts };
+    const result = await this.push();
+    // A source that tallies replaced local changes counts both kinds: found on
+    // pull, and found by a refused push (whose remote apply it also saw).
+    const conflicts = this.local.takeConflicts ? this.local.takeConflicts() : result.conflicts;
+    return { pushed: result.pushed, applied, conflicts };
   }
 }

@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { loadOrCreateApprovalKey } from "./approval-keys.js";
+import { loadOrCreateApprovalKey, presentTask, trustedApproverKeys } from "./approval-keys.js";
 import { loadConfig, type ResolvedConfig } from "./config.js";
 import { IngestStore } from "./storage/ingest-store.js";
 import { readTasksSwitch, writeTasksSwitch } from "./storage/task-store.js";
@@ -16,7 +16,9 @@ import {
   provenanceLine,
   renderTaskForAgent,
   sanitizeTaskText,
+  singleLine,
   TASK_CAPABILITIES,
+  taskContentHash,
   type HumanAction,
   type HumanContext,
   type TaskCapability,
@@ -29,8 +31,14 @@ import {
  *
  * Anything that widens what agents may do (approving a task or an effect,
  * posting a task as yourself, unfreezing, turning tasks back on) asks for a
- * yes on an interactive terminal. An agent's shell tool is not a terminal,
- * so an agent cannot approve its own work through this CLI.
+ * yes on an interactive terminal. That stops an agent's ordinary shell tool,
+ * which is not a terminal. It is a speed bump, not a wall: an agent that runs
+ * shell commands as you can fake a terminal or read your approval key, the
+ * same way it could read anything else you can. Do not give an agent you do
+ * not trust a shell on the machine that holds your approval key.
+ *
+ * Every decision names what the person was shown (content or effect hash), so
+ * a task that changes while the prompt is open is refused, not approved.
  */
 
 export const TASKS_USAGE = `tasks (cross-agent tasks: agents leave work for each other; you approve):
@@ -187,26 +195,27 @@ function iso(ms: number): string {
 
 function describeForHuman(task: TaskRecord, now: number): string {
   const lines = [
-    `${task.task_id}  ${task.state} (A2A ${A2A_TASK_STATE[task.state]})${isTaskApproved(task, now) ? "  approved" : task.origin === "agent" ? "  NOT approved" : ""}`,
-    `  title:    ${sanitizeTaskText(task.title)}`,
-    `  thread:   ${task.thread}`,
-    `  for:      ${task.assignee}`,
+    `${task.task_id}  ${task.state} (A2A ${A2A_TASK_STATE[task.state]})${isTaskApproved(task, now) ? "  approved" : "  NOT approved"}`,
+    `  title:    ${singleLine(task.title)}`,
+    `  thread:   ${singleLine(task.thread)}`,
+    `  for:      ${singleLine(task.assignee)}`,
     `  ${provenanceLine(task, now)}`,
     `  asks for: ${task.capabilities.join(", ") || "nothing"}`,
     `  expires:  ${iso(task.expires_at)}`,
   ];
+  for (const a of task.input_artifacts) lines.push(`  artifact: ${singleLine(a.ref)}: ${singleLine(a.role)}`);
   if (task.approval) lines.push(`  granted:  ${task.approval.granted.join(", ") || "read-only work"}${task.approval.key_id ? `  (signed, key ${task.approval.key_id})` : ""}`);
-  if (task.lease) lines.push(`  claimed:  by ${task.lease.harness} until ${iso(task.lease.expires_at)}`);
+  if (task.lease) lines.push(`  claimed:  by ${singleLine(task.lease.harness)} until ${iso(task.lease.expires_at)}`);
   if (task.pending_effect) {
     lines.push(
-      `  WAITING ON YOU: ${task.pending_effect.capability} · ${sanitizeTaskText(task.pending_effect.summary)}`,
+      `  WAITING ON YOU: ${task.pending_effect.capability} · ${singleLine(task.pending_effect.summary)}`,
       ...sanitizeTaskText(task.pending_effect.details)
         .split("\n")
         .map((l) => `    | ${l}`)
     );
   }
-  if (task.result) lines.push(`  result:   ${sanitizeTaskText(task.result.summary)}`);
-  if (task.reason) lines.push(`  reason:   ${sanitizeTaskText(task.reason)}`);
+  if (task.result) lines.push(`  result:   ${singleLine(task.result.summary)}`);
+  if (task.reason) lines.push(`  reason:   ${singleLine(task.reason)}`);
   return lines.join("\n");
 }
 
@@ -254,12 +263,15 @@ export async function runTasks(argv: string[], deps: TasksCliDeps = {}): Promise
       const key = loadOrCreateApprovalKey(config.cacheDir);
       return { now, via, signer: { key_id: key.keyId, public_key: key.publicKey, sign: key.sign } };
     };
+    // What the person sees: approvals count only when they verify against
+    // this device's key or one its vault enrolled.
+    const trusted = trustedApproverKeys(config.cacheDir, store.trustedApproverKeyIds());
     const requireTask = (): TaskRecord => {
       const id = args.positional[0];
       if (!id) throw new Error(`tasks ${sub} requires a task id (see 'ctxfile tasks')`);
       const task = store.tasks.get(config.root, id, now);
       if (!task) throw new Error(`no task ${id} in this project`);
-      return task;
+      return presentTask(task, trusted);
     };
     const decide = (task: TaskRecord, action: HumanAction, done: string): void => {
       const result = store.tasks.humanAction(config.root, task.task_id, action, human("cli"));
@@ -273,6 +285,7 @@ export async function runTasks(argv: string[], deps: TasksCliDeps = {}): Promise
         if (switchState.off) console.error("ctxfile: tasks are OFF ('ctxfile tasks on' to re-enable)");
         const tasks = store.tasks
           .list(config.root, now)
+          .map((t) => presentTask(t, trusted))
           .filter((t) => args.all || isOpenState(t.state))
           .filter((t) => !args.thread || t.thread.toLowerCase() === args.thread.toLowerCase());
         if (tasks.length === 0) {
@@ -315,17 +328,15 @@ export async function runTasks(argv: string[], deps: TasksCliDeps = {}): Promise
           console.error("ctxfile: not posted");
           return;
         }
+        // Signed in the same transaction: a relay verifies the signature (not
+        // an origin label) before it lets this task wake anyone.
         const result = store.tasks.post(
           config.root,
           parsed.data,
           { kind: "human", harness: null, door: "cli", client: null, token: null },
-          { now, defaultTtlDays: config.tasks.defaultTtlDays }
+          { now, defaultTtlDays: config.tasks.defaultTtlDays, signer: human("cli").signer }
         );
         if (!result.ok) throw new Error(result.error);
-        // Sign it too, so a relay can verify it came from this device before
-        // waking an agent for it (push trusts signatures, not origin labels).
-        const signed = store.tasks.humanAction(config.root, result.task.task_id, { kind: "approve" }, human("cli"));
-        if (!signed.ok) throw new Error(signed.error);
         console.error(`ctxfile: posted ${result.task.task_id} for ${result.task.assignee} on thread "${result.task.thread}"`);
         return;
       }
@@ -342,7 +353,11 @@ export async function runTasks(argv: string[], deps: TasksCliDeps = {}): Promise
           console.error("ctxfile: not approved");
           return;
         }
-        decide(task, { kind: "approve", granted }, "approved and signed with this device's approval key");
+        decide(
+          task,
+          { kind: "approve", granted, expectedContentHash: taskContentHash(task) },
+          "approved and signed with this device's approval key"
+        );
         return;
       }
       case "reject":
@@ -359,12 +374,14 @@ export async function runTasks(argv: string[], deps: TasksCliDeps = {}): Promise
           console.error("ctxfile: not approved");
           return;
         }
-        decide(task, { kind: "approve_effect" }, "effect approved");
+        decide(task, { kind: "approve_effect", expectedEffectHash: task.pending_effect.effect_hash }, "effect approved");
         return;
       }
-      case "deny-effect":
-        decide(requireTask(), { kind: "deny_effect", reason: args.reason }, "effect denied");
+      case "deny-effect": {
+        const task = requireTask();
+        decide(task, { kind: "deny_effect", reason: args.reason, expectedEffectHash: task.pending_effect?.effect_hash }, "effect denied");
         return;
+      }
       case "freeze": {
         const thread = args.positional.join(" ").trim();
         if (!thread) throw new Error("tasks freeze requires a thread title");

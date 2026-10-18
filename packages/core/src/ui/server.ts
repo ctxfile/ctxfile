@@ -2,7 +2,7 @@ import { createReadStream, existsSync, realpathSync, statSync } from "node:fs";
 import type { AddressInfo } from "node:net";
 import { createServer as createHttpServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import path from "node:path";
-import { loadOrCreateApprovalKey, type ApprovalKey } from "../approval-keys.js";
+import { loadOrCreateApprovalKey, presentTask, trustedApproverKeys, type ApprovalKey } from "../approval-keys.js";
 import type { ResolvedConfig } from "../config.js";
 import { filterScope } from "../engine/build.js";
 import { CONTEXT_SCOPES, type ContextObject, type ContextScope } from "../engine/types.js";
@@ -22,6 +22,7 @@ import {
   type HumanContext,
   type TaskCapability,
   type TaskTransition,
+  type TaskRecord,
 } from "../tasks.js";
 import { VERSION } from "../version.js";
 import { hostAllowed, tokenMatches } from "./security.js";
@@ -67,7 +68,7 @@ export interface UiServerDeps {
 }
 
 /** The slice of the ingest store the dashboard uses. */
-export type UiIngestStore = Pick<IngestStore, "tasks" | "gateCounts">;
+export type UiIngestStore = Pick<IngestStore, "tasks" | "gateCounts" | "trustedApproverKeyIds">;
 
 export interface TaskCountsView {
   open: number;
@@ -529,9 +530,16 @@ export function createUiServer(deps: UiServerDeps): Server {
     return { now, via: "dashboard", signer: { key_id: approvalKey.keyId, public_key: approvalKey.publicKey, sign: approvalKey.sign } };
   }
 
+  /** Approvals count only when they verify against this device's key or one
+      its vault enrolled (learned at the last sync). */
+  function presenter(store: UiIngestStore): (task: TaskRecord) => TaskRecord {
+    const trusted = trustedApproverKeys(deps.config.cacheDir, store.trustedApproverKeyIds());
+    return (task) => presentTask(task, trusted);
+  }
+
   function buildTaskList(store: UiIngestStore, all: boolean, now: number): TaskListResponse {
     const root = deps.config.root;
-    const every = store.tasks.list(root, now);
+    const every = store.tasks.list(root, now).map(presenter(store));
     const frozenByThread = new Map<string, boolean>();
     const frozen = (thread: string): boolean => {
       const key = thread.toLowerCase();
@@ -567,7 +575,7 @@ export function createUiServer(deps: UiServerDeps): Server {
     now: number
   ): void {
     if (result.ok) {
-      sendJson(res, 200, { task: taskView(result.task, now, store.tasks.isFrozen(deps.config.root, result.task.thread)) });
+      sendJson(res, 200, { task: taskView(presenter(store)(result.task), now, store.tasks.isFrozen(deps.config.root, result.task.thread)) });
       return;
     }
     const status =
@@ -652,7 +660,8 @@ export function createUiServer(deps: UiServerDeps): Server {
       return;
     }
     const body = await readObjectBody(req);
-    const current = store.tasks.get(root, id, now);
+    const stored = store.tasks.get(root, id, now);
+    const current = stored ? presenter(store)(stored) : null;
     if (!current) {
       sendJson(res, 404, { error: `no task ${id} in this project`, code: "not_found" });
       return;
@@ -669,7 +678,10 @@ export function createUiServer(deps: UiServerDeps): Server {
           sendJson(res, 409, { error: "This task changed since you opened it. Review it again before approving.", code: "conflict" });
           return;
         }
-        action = granted === undefined ? { kind: "approve" } : { kind: "approve", granted };
+        // The model re-checks the hash inside its transaction, so a change
+        // that lands between this check and the write is refused too.
+        const expectedContentHash = seen ?? taskContentHash(current);
+        action = granted === undefined ? { kind: "approve", expectedContentHash } : { kind: "approve", granted, expectedContentHash };
         break;
       }
       case "reject":
@@ -686,7 +698,11 @@ export function createUiServer(deps: UiServerDeps): Server {
           sendJson(res, 409, { error: "The effect this task is waiting on changed since you opened it. Review it again.", code: "conflict" });
           return;
         }
-        action = decision === "approve" ? { kind: "approve_effect" } : { kind: "deny_effect", reason: optionalReason(body) };
+        const expectedEffectHash = seen ?? current.pending_effect?.effect_hash;
+        action =
+          decision === "approve"
+            ? { kind: "approve_effect", expectedEffectHash }
+            : { kind: "deny_effect", reason: optionalReason(body), expectedEffectHash };
       }
     }
     sendTransition(res, store, store.tasks.humanAction(root, id, action, humanContext(now)), now);

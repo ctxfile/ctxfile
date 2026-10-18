@@ -1,9 +1,10 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import type Database from "better-sqlite3";
+import { canonicalJson } from "../canonical-json.js";
 import { redactContent } from "../redact.js";
 import type { SyncEntry } from "../sync/client.js";
-import type { TaskSyncPayload } from "../sync/payload.js";
+import type { TaskFreezeSyncPayload, TaskSyncPayload } from "../sync/payload.js";
 import {
   applyAgentAction,
   applyHumanAction,
@@ -17,6 +18,7 @@ import {
   type HumanAction,
   type HumanContext,
   type PostTaskInput,
+  type SignedBy,
   type TaskActor,
   type TaskRecord,
   type TaskTransition,
@@ -64,6 +66,7 @@ export function redactPostInput(input: PostTaskInput): PostTaskInput {
 export function redactUpdateInput(input: UpdateTaskInput): UpdateTaskInput {
   return {
     ...input,
+    session_id: input.session_id ? redact(input.session_id) : undefined,
     reason: input.reason ? redact(input.reason) : undefined,
     result: input.result
       ? {
@@ -107,6 +110,16 @@ export function tasksSwitchExists(cacheDir: string): boolean {
 }
 
 export class TaskStore {
+  /** Local, never-pushed changes replaced by the relay's version since the
+      last takeConflicts() (they lost a race to another device). */
+  private conflicts = 0;
+
+  takeConflicts(): number {
+    const n = this.conflicts;
+    this.conflicts = 0;
+    return n;
+  }
+
   constructor(
     private readonly db: Database.Database,
     private readonly ensureThread: (root: string, title: string, now: number) => { id: number; title: string }
@@ -132,6 +145,27 @@ export class TaskStore {
     if (!threadColumns.has("tasks_frozen")) {
       this.db.exec("ALTER TABLE threads ADD COLUMN tasks_frozen INTEGER NOT NULL DEFAULT 0");
     }
+    // A freeze is two clocks, not a flag: the latest freeze and the latest
+    // unfreeze. Merging takes the max of each, so ordinary thread activity on
+    // another device (which wins last-write-wins on the thread) can never
+    // silently undo a freeze.
+    if (!threadColumns.has("tasks_frozen_at")) {
+      this.db.exec("ALTER TABLE threads ADD COLUMN tasks_frozen_at INTEGER NOT NULL DEFAULT 0");
+      this.db.exec("ALTER TABLE threads ADD COLUMN tasks_unfrozen_at INTEGER NOT NULL DEFAULT 0");
+      this.db.exec("UPDATE threads SET tasks_frozen_at = last_active WHERE tasks_frozen = 1");
+    }
+  }
+
+  /** Writes a normalized (lazily expired) record only if nobody changed the
+      row since it was read: a compare-and-set on updated_at, so a reader's
+      housekeeping can never overwrite a claim another process just made. */
+  private writeIfUnchanged(root: string, task: TaskRecord, readAt: number): void {
+    this.db
+      .prepare(
+        `UPDATE tasks SET thread_title = ?, state = ?, assignee = ?, updated_at = ?, deleted = ?, doc = ?
+         WHERE root = ? AND task_id = ? AND updated_at = ?`
+      )
+      .run(task.thread, task.state, task.assignee, task.updated_at, task.deleted ? 1 : 0, JSON.stringify(task), root, task.task_id, readAt);
   }
 
   private readRow(root: string, taskId: string): TaskRow | undefined {
@@ -162,13 +196,21 @@ export class TaskStore {
   /** Whether new tasks are blocked on this thread (`ctxfile tasks freeze`). */
   isFrozen(root: string, threadTitle: string): boolean {
     const row = this.db
-      .prepare("SELECT tasks_frozen FROM threads WHERE root = ? AND lower(title) = lower(?) AND deleted = 0")
-      .get(root, threadTitle) as { tasks_frozen: number } | undefined;
-    return row?.tasks_frozen === 1;
+      .prepare("SELECT tasks_frozen_at, tasks_unfrozen_at FROM threads WHERE root = ? AND lower(title) = lower(?) AND deleted = 0")
+      .get(root, threadTitle) as { tasks_frozen_at: number; tasks_unfrozen_at: number } | undefined;
+    return row !== undefined && row.tasks_frozen_at > row.tasks_unfrozen_at;
   }
 
   /** Posts a task (redacted at write, like every other ingested text). */
-  post(root: string, input: PostTaskInput, postedBy: TaskActor, options: { now?: number; defaultTtlDays?: number } = {}): TaskPostResult {
+  /** Posts a task. A task the user posts (dashboard or CLI) is signed with
+      their device key in the same transaction; without a signer it is stored
+      as unapproved, like an agent's proposal. */
+  post(
+    root: string,
+    input: PostTaskInput,
+    postedBy: TaskActor,
+    options: { now?: number; defaultTtlDays?: number; signer?: SignedBy } = {}
+  ): TaskPostResult {
     const now = options.now ?? Date.now();
     const clean = redactPostInput(input);
     return this.db.transaction((): TaskPostResult => {
@@ -184,7 +226,12 @@ export class TaskStore {
         return { ok: false, error: `this project already has ${open.length} open tasks (limit ${MAX_OPEN_TASKS_PER_PROJECT}); finish or cancel some first` };
       }
       const thread = this.ensureThread(root, clean.thread, now);
-      const task = createTaskRecord({ ...clean, thread: thread.title }, { now, postedBy, defaultTtlDays: options.defaultTtlDays });
+      let task = createTaskRecord({ ...clean, thread: thread.title }, { now, postedBy, defaultTtlDays: options.defaultTtlDays });
+      if (postedBy.kind === "human" && options.signer) {
+        const signed = applyHumanAction(task, { kind: "approve" }, { now, via: postedBy.door === "dashboard" ? "dashboard" : "cli", signer: options.signer });
+        if (!signed.ok) return { ok: false, error: signed.error };
+        task = signed.task;
+      }
       this.write(root, task);
       this.touchThread(root, thread.id, now);
       return { ok: true, task };
@@ -202,7 +249,7 @@ export class TaskStore {
     const task = this.parse(row);
     if (!task || task.deleted) return null;
     const normalized = normalizeTask(task, now);
-    if (normalized !== task) this.write(root, normalized);
+    if (normalized !== task) this.writeIfUnchanged(root, normalized, task.updated_at);
     return normalized;
   }
 
@@ -216,14 +263,22 @@ export class TaskStore {
       const task = this.parse(row);
       if (!task || task.deleted) continue;
       const normalized = normalizeTask(task, now);
-      if (normalized !== task) this.write(root, normalized);
+      if (normalized !== task) this.writeIfUnchanged(root, normalized, task.updated_at);
       out.push(normalized);
     }
     return out;
   }
 
-  /** An agent's update_task, atomic across processes. */
-  agentAction(root: string, input: UpdateTaskInput, ctx: AgentContext): TaskTransition | { ok: false; code: "not_found"; error: string } {
+  /** An agent's update_task, atomic across processes. `present` is the
+      reader's trust filter (presentTask with its trusted keys): the state
+      machine decides on the verified view, and the stored approval fields are
+      put back on write (agent actions never change them). */
+  agentAction(
+    root: string,
+    input: UpdateTaskInput,
+    ctx: AgentContext,
+    present: (task: TaskRecord) => TaskRecord = (task) => task
+  ): TaskTransition | { ok: false; code: "not_found"; error: string } {
     const clean = redactUpdateInput(input);
     return this.db.transaction(() => {
       const row = this.readRow(root, clean.task_id);
@@ -234,8 +289,10 @@ export class TaskStore {
       if (clean.action === "claim" && this.isFrozen(root, task.thread)) {
         return { ok: false as const, code: "forbidden" as const, error: `thread "${task.thread}" is frozen for tasks by the user` };
       }
-      const result = applyAgentAction(task, clean, ctx);
-      if (result.ok && result.task !== task) this.write(root, result.task);
+      const shown = present(task);
+      const result = applyAgentAction(shown, clean, ctx);
+      if (!result.ok || result.task === shown) return result;
+      this.write(root, { ...result.task, approval: task.approval, effect_decisions: task.effect_decisions });
       return result;
     }).immediate();
   }
@@ -265,10 +322,16 @@ export class TaskStore {
         .prepare("SELECT id, title FROM threads WHERE root = ? AND lower(title) = lower(?) AND deleted = 0")
         .get(root, threadTitle) as { id: number; title: string } | undefined;
       if (!thread) return null;
-      // Advance last_active so the flag carries a newer clock and syncs.
+      // Move the matching clock past both clocks, so this decision is the
+      // latest one wherever the freeze record syncs.
+      const clocks = this.db.prepare("SELECT tasks_frozen_at, tasks_unfrozen_at FROM threads WHERE id = ?").get(thread.id) as {
+        tasks_frozen_at: number;
+        tasks_unfrozen_at: number;
+      };
+      const at = Math.max(ctx.now, clocks.tasks_frozen_at + 1, clocks.tasks_unfrozen_at + 1);
       this.db
-        .prepare("UPDATE threads SET tasks_frozen = ?, last_active = MAX(last_active + 1, ?) WHERE id = ?")
-        .run(frozen ? 1 : 0, ctx.now, thread.id);
+        .prepare(`UPDATE threads SET tasks_frozen = ?, ${frozen ? "tasks_frozen_at" : "tasks_unfrozen_at"} = ? WHERE id = ?`)
+        .run(frozen ? 1 : 0, at, thread.id);
       if (!frozen) return 0;
       let canceled = 0;
       for (const task of this.list(root, ctx.now)) {
@@ -310,6 +373,47 @@ export class TaskStore {
     return entries;
   }
 
+  /** One freeze record per thread that was ever frozen or unfrozen, versioned
+      by its latest decision. */
+  exportFreezeEntries(root: string): SyncEntry[] {
+    const rows = this.db
+      .prepare("SELECT title, tasks_frozen_at, tasks_unfrozen_at FROM threads WHERE root = ? AND (tasks_frozen_at > 0 OR tasks_unfrozen_at > 0)")
+      .all(root) as { title: string; tasks_frozen_at: number; tasks_unfrozen_at: number }[];
+    return rows.map((row) => {
+      const payload: TaskFreezeSyncPayload = {
+        kind: "task_freeze",
+        thread: row.title,
+        frozen_at: row.tasks_frozen_at,
+        unfrozen_at: row.tasks_unfrozen_at,
+      };
+      return {
+        naturalId: `task-freeze:${row.title.toLowerCase()}`,
+        version: Math.max(row.tasks_frozen_at, row.tasks_unfrozen_at),
+        deleted: false,
+        payload: textEncoder.encode(JSON.stringify(payload)),
+      };
+    });
+  }
+
+  /** Merges a freeze record: each clock takes the max, so neither device's
+      latest decision is lost. Returns 1 when local state changed. */
+  applyFreezePayload(root: string, payload: TaskFreezeSyncPayload): number {
+    let row = this.db
+      .prepare("SELECT id, tasks_frozen_at, tasks_unfrozen_at FROM threads WHERE root = ? AND lower(title) = lower(?)")
+      .get(root, payload.thread) as { id: number; tasks_frozen_at: number; tasks_unfrozen_at: number } | undefined;
+    if (!row) {
+      const created = this.ensureThread(root, payload.thread, Math.max(payload.frozen_at, payload.unfrozen_at));
+      row = { id: created.id, tasks_frozen_at: 0, tasks_unfrozen_at: 0 };
+    }
+    const frozenAt = Math.max(row.tasks_frozen_at, payload.frozen_at);
+    const unfrozenAt = Math.max(row.tasks_unfrozen_at, payload.unfrozen_at);
+    if (frozenAt === row.tasks_frozen_at && unfrozenAt === row.tasks_unfrozen_at) return 0;
+    this.db
+      .prepare("UPDATE threads SET tasks_frozen_at = ?, tasks_unfrozen_at = ?, tasks_frozen = ? WHERE id = ?")
+      .run(frozenAt, unfrozenAt, frozenAt > unfrozenAt ? 1 : 0, row.id);
+    return 1;
+  }
+
   /** Records that the relay now holds exactly this version. */
   markSynced(root: string, taskId: string, version: number): void {
     this.db.prepare("UPDATE tasks SET synced_version = ? WHERE root = ? AND task_id = ?").run(version, root, taskId);
@@ -327,7 +431,11 @@ export class TaskStore {
     if (row) {
       const agreed = row.synced_version ?? -1;
       if (remoteVersion <= agreed) return 0;
-      if (row.updated_at > agreed && row.updated_at !== remoteVersion) {
+      // A local change never pushed, replaced by different content (two
+      // devices can even reach the same version number from one base).
+      const local = this.parse(row);
+      if (row.updated_at > agreed && (!local || canonicalJson(local) !== canonicalJson(task))) {
+        this.conflicts += 1;
         console.error(`ctxfile sync: task ${task.task_id} changed on another device first; its version replaces the local one`);
       }
     }

@@ -9,7 +9,7 @@ import {
   normalizeTask,
   parseSyncPayload,
   parseTaskRecord,
-  sanitizeTaskText,
+  singleLine,
   verifyEffectDecision,
   verifyTaskApproval,
   type TaskRecord,
@@ -88,6 +88,8 @@ export interface PushOptions {
   allowPrivate?: boolean;
   /** Clock seam for tests. */
   now?: () => number;
+  /** Absolute per-send deadline; tests shorten it. */
+  sendTimeoutMs?: number;
 }
 
 export function migratePush(db: RelayDb): void {
@@ -158,8 +160,11 @@ function ipv4Private(ip: string): boolean {
   );
 }
 
-/** True for loopback, private, link-local, CGNAT, multicast and reserved
-    addresses, IPv4 or IPv6 (including IPv4-mapped IPv6). */
+/** True for anything that is not a public, globally routable address:
+    loopback, private, link-local, CGNAT, multicast and reserved IPv4; and for
+    IPv6, everything outside global unicast (2000::/3), plus the global ranges
+    that tunnel or embed IPv4 (6to4, Teredo, NAT64) and documentation space.
+    IPv4-mapped addresses are judged by the IPv4 address inside. */
 export function isPrivateAddress(ip: string): boolean {
   if (net.isIPv4(ip)) return ipv4Private(ip);
   if (!net.isIPv6(ip)) return true;
@@ -173,18 +178,14 @@ export function isPrivateAddress(ip: string): boolean {
     const lo = parseInt(mappedHex[2] as string, 16);
     return ipv4Private(`${hi >> 8}.${hi & 255}.${lo >> 8}.${lo & 255}`);
   }
+  if (lower.startsWith("::")) return true; // unspecified, loopback, IPv4-compatible
+  const first = parseInt(lower.split(":")[0] ?? "", 16);
+  if (!Number.isFinite(first) || first < 0x2000 || first > 0x3fff) return true; // not 2000::/3
   return (
-    lower === "::" ||
-    lower === "::1" ||
-    lower.startsWith("fc") ||
-    lower.startsWith("fd") ||
-    lower.startsWith("fe8") ||
-    lower.startsWith("fe9") ||
-    lower.startsWith("fea") ||
-    lower.startsWith("feb") ||
-    lower.startsWith("ff") ||
-    lower.startsWith("64:ff9b:") ||
-    lower.startsWith("2001:db8:")
+    lower.startsWith("2002:") || // 6to4 embeds an IPv4 address
+    /^2001:0{0,4}:/.test(lower) || // Teredo 2001::/32
+    lower.startsWith("2001:db8:") ||
+    lower.startsWith("64:ff9b:")
   );
 }
 
@@ -221,6 +222,7 @@ interface SendResult {
 /** One POST with the SSRF guard enforced at connect time, a timeout, and a
     capped response read. Never throws. */
 export function guardedPost(url: URL, headers: Record<string, string>, body: string, options: PushOptions = {}): Promise<SendResult> {
+  const limit = options.sendTimeoutMs ?? SEND_TIMEOUT_MS;
   return new Promise((resolve) => {
     const lookup: net.LookupFunction = (hostname, lookupOptions, callback) => {
       dns.lookup(hostname, { ...lookupOptions, all: true }, (error, addresses) => {
@@ -246,7 +248,7 @@ export function guardedPost(url: URL, headers: Record<string, string>, body: str
         method: "POST",
         headers: { ...headers, "content-length": Buffer.byteLength(body).toString() },
         lookup,
-        timeout: SEND_TIMEOUT_MS,
+        timeout: limit,
       },
       (res) => {
         let received = 0;
@@ -266,7 +268,13 @@ export function guardedPost(url: URL, headers: Record<string, string>, body: str
         res.on("close", finish);
       }
     );
-    req.on("timeout", () => req.destroy(new Error("timed out after 5s")));
+    // An absolute deadline, not just an idle timeout: a target that drips one
+    // byte at a time must not hold a delivery slot.
+    const timedOut = new Error(`timed out after ${limit / 1000}s`);
+    const deadline = setTimeout(() => req.destroy(timedOut), limit);
+    deadline.unref();
+    req.on("close", () => clearTimeout(deadline));
+    req.on("timeout", () => req.destroy(timedOut));
     req.on("error", (error) => resolve({ status: null, error: error.message, retryAfterMs: null }));
     req.end(body);
   });
@@ -314,7 +322,11 @@ export class PushService {
 
   start(): void {
     if (this.timer) return;
-    this.timer = setInterval(() => void this.tick(), WORKER_INTERVAL_MS);
+    this.timer = setInterval(() => {
+      this.tick().catch((error: unknown) => {
+        console.error(`ctxfile-relay: push tick failed: ${error instanceof Error ? error.message : String(error)}`);
+      });
+    }, WORKER_INTERVAL_MS);
     this.timer.unref();
   }
 
@@ -455,9 +467,18 @@ export class PushService {
       const due = this.db.db
         .prepare("SELECT * FROM push_outbox WHERE status = 'pending' AND next_attempt_at <= ? ORDER BY next_attempt_at LIMIT ?")
         .all(this.now(), BATCH) as PushOutboxRow[];
-      for (const row of due) {
-        if (await this.deliver(row)) sent += 1;
-      }
+      // Targets deliver concurrently; each target's events go one at a time,
+      // so a slow or dead target only ever delays itself.
+      const byTarget = new Map<string, PushOutboxRow[]>();
+      for (const row of due) byTarget.set(row.target_id, [...(byTarget.get(row.target_id) ?? []), row]);
+      const counts = await Promise.all(
+        [...byTarget.values()].map(async (rows) => {
+          let delivered = 0;
+          for (const row of rows) if (await this.safeDeliver(row)) delivered += 1;
+          return delivered;
+        })
+      );
+      sent = counts.reduce((a, b) => a + b, 0);
     } finally {
       this.running = false;
     }
@@ -472,6 +493,20 @@ export class PushService {
     const result = await this.send(target, id, "ping", null);
     this.db.audit({ vaultId: vault.id, actor, action: "push.test", detail: { target: targetId, status: result.status } });
     return { ok: result.status !== null && result.status >= 200 && result.status < 300, status: result.status, error: result.error };
+  }
+
+  /** One delivery that can never throw: anything unexpected (a malformed
+      record that slipped past parsing, a keyring failure) fails the event,
+      not the relay. */
+  private async safeDeliver(row: PushOutboxRow): Promise<boolean> {
+    try {
+      return await this.deliver(row);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.db.db.prepare("UPDATE push_outbox SET status = 'failed', last_error = ? WHERE id = ?").run(`internal: ${message}`.slice(0, 300), row.id);
+      console.error(`ctxfile-relay: push delivery ${row.id} failed: ${message}`);
+      return false;
+    }
   }
 
   private async deliver(row: PushOutboxRow): Promise<boolean> {
@@ -549,10 +584,10 @@ export class PushService {
     if (!task) return null;
     return {
       task_id: task.task_id,
-      thread: task.thread,
-      title: sanitizeTaskText(task.title).slice(0, 120),
-      assignee: task.assignee,
-      from: task.origin === "human" ? "user" : task.posted_by.harness,
+      thread: singleLine(task.thread).slice(0, 200),
+      title: singleLine(task.title).slice(0, 120),
+      assignee: singleLine(task.assignee),
+      from: task.origin === "human" && task.approval ? "user" : singleLine(task.posted_by.harness ?? "unknown"),
       state: task.state,
       read_with: `list_tasks with task_id "${task.task_id}" (ctxfile MCP tools)`,
     };

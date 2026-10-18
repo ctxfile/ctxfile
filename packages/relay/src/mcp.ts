@@ -40,7 +40,9 @@ import {
   SERVER_INSTRUCTIONS,
   TASK_TOOL_TEXT,
   UPDATE_TASK_INPUT_SCHEMA,
-  verifyTaskApproval,
+  presentTask,
+  restoreTrustFields,
+  TASK_AGENT_ACTIONS,
   type IngestedSession,
   type TaskBackend,
   type TaskRecord,
@@ -116,8 +118,10 @@ export function createVaultMcpServer(options: VaultServerOptions): McpServer {
       if (scope === "read:tasks" || scope === "write:tasks") return false;
       return scope === "read:context" ? true : grant.permission === "read+ingest";
     }
-    if (scope === "read:tasks") return options.scopes.includes("read:tasks") || options.scopes.includes("read:context");
-    if (scope === "write:tasks") return options.scopes.includes("write:tasks") || options.scopes.includes("write:sessions");
+    // Only a full legacy device token (both old scopes) is read as holding the
+    // task scopes; a narrower token never gains them by upgrade.
+    const legacyDevice = options.scopes.includes("read:context") && options.scopes.includes("write:sessions");
+    if (scope === "read:tasks" || scope === "write:tasks") return options.scopes.includes(scope) || legacyDevice;
     return options.scopes.includes(scope);
   };
   const server = new McpServer({ name: "ctxfile-relay", version: options.version }, { instructions: SERVER_INSTRUCTIONS });
@@ -137,12 +141,18 @@ export function createVaultMcpServer(options: VaultServerOptions): McpServer {
   const view = () => loadView(db, keyring, vault);
 
   // ---- tasks ------------------------------------------------------------------
-  // An approval only counts on the relay when its signature verifies against
-  // a device approval key enrolled with this vault. Unverifiable approvals are
-  // hidden from what agents see (the stored record is left untouched).
-  const present = (task: TaskRecord): TaskRecord =>
-    task.approval && !verifyTaskApproval(task, db.approverKeyIds(vault.id)) ? { ...task, approval: null } : task;
-  const liveTasks = (v: VaultView, now: number): TaskRecord[] => v.tasks.map((t) => present(normalizeTask(t, now)));
+  // An approval or effect decision only counts on the relay when it matches
+  // the task and its signature verifies against a device approval key enrolled
+  // with this vault. Unverifiable ones are hidden from agents and from the
+  // state machine (the stored record keeps them).
+  const presenter = (): ((task: TaskRecord) => TaskRecord) => {
+    const trusted = db.approverKeyIds(vault.id);
+    return (task) => presentTask(task, trusted);
+  };
+  const liveTasks = (v: VaultView, now: number): TaskRecord[] => {
+    const present = presenter();
+    return v.tasks.map((t) => present(normalizeTask(t, now)));
+  };
   const inboxFrom = (v: VaultView): string | null => {
     if (grant || !allowed("read:tasks")) return null;
     const now = Date.now();
@@ -704,12 +714,16 @@ export function createVaultMcpServer(options: VaultServerOptions): McpServer {
           if (clean.action === "claim" && (await view()).frozenThreads.includes(current.task.thread.toLowerCase())) {
             return { ok: false as const, code: "forbidden" as const, error: `thread "${current.task.thread}" is frozen for tasks by the user` };
           }
-          const result = applyAgentAction(current.task, clean, agentCtx);
+          const shown = presenter()(current.task);
+          const result = applyAgentAction(shown, clean, agentCtx);
           if (!result.ok) return result;
-          if (result.task === current.task) return { ...result, task: present(result.task) };
-          if (await writeTask(db, keyring, vault, result.task, current.version)) {
-            options.onTaskWritten?.(result.task);
-            return { ...result, task: present(result.task) };
+          if (result.task === shown) return result;
+          // Decide on the verified view; write back the stored trust fields
+          // (agent actions never change them).
+          const written = restoreTrustFields(result.task, current.task);
+          if (await writeTask(db, keyring, vault, written, current.version)) {
+            options.onTaskWritten?.(written);
+            return result;
           }
         }
         return { ok: false as const, code: "conflict" as const, error: `task ${clean.task_id} changed on another device while you acted on it` };
@@ -765,7 +779,9 @@ export function createVaultMcpServer(options: VaultServerOptions): McpServer {
     if (denied) return denied;
     const result = await handleUpdateTask(args, taskBackend, taskContext());
     const structured = result.structuredContent;
-    const action = typeof (args as { action?: unknown }).action === "string" ? (args as { action: string }).action : null;
+    // The audit log takes only a known action name: never raw agent text.
+    const raw = (args as { action?: unknown }).action;
+    const action = typeof raw === "string" && (TASK_AGENT_ACTIONS as readonly string[]).includes(raw) ? raw : null;
     record("mcp.update_task", structured ? { task: structured.task_id, action, state: structured.state } : { action, result: "refused" });
     return result;
   });

@@ -1,7 +1,7 @@
 import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync, sign, verify, type KeyObject } from "node:crypto";
-import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { approvalStatement, effectStatement, type EffectDecision, type TaskRecord } from "./tasks.js";
+import { approvalStatement, effectStatement, taskContentHash, type EffectDecision, type TaskRecord } from "./tasks.js";
 
 /**
  * The device approval key: an Ed25519 keypair that lives only on the user's
@@ -72,7 +72,34 @@ export function loadOrCreateApprovalKey(dir: string): ApprovalKey {
   return fromStored(stored);
 }
 
+/** This device's approval key id, without creating a key (null if none yet). */
+export function readApprovalKeyId(dir: string): string | null {
+  const file = path.join(dir, APPROVAL_KEY_FILE);
+  if (!existsSync(file)) return null;
+  try {
+    const stored = JSON.parse(readFileSync(file, "utf8")) as Partial<StoredKey>;
+    return typeof stored.key_id === "string" ? stored.key_id : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Ed25519 verification results, memoized: the relay re-checks every task's
+    approval on every inbox read, and the inputs are immutable strings. */
+const verifyMemo = new Map<string, boolean>();
+const VERIFY_MEMO_MAX = 10_000;
+
 export function verifyStatement(statement: string, signatureB64: string, publicKeySpkiB64: string): boolean {
+  const memoKey = `${publicKeySpkiB64}\u0000${signatureB64}\u0000${statement}`;
+  const memo = verifyMemo.get(memoKey);
+  if (memo !== undefined) return memo;
+  const result = verifyUncached(statement, signatureB64, publicKeySpkiB64);
+  if (verifyMemo.size >= VERIFY_MEMO_MAX) verifyMemo.clear();
+  verifyMemo.set(memoKey, result);
+  return result;
+}
+
+function verifyUncached(statement: string, signatureB64: string, publicKeySpkiB64: string): boolean {
   try {
     const key = createPublicKey({ key: Buffer.from(publicKeySpkiB64, "base64"), format: "der", type: "spki" });
     return verify(null, Buffer.from(statement, "utf8"), key, Buffer.from(signatureB64, "base64"));
@@ -81,11 +108,13 @@ export function verifyStatement(statement: string, signatureB64: string, publicK
   }
 }
 
-/** True when the task's approval carries a valid signature from a key in
-    `trusted` (key ids). Pass null to check the signature alone. */
+/** True when the task's approval matches the task's current content and
+    carries a valid signature from a key in `trusted` (key ids). Pass null to
+    check the content binding and the signature alone. */
 export function verifyTaskApproval(task: TaskRecord, trusted: ReadonlySet<string> | null): boolean {
   const approval = task.approval;
   if (!approval?.signature || !approval.public_key || !approval.key_id) return false;
+  if (approval.content_hash !== taskContentHash(task)) return false;
   if (approvalKeyId(approval.public_key) !== approval.key_id) return false;
   if (trusted && !trusted.has(approval.key_id)) return false;
   return verifyStatement(approvalStatement(task.task_id, approval), approval.signature, approval.public_key);
@@ -97,4 +126,31 @@ export function verifyEffectDecision(taskId: string, decision: EffectDecision, t
   if (approvalKeyId(decision.public_key) !== decision.key_id) return false;
   if (trusted && !trusted.has(decision.key_id)) return false;
   return verifyStatement(effectStatement(taskId, decision), decision.signature, decision.public_key);
+}
+
+/** The key ids this device trusts: its own approval key (if it has one) plus
+    the keys its vault has enrolled, as learned at the last sync. */
+export function trustedApproverKeys(dir: string, learned: readonly string[]): Set<string> {
+  const own = readApprovalKeyId(dir);
+  return new Set(own ? [own, ...learned] : learned);
+}
+
+/** A task as a reader should see it: an approval or effect decision that does
+    not verify against a trusted key is dropped (the record on disk is left
+    alone). Every door that shows a task to an agent, a person, or the push
+    logic goes through this, so a forged approval written by anything that can
+    reach the store or the vault never counts. */
+export function presentTask(task: TaskRecord, trusted: ReadonlySet<string>): TaskRecord {
+  const approval = task.approval && verifyTaskApproval(task, trusted) ? task.approval : null;
+  const decisions = task.effect_decisions.filter((d) => verifyEffectDecision(task.task_id, d, trusted));
+  if (approval === task.approval && decisions.length === task.effect_decisions.length) return task;
+  return { ...task, approval, effect_decisions: decisions };
+}
+
+/** Agent actions never change approvals or effect decisions. After a
+    transition computed on a presented task, put the stored originals back so
+    the write does not destroy a real approval this reader cannot verify yet
+    (for example one from a device whose key it has not learned). */
+export function restoreTrustFields(next: TaskRecord, original: TaskRecord): TaskRecord {
+  return { ...next, approval: original.approval, effect_decisions: original.effect_decisions };
 }

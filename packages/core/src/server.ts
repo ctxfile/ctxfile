@@ -30,6 +30,7 @@ import {
   withMemoryDefaults,
 } from "./memory.js";
 import { createRuntime, type Runtime, type RuntimeOptions } from "./runtime.js";
+import { presentTask, trustedApproverKeys } from "./approval-keys.js";
 import { readTasksSwitch } from "./storage/task-store.js";
 import {
   handleListTasks,
@@ -43,7 +44,7 @@ import {
   type TaskBackend,
   type TaskToolContext,
 } from "./task-tools.js";
-import { renderInboxLine } from "./tasks.js";
+import { renderInboxLine, type TaskRecord } from "./tasks.js";
 import { VERSION } from "./version.js";
 
 export interface ServerOptions extends RuntimeOptions {
@@ -96,12 +97,19 @@ export function createServerForRuntime(
   const clientName = (): string | null => server.server.getClientVersion()?.name ?? null;
   const clientHarness = (): string => inferHarnessFromClientName(clientName() ?? undefined);
 
+  /** Tasks as this device should see them: approvals only count when they
+      verify against this device's key or one its vault enrolled. */
+  const present = (): ((task: TaskRecord) => TaskRecord) => {
+    const trusted = trustedApproverKeys(config.cacheDir, ingest?.trustedApproverKeyIds() ?? []);
+    return (task) => presentTask(task, trusted);
+  };
+
   /** The one-line inbox hint other tools append, or null when nothing waits. */
   const inboxLine = (): string | null => {
     if (ingest === null || !allowed("read:tasks")) return null;
     if (readTasksSwitch(config.cacheDir).off) return null;
     const now = Date.now();
-    return renderInboxLine(ingest.tasks.list(config.root, now), clientHarness(), now);
+    return renderInboxLine(ingest.tasks.list(config.root, now).map(present()), clientHarness(), now);
   };
 
   const registerContextResource = (name: string, uri: string, title: string, scope: ContextScope): void => {
@@ -573,10 +581,10 @@ export function createServerForRuntime(
   const postTimestamps: number[] = [];
   const taskBackend: TaskBackend | null = ingest
     ? {
-        list: async (now) => ingest.tasks.list(config.root, now),
+        list: async (now) => ingest.tasks.list(config.root, now).map(present()),
         post: async (input, actor, now) =>
           ingest.tasks.post(config.root, input, actor, { now, defaultTtlDays: config.tasks.defaultTtlDays }),
-        agentAction: async (input, agentCtx) => ingest.tasks.agentAction(config.root, input, agentCtx),
+        agentAction: async (input, agentCtx) => ingest.tasks.agentAction(config.root, input, agentCtx, present()),
       }
     : null;
   const taskContext = (): TaskToolContext => ({

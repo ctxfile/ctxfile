@@ -284,6 +284,19 @@ export async function enrollApprovalKey(
   return true;
 }
 
+/** Key ids of the approval keys the vault's devices enrolled. A device trusts
+    approvals signed by these (and by its own key) and no others. Returns null
+    when the relay predates approver keys. */
+export async function fetchApproverKeyIds(config: VaultConfig, fetchImpl: typeof fetch = fetch): Promise<string[] | null> {
+  const response = await fetchImpl(`${config.relayUrl.replace(/\/+$/, "")}/v1/vaults/approver-keys`, {
+    headers: { authorization: `Bearer ${config.token}` },
+  });
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error(`relay /v1/vaults/approver-keys failed: ${response.status}`);
+  const body = (await response.json()) as { keys?: { key_id?: unknown }[] };
+  return (body.keys ?? []).map((k) => k.key_id).filter((id): id is string => typeof id === "string");
+}
+
 /** Everything wired: unlock, point the local store at the relay, sync. */
 export async function openVaultSync(
   config: VaultConfig,

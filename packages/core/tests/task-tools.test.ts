@@ -115,7 +115,7 @@ describe("task tools over MCP (Grok posts, ChatGPT picks it up)", () => {
     const claimed = await call(chatgpt, "update_task", { task_id: taskId, action: "claim" });
     expect(claimed.isError ?? false).toBe(false);
     expect(claimed.content[0]!.text).toMatch(/unapproved proposal\. You claimed it/);
-    expect(claimed.content[0]!.text).toContain("<<<ctxfile-task-text");
+    expect(claimed.content[0]!.text).toMatch(/<<<ctxfile-data [0-9a-f]{32} task-text>>>/);
     expect(claimed.structuredContent?.state).toBe("claimed");
   });
 
@@ -222,7 +222,7 @@ describe("ctxfile tasks (the human side)", () => {
     await runTasks(["list", "--root", dir], deps(true));
     const listing = out.join("\n");
     expect(listing).toContain("Fix the flaky test");
-    expect(listing).toContain("Posted by the user");
+    expect(listing).toContain("Posted and approved by the user");
   });
 
   it("manages push targets on the vault's relay, keeping routine tokens off argv", async () => {

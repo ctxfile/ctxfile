@@ -89,7 +89,11 @@ async function readJson<T>(res: Response): Promise<T> {
 }
 
 function postTask(overrides: Record<string, unknown> = {}, actor: TaskActor = GROK): TaskRecord {
-  const result = store.tasks.post(config.root, postInput(overrides), actor, { now: T0 });
+  // A task the user posts is signed with this device's key (as the CLI does);
+  // an unsigned "human" label alone would not count as approved.
+  const key = actor.kind === "human" ? loadOrCreateApprovalKey(config.cacheDir) : null;
+  const signer = key ? { key_id: key.keyId, public_key: key.publicKey, sign: key.sign } : undefined;
+  const result = store.tasks.post(config.root, postInput(overrides), actor, { now: T0, signer });
   if (!result.ok) throw new Error(result.error);
   return result.task;
 }

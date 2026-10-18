@@ -346,8 +346,8 @@ export async function startRelay(ctx: RelayContext): Promise<RunningRelay> {
     }
 
     if (pathname === "/v1/vaults/approver-keys" && method === "POST") {
-      if (!canWrite) {
-        json(res, 403, { error: "enrolling an approval key requires a device token with write:sessions" });
+      if (!canRead || !canWrite) {
+        json(res, 403, { error: "enrolling an approval key requires a full device token (read:context and write:sessions)" });
         return;
       }
       const body = (await readBody(req)) as { key_id?: string; public_key_b64?: string };
@@ -373,6 +373,10 @@ export async function startRelay(ctx: RelayContext): Promise<RunningRelay> {
     }
 
     if (pathname === "/v1/vaults/approver-keys" && method === "GET") {
+      if (!canRead) {
+        json(res, 403, { error: "token lacks read:context" });
+        return;
+      }
       json(res, 200, {
         keys: db.listApproverKeys(vault.id).map((k) => ({ key_id: k.key_id, added_by: k.added_by, added_at: k.added_at })),
       });
@@ -441,6 +445,8 @@ export async function startRelay(ctx: RelayContext): Promise<RunningRelay> {
           action: "blob.push",
           detail: { id: blobId.slice(0, 8), stored: result === "stored", ...(expected !== undefined ? { cas: result } : {}) },
         });
+        // Tell clients this relay honors compare-and-set (older ones do not).
+        res.setHeader("x-ctxfile-cas", "1");
         if (result === "conflict") {
           json(res, 409, { error: "blob changed since your base version", current: db.getBlobMeta(vault.id, blobId) });
           return;
@@ -550,8 +556,8 @@ export async function startRelay(ctx: RelayContext): Promise<RunningRelay> {
     }
 
     if (pathname === "/v1/push/targets" && method === "POST") {
-      if (!canWrite) {
-        json(res, 403, { error: "push targets need a device token with write:sessions" });
+      if (!canRead || !canWrite) {
+        json(res, 403, { error: "push targets need a full device token (read:context and write:sessions)" });
         return;
       }
       const body = (await readBody(req)) as Partial<AddTargetInput>;
@@ -575,11 +581,19 @@ export async function startRelay(ctx: RelayContext): Promise<RunningRelay> {
     }
 
     if (pathname === "/v1/push/targets" && method === "GET") {
+      if (!canRead) {
+        json(res, 403, { error: "token lacks read:context" });
+        return;
+      }
       json(res, 200, { targets: ctx.push.listTargets(vault.id) });
       return;
     }
 
     if (pathname === "/v1/push/outbox" && method === "GET") {
+      if (!canRead) {
+        json(res, 403, { error: "token lacks read:context" });
+        return;
+      }
       json(res, 200, {
         events: ctx.push.outbox(vault.id).map((e) => ({
           event_id: e.event_id,
@@ -597,8 +611,8 @@ export async function startRelay(ctx: RelayContext): Promise<RunningRelay> {
 
     const targetMatch = pathname.match(/^\/v1\/push\/targets\/([0-9a-f-]{36})(\/test)?$/);
     if (targetMatch) {
-      if (!canWrite) {
-        json(res, 403, { error: "push targets need a device token with write:sessions" });
+      if (!canRead || !canWrite) {
+        json(res, 403, { error: "push targets need a full device token (read:context and write:sessions)" });
         return;
       }
       const targetId = targetMatch[1] as string;
