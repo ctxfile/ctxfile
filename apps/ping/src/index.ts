@@ -8,7 +8,7 @@
  *     usage?: { cross_vendor_threads_30d, handoffs_saved_30d,
  *               handoffs_resumed_cross_vendor_30d, resumes_with_prompt_30d } }
  *
- * `usage` is four whole numbers from the install's local store (0.6.1+): how
+ * `usage` is four whole numbers from the install's local store (0.7.0+): how
  * often work crosses between AI tools. Counts only, never titles, text, or
  * ids. It decides whether cross-agent tasks are worth building further.
  *

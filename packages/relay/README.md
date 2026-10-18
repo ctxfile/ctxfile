@@ -21,7 +21,7 @@ The relay is open source on purpose: it is the component that momentarily holds 
 node dist/cli.js start --data-dir ~/ctxfile-relay      # or: ctxfile-relay start
 ```
 
-All state (SQLite, keyring master key, org identity) lives in the data dir: one folder to volume-mount, one folder to back up. Defaults: `127.0.0.1:5959`, registration open (self-host mode). Environment: `CTXFILE_RELAY_DATA`, `CTXFILE_RELAY_HOST`, `CTXFILE_RELAY_PORT`, `CTXFILE_RELAY_ORG`, `CTXFILE_RELAY_REGISTRATION` (`closed` for hosted deployments where the subscription flow provisions vaults), `CTXFILE_RELAY_PUBLIC_URL`.
+All state (SQLite, keyring master key, org identity) lives in the data dir: one folder to volume-mount, one folder to back up. Defaults: `127.0.0.1:5959`, registration open (self-host mode). Environment: `CTXFILE_RELAY_DATA`, `CTXFILE_RELAY_HOST`, `CTXFILE_RELAY_PORT`, `CTXFILE_RELAY_ORG`, `CTXFILE_RELAY_REGISTRATION` (`closed` for hosted deployments where the subscription flow provisions vaults), `CTXFILE_RELAY_PUBLIC_URL`. Self-hosted only, both off by default: `CTXFILE_RELAY_PUSH_ALLOW_HTTP=1` lets push reach `http://` targets and `CTXFILE_RELAY_PUSH_ALLOW_PRIVATE=1` lets it reach private and loopback addresses (for a hub and its webhook receiver on one LAN). Never set them on a public relay.
 
 Docker (build from the repo root; this is the Team hub artifact):
 
@@ -44,16 +44,19 @@ Fly.io: `fly deploy -c packages/relay/fly.toml` (see the file's header for secre
 | `POST /v1/grants`, `GET /v1/grants`, `POST /v1/grants/:id/revoke` | bearer (write to issue) | Handoff grants |
 | `POST /v1/federation/grants` | bearer (write) | Org-signed federation grant for an audience org |
 | `POST /v1/federation/redeem` | signatures, not bearer | Trusted-peer redemption; every denial is audited |
+| `POST /v1/vaults/approver-keys`, `GET /v1/vaults/approver-keys` | bearer (write to enroll) | A device's Ed25519 approval public key; approvals only count (and only push) when they verify against an enrolled key |
+| `POST /v1/push/targets`, `GET /v1/push/targets`, `DELETE /v1/push/targets/:id`, `POST /v1/push/targets/:id/test` | bearer (write; standard vaults) | Push targets: a webhook (the `whsec_` secret is returned once) or a Claude Code Routine (its token is stored wrapped by the keyring and never returned) |
+| `GET /v1/push/outbox` | bearer | Recent push deliveries: event, task id, status, attempts (no content) |
 | `GET /v1/audit` | bearer | The vault's audit rows |
 | `/mcp` | bearer (vault or grant token) | Streamable HTTP MCP; one session per client, session bound to its token |
 
 Tokens are stored as SHA-256 hashes and carry scopes (`read:context`, `write:sessions`, `read:tasks`, `write:tasks`). CLI: `vaults`, `tokens list|create|revoke`, `grants issue`, `org show|trust`, `federation issue|redeem`, `audit tail|export`, `stats`.
 
-`stats` is for the operator: it prints aggregate cross-vendor resume counts from the audit log (how often a thread saved by one client is resumed by another). The audit rows behind it record which client resumed a thread, never titles or content.
+`stats` is for the operator: it prints aggregate cross-vendor resume counts from the audit log (how often a thread saved by one client is resumed by another), counts only. The `continue_thread` and `save_session` audit rows behind it now also record the client id; like before, they name the thread but carry no content. Task audit rows carry task ids and states only, never titles or text.
 
 ## Security model, in one paragraph
 
-Clients encrypt before upload; the relay stores ciphertext under opaque ids; Standard-mode serving unwraps a per-vault data key through the `KeyProvider` seam (local keyring file when self-hosted, cloud KMS when hosted, the customer's own KMS for BYOK — same two-method interface, which is why key revocation is crypto-shredding), decrypts in memory for one request, and discards; Strict mode never enrolls a key at all; no plaintext is ever written to logs (log lines carry ids and counts only); grants are least-privilege by default (single thread, read-only, 7-day expiry); federation is invite-only by exchanged org identity and every redemption or denial is an audit row. Production deployments terminate TLS in front (Fly edge, Caddy, nginx); hub-to-hub mTLS is on the deploy checklist.
+Clients encrypt before upload; the relay stores ciphertext under opaque ids; Standard-mode serving unwraps a per-vault data key through the `KeyProvider` seam (local keyring file when self-hosted, cloud KMS when hosted, the customer's own KMS for BYOK — same two-method interface, which is why key revocation is crypto-shredding), decrypts in memory (cached per vault for at most a minute, invalidated by any write, never written to disk), and discards; Strict mode never enrolls a key at all; no plaintext is ever written to logs (log lines carry ids and counts only); grants are least-privilege by default (single thread, read-only, 7-day expiry); federation is invite-only by exchanged org identity and every redemption or denial is an audit row. Production deployments terminate TLS in front (Fly edge, Caddy, nginx); hub-to-hub mTLS is on the deploy checklist.
 
 ## Boundary note (for the repo split)
 

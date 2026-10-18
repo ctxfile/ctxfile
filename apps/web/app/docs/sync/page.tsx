@@ -227,8 +227,9 @@ ctxfile vault recover   # unwraps with the code, re-wraps, prints a fresh code`}
         The relay&apos;s append-only audit log records each MCP call with the client that made it. For{" "}
         <code>continue_thread</code>, that includes which client resumed the thread, so the operator of the
         hosted relay can count how often work saved in one vendor&apos;s app is picked up in another&apos;s.{" "}
-        <code>ctxfile-relay stats</code> prints those counts in aggregate across vaults. Counts only: no thread
-        titles, no content. On a relay you run yourself, you are the operator.
+        <code>ctxfile-relay stats</code> prints those counts in aggregate across vaults, and its output is counts
+        only. The audit rows themselves name the thread, as they always have, but never carry content; task rows
+        carry only task ids and states. On a relay you run yourself, you are the operator.
       </p>
 
       <h2>What never changes</h2>

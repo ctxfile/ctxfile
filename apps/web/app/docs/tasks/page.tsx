@@ -699,10 +699,34 @@ ctxfile tasks target test <id>     # sends a test delivery
 ctxfile tasks target rm <id>`}</code>
       </pre>
       <p>
-        <code>--to</code> limits a target to tasks for one assignee. For a Claude Code Routine, write the
-        routine&apos;s prompt as the go-ahead: &ldquo;Call list_tasks, then work the approved ctxfile tasks
-        assigned to claude-code. Ask before any side effect.&rdquo; Per behavior B8, a run you set up this way
-        counts as your go-ahead for approved tasks only.
+        <code>--to</code> limits a target to tasks for one assignee (routines default to{" "}
+        <code>claude-code</code>, webhooks to <code>any</code>).
+      </p>
+      <h3>Claude Code Routines</h3>
+      <ol>
+        <li>
+          In <a href="https://claude.ai/code/routines">Claude Code routines</a>, add an API trigger to a routine
+          and generate its token (it starts with <code>sk-ant-oat01-</code> and is shown once). The fire URL looks
+          like <code>https://api.anthropic.com/v1/claude_code/routines/trig_.../fire</code>; ctxfile refuses any
+          other URL for this target kind.
+        </li>
+        <li>
+          Give the routine the ctxfile connector: add your vault&apos;s MCP URL as a custom connector, so the run
+          can read the task.
+        </li>
+        <li>
+          The relay sends only the task id, thread, title, and who it is from, in the request&apos;s{" "}
+          <code>text</code>. Claude Code hands that to the run inside a <code>routine-fire-payload</code> block
+          marked as untrusted, so write the routine&apos;s prompt to act on it: &ldquo;The routine-fire-payload
+          names a ctxfile task. Call list_tasks with that task_id and work it if it is approved. Ask before any
+          side effect.&rdquo; Per behavior B8, a run you set up this way counts as your go-ahead for approved
+          tasks only.
+        </li>
+      </ol>
+      <p>
+        Routines are a research preview, and each one accepts 30 fires an hour; the relay stays under 25 and
+        holds the rest. The fire endpoint has no idempotency key, so the relay sends each event once and does
+        not re-send it after a successful answer.
       </p>
 
       <h3>Events and payload</h3>
@@ -740,7 +764,8 @@ ctxfile tasks target rm <id>`}</code>
     "title": "Draft follow-ups to the 12 Q4 leads",
     "assignee": "chatgpt",
     "from": "grok",
-    "next": "Read it with list_tasks task_id=t_8f2c41d09a7be3a15c66"
+    "state": "pending",
+    "read_with": "list_tasks with task_id \"t_8f2c41d09a7be3a15c66\" (ctxfile MCP tools)"
   }
 }`}</code>
       </pre>
@@ -764,9 +789,14 @@ ctxfile tasks target rm <id>`}</code>
       <h3>Retries and safety</h3>
       <ul>
         <li>
-          A delivery that times out or gets a non-2xx answer is retried after 1 minute, 5 minutes, 30 minutes,
-          2 hours, and 12 hours, then marked failed. Retries reuse the <code>webhook-id</code>, so deduplicate on
-          it.
+          A delivery that times out, fails to connect, or gets a 5xx, 408, or 429 answer is retried after 1
+          minute, 5 minutes, 30 minutes, 2 hours, and 12 hours (longer if the target sends{" "}
+          <code>Retry-After</code>), then marked failed. Any other 4xx marks it failed at once. Retries reuse the{" "}
+          <code>webhook-id</code>, so deduplicate on it.
+        </li>
+        <li>
+          Before each attempt the relay re-reads the task. If it was claimed, edited, or expired in the meantime,
+          the delivery is skipped.
         </li>
         <li>HTTPS only. URLs that resolve to private or link-local addresses are refused, checked after DNS lookup.</li>
         <li>5-second timeout per delivery; at most 64 KB of the response is read.</li>

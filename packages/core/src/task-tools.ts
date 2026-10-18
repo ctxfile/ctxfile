@@ -71,7 +71,7 @@ const artifactShape = z.object({ ref: z.string(), role: z.string() }).passthroug
 /** SDK-level input shapes: permissive on purpose. Handlers re-validate with
     the strict schemas so agents always get field-by-field errors. */
 export const POST_TASK_INPUT_SHAPE = {
-  thread: z.string().optional().describe("Required: the thread this task belongs to (fuzzy names are not matched; use the exact title)"),
+  thread: z.string().optional().describe("Required: the thread this task belongs to, by exact title (created if it does not exist yet)"),
   title: z.string().optional().describe("Required: a short title, up to 120 characters; the only text shown in inboxes"),
   instructions: z.string().optional().describe("Required: what the assignee should do, up to 4,000 characters"),
   assignee: z
