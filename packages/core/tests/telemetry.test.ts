@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { loadConfig } from "../src/config.js";
+import { IngestStore } from "../src/storage/ingest-store.js";
 import { sendPingIfDue, type FetchLike } from "../src/telemetry.js";
 
 describe("telemetry ping", () => {
@@ -18,8 +19,10 @@ describe("telemetry ping", () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
+  // cacheDir points into the temp dir so the ping never reads the real
+  // ~/.ctxfile store (which would add usage counts from other runs).
   function configWith(telemetry?: { enabled: boolean; endpoint?: string }) {
-    if (telemetry) writeFileSync(path.join(dir, ".ctxfile.json"), JSON.stringify({ telemetry }));
+    writeFileSync(path.join(dir, ".ctxfile.json"), JSON.stringify({ cacheDir: path.join(dir, "cache"), ...(telemetry ? { telemetry } : {}) }));
     return loadConfig({ root: dir, env: {} });
   }
 
@@ -50,6 +53,50 @@ describe("telemetry ping", () => {
     expect(Object.keys(payload!).sort()).toEqual(["installId", "os", "version"]);
     expect(payload!.installId).toMatch(/^[0-9a-f-]{36}$/);
     expect(JSON.stringify(payload)).not.toContain(dir);
+  });
+
+  it("adds four whole-number usage counts, and nothing else, once a local store exists", async () => {
+    const config = configWith({ enabled: true });
+    const store = new IngestStore(path.join(config.cacheDir, "ingest.db"));
+    const now = Date.parse("2026-07-10T00:00:00Z");
+    store.ingest(dir, {
+      ctxfile_ingest_schema: "2",
+      source: { harness: "grok" },
+      session: {
+        session_id: "secret-session-id",
+        summary: "Found 12 leads for Acme",
+        key_decisions: ["d"],
+        files_touched: [],
+        open_items: ["email them"],
+        thread: "Acme leads (private title)",
+        handoff: true,
+        state: "done",
+        gotchas: ["none encountered"],
+        artifacts: [{ ref: "leads.csv", role: "the leads" }],
+        suggested_first_prompt: "Email the leads",
+      },
+    }, now - 60_000);
+    const threadId = store.listThreads(dir)[0]!.id;
+    store.recordResume(dir, threadId, "chatgpt", now);
+    store.close();
+
+    let payload: Record<string, unknown> | null = null;
+    const fetchImpl: FetchLike = async (_u, init) => {
+      payload = JSON.parse(String(init?.body));
+      return new Response("{}");
+    };
+    expect(await sendPingIfDue(config, { fetchImpl, stateFilePath, now: new Date(now) })).toBe(true);
+    expect(Object.keys(payload!).sort()).toEqual(["installId", "os", "usage", "version"]);
+    expect(payload!.usage).toEqual({
+      cross_vendor_threads_30d: 1,
+      handoffs_saved_30d: 1,
+      handoffs_resumed_cross_vendor_30d: 1,
+      resumes_with_prompt_30d: 1,
+    });
+    const body = JSON.stringify(payload);
+    expect(body).not.toContain("Acme");
+    expect(body).not.toContain("secret-session-id");
+    expect(body).not.toContain(dir);
   });
 
   it("pings at most once per week with a stable install id", async () => {

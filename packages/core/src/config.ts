@@ -4,8 +4,10 @@ import path from "node:path";
 import { z } from "zod";
 import { EXPORT_PROFILES, EXPORT_SECTIONS, type ExportProfile, type ExportSection } from "./export.js";
 
-/** Scopes for the HTTP door: what a bearer token may do on a connection. */
-export const SERVE_SCOPES = ["read:context", "write:sessions"] as const;
+/** Scopes for the HTTP door: what a bearer token may do on a connection.
+    Tokens configured with an explicit scope list never gain new scopes on
+    upgrade; tokens without one get every scope. */
+export const SERVE_SCOPES = ["read:context", "write:sessions", "read:tasks", "write:tasks"] as const;
 export type ServeScope = (typeof SERVE_SCOPES)[number];
 
 export const DEFAULT_SERVE_PORT = 4949;
@@ -64,6 +66,17 @@ const fileConfigSchema = z
         /** Section allowlist applied by the "custom" profile. */
         include: z.array(z.enum(EXPORT_SECTIONS)).optional(),
       })
+      .optional(),
+    // Cross-agent tasks.
+    tasks: z
+      .object({
+        /** "ask": an agent may claim an unapproved proposal after asking the
+            user in chat. "require_approval": proposals need the dashboard or
+            CLI first. Push always requires approval either way. */
+        proposals: z.enum(["ask", "require_approval"]).optional(),
+        defaultTtlDays: z.number().int().min(1).max(30).optional(),
+      })
+      .strict()
       .optional(),
     // Behavior layer (auto-checkpoint guardrails).
     behavior: z
@@ -188,6 +201,7 @@ export interface ResolvedConfig {
   telemetry: { enabled: boolean; endpoint: string };
   export: { profile: ExportProfile; include: ExportSection[] | null };
   behavior: { debounceMinutes: number };
+  tasks: { proposals: "ask" | "require_approval"; defaultTtlDays: number };
   /** The HTTP door (`ctxfile serve`): loopback default, bearer tokens by env var. */
   serve: { port: number; host: string; tokens: ServeTokenSpec[] };
 }
@@ -295,6 +309,10 @@ export function loadConfig(opts: LoadConfigOptions = {}): ResolvedConfig {
     },
     behavior: {
       debounceMinutes: fileConfig.behavior?.debounceMinutes ?? 5,
+    },
+    tasks: {
+      proposals: fileConfig.tasks?.proposals ?? "ask",
+      defaultTtlDays: fileConfig.tasks?.defaultTtlDays ?? 7,
     },
     serve: {
       port: fileConfig.serve?.port ?? DEFAULT_SERVE_PORT,

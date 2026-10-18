@@ -40,6 +40,7 @@ import { sendPingIfDue } from "./telemetry.js";
 import { storeLicenseKey } from "./license-store.js";
 import { appendVaultToConfig, detectVaultNear, paraDefaultExcludes, tildeRelative } from "./vault-detect.js";
 import { MEMORY_USAGE, runIngestImport, runMemory } from "./cli-memory.js";
+import { runTasks, TASKS_USAGE } from "./cli-tasks.js";
 import { generateToken } from "./ui/security.js";
 import { createUiServer, DEFAULT_UI_PORT, listenOnAvailablePort } from "./ui/server.js";
 import { VERSION } from "./version.js";
@@ -56,6 +57,7 @@ Usage: ctxfile [options]
        ctxfile ingest list|rm <id>|import [options]
        ctxfile memory prompt|import|list|approve|reject|export [options]
        ctxfile threads [options]
+       ctxfile tasks [list|show|post|approve|reject|cancel|approve-effect|deny-effect|freeze|off|on|status] [options]
        ctxfile vault create|join|recover|status [options]
        ctxfile sync [options]
        ctxfile activate <license-key>
@@ -88,6 +90,7 @@ ingest (agent-reported sessions via ingest_context / save_session):
   import            Import a session digest (ingest_context JSON) from stdin or --file
 
 ${MEMORY_USAGE}
+${TASKS_USAGE}
 init (the behavior layer: agents checkpoint automatically, announced, never silent):
   --yes             Consent to auto-capture and install the skill for detected harnesses
   --no-auto         Record that auto-capture stays OFF (skills not installed)
@@ -282,7 +285,7 @@ async function runServe(args: CliArgs): Promise<void> {
   if (!runtime.proActive) {
     throw new Error(
       "ctxfile serve requires an active Pro license ('ctxfile activate <key>', https://ctxfile.dev/pricing). " +
-        "All six tools, threads and memory included, stay free over stdio."
+        "Every tool, threads, memory and tasks included, stays free over stdio."
     );
   }
   const tokens: ResolvedServeToken[] = [];
@@ -307,7 +310,9 @@ async function runServe(args: CliArgs): Promise<void> {
       ? `  auth: bearer tokens (${tokens.map((t) => `${t.name}: ${t.scopes.join("+")}`).join("; ")})`
       : "  auth: none (loopback only; configure serve.tokens before exposing further)"
   );
-  console.error("  tools: get_context, save_session, continue_thread, list_threads, ingest_context, ingest_memory");
+  console.error(
+    "  tools: get_context, save_session, continue_thread, list_threads, ingest_context, ingest_memory, post_task, list_tasks, update_task"
+  );
   const shutdown = (): void => {
     void running.close().then(() => process.exit(0));
   };
@@ -576,6 +581,11 @@ async function runSync(argv: string[]): Promise<void> {
     console.error(
       `ctxfile: synced with vault "${vault.name}": pushed ${result.pushed}, applied ${result.applied} (client-side encrypted; the relay holds ciphertext only)`
     );
+    if (result.conflicts > 0) {
+      console.error(
+        `ctxfile: ${result.conflicts} task change${result.conflicts === 1 ? "" : "s"} lost a race to another device; that device's version now applies here`
+      );
+    }
   } finally {
     store.close();
   }
@@ -760,6 +770,10 @@ async function main(): Promise<void> {
   }
   if (argv[0] === "threads") {
     runThreads(argv.slice(1));
+    return;
+  }
+  if (argv[0] === "tasks") {
+    await runTasks(argv.slice(1));
     return;
   }
   if (argv[0] === "vault") {

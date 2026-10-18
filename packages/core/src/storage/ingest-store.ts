@@ -6,8 +6,16 @@ import { ingestSessionId } from "../ingest.js";
 import { MEMORY_SCHEMA_VERSION } from "../memory.js";
 import { redactContent } from "../redact.js";
 import type { LocalBlobSource, SyncEntry } from "../sync/client.js";
-import { parseSyncPayload, type SessionSyncPayload, type SyncPayload, type ThreadSyncPayload } from "../sync/payload.js";
+import {
+  parseSyncPayload,
+  SYNC_PAYLOAD_KINDS,
+  syncPayloadKind,
+  type SessionSyncPayload,
+  type SyncPayload,
+  type ThreadSyncPayload,
+} from "../sync/payload.js";
 import { MemoryStore, type MemoryImportResult } from "./memory-store.js";
+import { TaskStore } from "./task-store.js";
 
 /**
  * Persistence for agent-reported session digests (`ingest_context` and
@@ -19,6 +27,21 @@ import { MemoryStore, type MemoryImportResult } from "./memory-store.js";
  */
 
 const HISTORY_CAP = 5;
+const DAY_MS = 86_400_000;
+
+/** The validation-gate counters (Phase 0). Whole numbers only: they may ride
+    the opt-in telemetry ping, so they never carry titles, text, or ids. */
+export interface GateCounts {
+  /** Threads with sessions or resumes from 2+ harnesses in the last 30 days. */
+  cross_vendor_threads_30d: number;
+  /** Handoff packages saved in the last 30 days. */
+  handoffs_saved_30d: number;
+  /** Resumes, in the last 30 days, of a handoff saved by a different harness
+      within the 7 days before the resume. */
+  handoffs_resumed_cross_vendor_30d: number;
+  /** Resumes in the last 30 days that returned a suggested_first_prompt. */
+  resumes_with_prompt_30d: number;
+}
 
 export interface IngestResult {
   id: number;
@@ -171,11 +194,16 @@ export class IngestStore {
   private readonly db: Database.Database;
   /** Imported memory, same database file (one connection, one WAL). */
   readonly memory: MemoryStore;
+  /** Cross-agent tasks, same database file. */
+  readonly tasks: TaskStore;
 
   constructor(dbPath: string) {
     mkdirSync(path.dirname(dbPath), { recursive: true });
     this.db = new Database(dbPath);
     this.db.pragma("journal_mode = WAL");
+    // Several MCP processes (one per harness) can share this file; a writer
+    // waits briefly for another's transaction instead of failing at once.
+    this.db.pragma("busy_timeout = 5000");
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS ingest_sessions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -201,6 +229,7 @@ export class IngestStore {
     `);
     this.migrate();
     this.memory = new MemoryStore(this.db);
+    this.tasks = new TaskStore(this.db, (root, title, now) => this.ensureThread(root, title, now));
   }
 
   /** Idempotent v2 migration: column-presence checks, never version guesses,
@@ -251,7 +280,94 @@ export class IngestStore {
     if (!threadColumns.has("deleted")) this.db.exec("ALTER TABLE threads ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0");
     if (!threadColumns.has("org_id")) this.db.exec("ALTER TABLE threads ADD COLUMN org_id TEXT");
     if (!threadColumns.has("private")) this.db.exec("ALTER TABLE threads ADD COLUMN private INTEGER NOT NULL DEFAULT 0");
-    this.db.exec("PRAGMA user_version = 4;");
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS thread_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        root TEXT NOT NULL,
+        thread_id INTEGER,
+        kind TEXT NOT NULL,
+        harness TEXT NOT NULL,
+        handoff_harness TEXT,
+        handoff_at INTEGER,
+        had_prompt INTEGER NOT NULL DEFAULT 0,
+        at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_thread_events_at ON thread_events (at);
+      CREATE TABLE IF NOT EXISTS sync_skipped (
+        blob_id TEXT PRIMARY KEY,
+        version INTEGER NOT NULL,
+        kind TEXT
+      );
+    `);
+    this.db.exec("PRAGMA user_version = 5;");
+  }
+
+  /** Phase-0 gate signal: a thread was resumed by `harness`. Records which
+      harness saved the newest handoff on that thread (if any), so a later
+      count can tell a cross-vendor pickup from a same-tool one. No content. */
+  recordResume(root: string, threadId: number, harness: string, now = Date.now()): void {
+    const handoff = this.db
+      .prepare(
+        `SELECT harness, ingested_at, suggested_first_prompt FROM ingest_sessions
+         WHERE root = ? AND thread_id = ? AND deleted = 0 AND handoff = 1
+         ORDER BY updated_at DESC, id DESC LIMIT 1`
+      )
+      .get(root, threadId) as { harness: string; ingested_at: number; suggested_first_prompt: string | null } | undefined;
+    this.db
+      .prepare(
+        `INSERT INTO thread_events (root, thread_id, kind, harness, handoff_harness, handoff_at, had_prompt, at)
+         VALUES (?, ?, 'resume', ?, ?, ?, ?, ?)`
+      )
+      .run(
+        root,
+        threadId,
+        harness,
+        handoff?.harness ?? null,
+        handoff?.ingested_at ?? null,
+        handoff?.suggested_first_prompt ? 1 : 0,
+        now
+      );
+  }
+
+  /** The four gate counters, across every project in this store. */
+  gateCounts(now = Date.now()): GateCounts {
+    const since = now - 30 * DAY_MS;
+    const harnessesByThread = new Map<string, Set<string>>();
+    const note = (root: string, threadId: number | null, harness: string): void => {
+      if (threadId === null || harness.startsWith("custom:unknown")) return;
+      const key = `${root}\u0000${threadId}`;
+      const set = harnessesByThread.get(key) ?? new Set<string>();
+      set.add(harness);
+      harnessesByThread.set(key, set);
+    };
+    const sessionRows = this.db
+      .prepare("SELECT root, thread_id, harness FROM ingest_sessions WHERE deleted = 0 AND thread_id IS NOT NULL AND updated_at >= ?")
+      .all(since) as { root: string; thread_id: number | null; harness: string }[];
+    for (const row of sessionRows) note(row.root, row.thread_id, row.harness);
+    const resumeRows = this.db
+      .prepare("SELECT root, thread_id, harness FROM thread_events WHERE kind = 'resume' AND at >= ?")
+      .all(since) as { root: string; thread_id: number | null; harness: string }[];
+    for (const row of resumeRows) note(row.root, row.thread_id, row.harness);
+    const crossVendorThreads = [...harnessesByThread.values()].filter((set) => set.size >= 2).length;
+    const count = (sql: string, ...params: unknown[]): number =>
+      (this.db.prepare(sql).get(...params) as { n: number }).n;
+    return {
+      cross_vendor_threads_30d: crossVendorThreads,
+      handoffs_saved_30d: count(
+        "SELECT COUNT(*) AS n FROM ingest_sessions WHERE deleted = 0 AND handoff = 1 AND ingested_at >= ?",
+        since
+      ),
+      handoffs_resumed_cross_vendor_30d: count(
+        `SELECT COUNT(*) AS n FROM thread_events WHERE kind = 'resume' AND at >= ? AND handoff_harness IS NOT NULL
+           AND handoff_harness != harness AND at - handoff_at <= ?`,
+        since,
+        7 * DAY_MS
+      ),
+      resumes_with_prompt_30d: count(
+        "SELECT COUNT(*) AS n FROM thread_events WHERE kind = 'resume' AND at >= ? AND had_prompt = 1",
+        since
+      ),
+    };
   }
 
   /** Case-insensitive find-or-create; titles are redacted like all content.
@@ -571,6 +687,7 @@ export class IngestStore {
       last_active: number;
       deleted: number;
       private: number;
+      tasks_frozen: number;
     }[];
     for (const row of threadRows) {
       const payload: ThreadSyncPayload = {
@@ -582,6 +699,7 @@ export class IngestStore {
         last_active: row.last_active,
         deleted: row.deleted === 1,
         private: row.private === 1,
+        tasks_frozen: row.tasks_frozen === 1,
       };
       entries.push({
         naturalId: `thread:${row.title.toLowerCase()}`,
@@ -590,6 +708,7 @@ export class IngestStore {
         payload: textEncoder.encode(JSON.stringify(payload)),
       });
     }
+    entries.push(...this.tasks.exportSyncEntries(root));
     return entries;
   }
 
@@ -610,6 +729,7 @@ export class IngestStore {
     for (const payload of payloads) {
       if (payload.kind === "session") applied += this.applySessionPayload(root, payload);
       else if (payload.kind === "memory") applied += this.memory.applySyncPayload(root, payload);
+      else if (payload.kind === "task") applied += this.tasks.applySyncPayload(root, payload);
     }
     return applied;
   }
@@ -619,7 +739,45 @@ export class IngestStore {
     return {
       snapshot: async () => this.exportSyncEntries(root),
       apply: async (entries) => this.importSyncEntries(root, entries),
+      classify: (payload) => {
+        const kind = syncPayloadKind(payload);
+        return { known: kind !== null && (SYNC_PAYLOAD_KINDS as readonly string[]).includes(kind), kind };
+      },
+      skipped: async () => this.skippedBlobs(),
+      recordSkipped: async (entries) => this.recordSkippedBlobs(entries),
+      markSynced: async (entries) => {
+        for (const entry of entries) {
+          if (entry.naturalId.startsWith("task:")) this.tasks.markSynced(root, entry.naturalId.slice("task:".length), entry.version);
+        }
+      },
     };
+  }
+
+  /** Blobs this build downloaded and could not use. Rows for kinds it now
+      understands (after an upgrade) are dropped, so those blobs sync again. */
+  private skippedBlobs(): Map<string, number> {
+    const rows = this.db.prepare("SELECT blob_id, version, kind FROM sync_skipped").all() as {
+      blob_id: string;
+      version: number;
+      kind: string | null;
+    }[];
+    const map = new Map<string, number>();
+    for (const row of rows) {
+      if (row.kind !== null && (SYNC_PAYLOAD_KINDS as readonly string[]).includes(row.kind)) {
+        this.db.prepare("DELETE FROM sync_skipped WHERE blob_id = ?").run(row.blob_id);
+        continue;
+      }
+      map.set(row.blob_id, row.version);
+    }
+    return map;
+  }
+
+  private recordSkippedBlobs(entries: { blobId: string; version: number; kind: string | null }[]): void {
+    const insert = this.db.prepare(
+      `INSERT INTO sync_skipped (blob_id, version, kind) VALUES (?, ?, ?)
+       ON CONFLICT (blob_id) DO UPDATE SET version = MAX(version, excluded.version), kind = excluded.kind`
+    );
+    for (const entry of entries) insert.run(entry.blobId, entry.version, entry.kind);
   }
 
   private applyThreadPayload(root: string, payload: ThreadSyncPayload): number {
@@ -627,16 +785,19 @@ export class IngestStore {
       .prepare("SELECT id, last_active FROM threads WHERE root = ? AND lower(title) = lower(?)")
       .get(root, payload.title) as { id: number; last_active: number } | undefined;
     const isPrivate = payload.private ? 1 : 0;
+    const frozen = payload.tasks_frozen ? 1 : 0;
     if (!existing) {
       this.db
-        .prepare("INSERT INTO threads (root, title, status, tags, created_at, last_active, deleted, private) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
-        .run(root, payload.title, payload.status, JSON.stringify(payload.tags), payload.created_at, payload.last_active, payload.deleted ? 1 : 0, isPrivate);
+        .prepare(
+          "INSERT INTO threads (root, title, status, tags, created_at, last_active, deleted, private, tasks_frozen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        )
+        .run(root, payload.title, payload.status, JSON.stringify(payload.tags), payload.created_at, payload.last_active, payload.deleted ? 1 : 0, isPrivate, frozen);
       return 1;
     }
     if (payload.last_active <= existing.last_active) return 0;
     this.db
-      .prepare("UPDATE threads SET status = ?, tags = ?, last_active = ?, deleted = ?, private = ? WHERE id = ?")
-      .run(payload.status, JSON.stringify(payload.tags), payload.last_active, payload.deleted ? 1 : 0, isPrivate, existing.id);
+      .prepare("UPDATE threads SET status = ?, tags = ?, last_active = ?, deleted = ?, private = ?, tasks_frozen = ? WHERE id = ?")
+      .run(payload.status, JSON.stringify(payload.tags), payload.last_active, payload.deleted ? 1 : 0, isPrivate, frozen, existing.id);
     return 1;
   }
 

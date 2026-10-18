@@ -1,5 +1,6 @@
 import type { IngestArtifact, IngestedSession, ThreadSummary } from "../ingest.js";
 import { MEMORY_CATEGORIES, type MemoryCategory, type MemoryRecord } from "../memory.js";
+import { parseTaskRecord, type TaskRecord } from "../tasks.js";
 
 /**
  * The plaintext shapes that travel inside encrypted sync blobs, shared by the
@@ -49,6 +50,9 @@ export interface ThreadSyncPayload {
   /** Local auto-capture exclusion, synced so it holds across devices. Absent
       in pre-v1 payloads means public. */
   private?: boolean;
+  /** `ctxfile tasks freeze`: no new tasks or claims on this thread. Absent in
+      older payloads means not frozen. */
+  tasks_frozen?: boolean;
 }
 
 /** One imported memory. `scope` routes it on apply: global memories land in
@@ -71,15 +75,38 @@ export interface MemorySyncPayload {
   deleted: boolean;
 }
 
-export type SyncPayload = SessionSyncPayload | ThreadSyncPayload | MemorySyncPayload;
+/** One cross-agent task: the full record, exactly as the local store keeps it. */
+export type TaskSyncPayload = { kind: "task" } & TaskRecord;
 
 const textDecoder = new TextDecoder();
+
+export type SyncPayload = SessionSyncPayload | ThreadSyncPayload | MemorySyncPayload | TaskSyncPayload;
+
+/** Payload kinds this build understands. A device skips (and remembers) blobs
+    of any other kind instead of downloading them again on every sync. */
+export const SYNC_PAYLOAD_KINDS = ["session", "thread", "memory", "task"] as const;
+
+/** The kind field of a decrypted payload, or null when it is not JSON. */
+export function syncPayloadKind(payload: Uint8Array): string | null {
+  try {
+    const parsed: unknown = JSON.parse(textDecoder.decode(payload));
+    if (typeof parsed !== "object" || parsed === null) return null;
+    const kind = (parsed as { kind?: unknown }).kind;
+    return typeof kind === "string" ? kind : null;
+  } catch {
+    return null;
+  }
+}
 
 export function parseSyncPayload(payload: Uint8Array): SyncPayload | null {
   try {
     const parsed: unknown = JSON.parse(textDecoder.decode(payload));
     if (typeof parsed !== "object" || parsed === null) return null;
     const kind = (parsed as { kind?: unknown }).kind;
+    if (kind === "task") {
+      const task = parseTaskRecord(parsed);
+      return task ? { kind: "task", ...task } : null;
+    }
     return kind === "session" || kind === "thread" || kind === "memory" ? (parsed as SyncPayload) : null;
   } catch {
     return null;
@@ -146,6 +173,10 @@ export interface VaultView {
   sessions: IngestedSession[];
   /** Live (non-rejected) memories, oldest first, both scopes. */
   memories: MemoryRecord[];
+  /** Live tasks, newest first (not normalized: callers apply expiry). */
+  tasks: TaskRecord[];
+  /** Lowercased titles of threads frozen for tasks. */
+  frozenThreads: string[];
 }
 
 /** Rebuilds the queryable view a local IngestStore would give, from nothing
@@ -198,5 +229,10 @@ export function buildVaultView(payloads: SyncPayload[]): VaultView {
     .filter((p): p is MemorySyncPayload => p.kind === "memory" && !p.deleted)
     .sort((a, b) => a.created_at - b.created_at || a.memory_id.localeCompare(b.memory_id))
     .map((p, index) => memoryPayloadToRecord(p, index + 1));
-  return { threads, sessions, memories };
+  const tasks = payloads
+    .filter((p): p is TaskSyncPayload => p.kind === "task" && !p.deleted)
+    .map(({ kind: _kind, ...task }) => task)
+    .sort((a, b) => b.updated_at - a.updated_at || a.task_id.localeCompare(b.task_id));
+  const frozenThreads = [...threadMeta.values()].filter((t) => t.tasks_frozen === true).map((t) => t.title.toLowerCase());
+  return { threads, sessions, memories, tasks, frozenThreads };
 }
