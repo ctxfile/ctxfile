@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 export const metadata: Metadata = {
   title: "Privacy",
@@ -61,7 +62,7 @@ export default function Privacy() {
               <td>
                 <code>telemetry.enabled: true</code> in config
               </td>
-              <td>An anonymous install-count ping (see below)</td>
+              <td>An anonymous weekly ping: install count plus four usage counts (see below)</td>
             </tr>
           </tbody>
         </table>
@@ -87,6 +88,11 @@ export default function Privacy() {
         <code>.ctxfile/context.&#123;json,md&#125;</code> in your project, and <code>ctxfile hooks install</code>{" "}
         writes a managed block in <code>.git/hooks/pre-commit</code>.
       </p>
+      <p>
+        <Link href="/docs/tasks">Cross-agent tasks</Link> do not change this. ctxfile stores tasks in its own
+        local database, redacted like everything else, and never carries one out itself. The agent that picks up
+        a task does the work with its own host&apos;s tools.
+      </p>
 
       <h2>Exports</h2>
       <p>
@@ -107,12 +113,65 @@ export default function Privacy() {
         it, when, and from what source.
       </p>
 
+      <h2>The device approval key</h2>
+      <p>
+        The first time it needs one (usually your first task approval in the dashboard or the CLI), ctxfile
+        creates an Ed25519 key pair at{" "}
+        <code>~/.ctxfile/approval-key.json</code> (inside <code>cacheDir</code>), readable only by you (mode
+        600). It signs your task approvals and side-effect decisions, so a forged &ldquo;approved&rdquo; written
+        by anything else fails verification. The file is never synced and never sent anywhere. With a Sync
+        vault, <code>ctxfile sync</code> enrolls the public key with the vault so the relay can check
+        signatures before it wakes an agent; the private key stays on the device.
+      </p>
+
       <h2>Telemetry, precisely</h2>
       <p>
         <strong>Off by default.</strong> If, and only if, you set <code>telemetry.enabled: true</code>, an
-        anonymous ping is sent containing: a random install UUID, the version string, and a coarse OS platform
-        name. Never code, never paths, never content, never identity. Its sole purpose is counting active
-        installs. Leave the flag unset and no ping ever happens.
+        anonymous ping is sent at most once a week containing: a random install UUID, the version string, a
+        coarse OS platform name, and, since 0.7.0, four whole numbers counted from your local store across all
+        projects on this machine:
+      </p>
+      <div className="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Count</th>
+              <th>What it counts, over the last 30 days</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>
+                <code>cross_vendor_threads_30d</code>
+              </td>
+              <td>Threads that sessions or resumes from two or more different clients touched.</td>
+            </tr>
+            <tr>
+              <td>
+                <code>handoffs_saved_30d</code>
+              </td>
+              <td>Handoff packages saved.</td>
+            </tr>
+            <tr>
+              <td>
+                <code>handoffs_resumed_cross_vendor_30d</code>
+              </td>
+              <td>Resumes of a handoff that a different client saved in the 7 days before.</td>
+            </tr>
+            <tr>
+              <td>
+                <code>resumes_with_prompt_30d</code>
+              </td>
+              <td>Resumes that returned a suggested first prompt.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        Counts only: never thread titles, task text, ids, code, paths, content, or identity. The install count
+        tells us how many people run ctxfile; the four numbers tell us how often work actually moves between AI
+        tools, which decides how much further cross-agent features are worth building. Leave the flag unset and
+        no ping ever happens.
       </p>
 
       <h2>Licensing without phoning home</h2>

@@ -105,6 +105,12 @@ session  { ..., thread_id, continues_from }   // an ingested digest`}</pre>
         surface. A handoff is presented with priority when the thread is resumed, suggested first prompt
         included.
       </p>
+      <p>
+        A handoff describes where the work stands, for whoever resumes next. To ask a specific agent to do the
+        next piece (&ldquo;have ChatGPT draft the emails&rdquo;, &ldquo;leave the refactor for Cursor&rdquo;),
+        post a <strong>task</strong> on the thread instead. The assignee finds it in its inbox, and you approve
+        it on your own device before it runs. See <Link href="/docs/tasks">Tasks &amp; handoff between agents</Link>.
+      </p>
 
       <h2>Person-to-person takeover</h2>
       <p>

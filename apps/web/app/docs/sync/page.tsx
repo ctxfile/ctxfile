@@ -59,6 +59,11 @@ export default function SyncDocs() {
         device and the approval syncs back. Handoff grants and federation never see memory.
       </p>
       <p>
+        <Link href="/docs/tasks">Tasks</Link> travel too. Grok can leave a task for ChatGPT on a thread; you
+        approve it on your own machine, and ChatGPT finds it in its inbox. Details below, under{" "}
+        <a href="#tasks">Tasks through the vault</a>.
+      </p>
+      <p>
         Remote MCP connectors are supported today by Claude (all tiers), ChatGPT (paid tiers, remote servers
         only, OAuth required), Grok (paid), Perplexity (Pro), and Mistral Le Chat. Nothing in this flow is
         speculative; it is the standard remote-connector pattern applied to context.
@@ -129,8 +134,8 @@ export default function SyncDocs() {
       <h2>Auth and tokens</h2>
       <p>
         Today, and on the local HTTP door, the relay authenticates each client with a bearer token scoped to{" "}
-        <code>read:context write:sessions</code> for one vault, revocable and visible in the append-only audit
-        view. Hosted Sync adds OAuth 2.1 with dynamic client registration on top of that scope model (ChatGPT
+        <code>read:context write:sessions</code> (plus <code>read:tasks write:tasks</code> for the task tools)
+        for one vault, revocable and visible in the append-only audit view. Hosted Sync adds OAuth 2.1 with dynamic client registration on top of that scope model (ChatGPT
         rejects anything less); that layer ships with the hosted deployment. The scopes are the same either way:
         see <Link href="/docs/mcp">MCP surface</Link>.
       </p>
@@ -148,7 +153,7 @@ export default function SyncDocs() {
   }
 }`}</pre>
       <p>
-        Same engine, same six tools, over HTTP. Loopback-only by default; binding beyond loopback requires
+        Same engine, same nine tools, over HTTP. Loopback-only by default; binding beyond loopback requires
         bearer tokens (values live in env vars, never in the config file), and each MCP session is bound to
         the token that opened it. This is the same door the relay is built from. Pricing:{" "}
         <Link href="/pricing#sync">Sync is $6/month, or $15 bundled with Pro</Link>.
@@ -177,10 +182,53 @@ export CTXFILE_VAULT_RECOVERY_CODE="ABCDE-FGHJK-..."   # the code shown at creat
 export CTXFILE_VAULT_PASSPHRASE="a new long passphrase"
 ctxfile vault recover   # unwraps with the code, re-wraps, prints a fresh code`}</pre>
       <p>
-        Standard mode serves the six tools from the vault; Strict mode makes step 3 refuse by design while
-        step 4 keeps working. Handoff grants (<code>ctxfile-relay grants issue</code>), org-to-org federation
+        Standard mode serves the ctxfile tools from the vault (the nine core tools plus <code>search</code> and{" "}
+        <code>fetch</code>); Strict mode makes step 3 refuse by design while step 4 keeps working. Handoff grants (<code>ctxfile-relay grants issue</code>), org-to-org federation
         (<code>ctxfile-relay federation issue/redeem</code>), and the append-only audit trail
         (<code>ctxfile-relay audit tail|export</code>) are documented in the relay package README.
+      </p>
+
+      <h2 id="tasks">Tasks through the vault</h2>
+      <p>
+        Tasks sync as their own encrypted record kind, like sessions and memory. Their state cannot converge by
+        last-write-wins, because two devices must never both win a claim, so every task push is a
+        compare-and-set: the device sends <code>If-Match: &quot;&lt;version&gt;&quot;</code> naming the relay
+        version it last agreed with, or <code>If-None-Match: *</code> for a new task, and the relay answers{" "}
+        <code>409</code> when its copy has moved on. The first device to push a claim wins. The losing device
+        takes the relay&apos;s version, and <code>ctxfile sync</code> reports how many task changes lost a race.
+      </p>
+      <ul>
+        <li>
+          <strong>Chat apps.</strong> On Standard vaults the relay&apos;s <code>/mcp</code> serves{" "}
+          <code>post_task</code>, <code>list_tasks</code>, and <code>update_task</code>, so ChatGPT, Claude.ai,
+          Grok, and Perplexity can post and pick up tasks. Strict vaults refuse them, since the relay holds no
+          key. Thread-scoped handoff grants do not get task tools yet (Team tier, later).
+        </li>
+        <li>
+          <strong>Approver keys.</strong> Approvals are signed on your device with its approval key.{" "}
+          <code>ctxfile sync</code> enrolls that key&apos;s public half with the vault. The private half never
+          leaves the device.
+        </li>
+        <li>
+          <strong>Push.</strong> The relay is always on, so it can wake an agent the moment a task is approved
+          for it: a Claude Code Routine or a signed webhook (n8n, Zapier, Make, Hermes, OpenClaw). It only does
+          so for a task whose approval verifies against an enrolled key, and the payload carries a summary,
+          never the task text. See <Link href="/docs/tasks#push">Push</Link>.
+        </li>
+        <li>
+          <strong>Older devices.</strong> Devices on ctxfile 0.7 or later remember blobs of a kind they do not
+          understand and stop downloading them on every sync. Older devices ignore task blobs, but download
+          them again on every sync until they upgrade.
+        </li>
+      </ul>
+
+      <h2>What the relay operator can count</h2>
+      <p>
+        The relay&apos;s append-only audit log records each MCP call with the client that made it. For{" "}
+        <code>continue_thread</code>, that includes which client resumed the thread, so the operator of the
+        hosted relay can count how often work saved in one vendor&apos;s app is picked up in another&apos;s.{" "}
+        <code>ctxfile-relay stats</code> prints those counts in aggregate across vaults. Counts only: no thread
+        titles, no content. On a relay you run yourself, you are the operator.
       </p>
 
       <h2>What never changes</h2>

@@ -39,6 +39,7 @@ const DOCS_NAV: DocGroup[] = [
       { href: "/docs/ingest", label: "Session sync" },
       { href: "/docs/memory", label: "Memory import" },
       { href: "/docs/threads", label: "Threads & handoff" },
+      { href: "/docs/tasks", label: "Tasks between agents" },
       { href: "/docs/export", label: "Cloud agents" },
       { href: "/docs/local-models", label: "Local models" },
       { href: "/docs/webchat", label: "Web chatbots" },
