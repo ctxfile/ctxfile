@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   filterTasks,
   formatTaskErrors,
+  isSideEffect,
   isTaskApproved,
   listTasksSchema,
   postTaskSchema,
@@ -191,7 +192,7 @@ export async function handlePostTask(args: unknown, backend: TaskBackend, ctx: T
     `Task ${task.task_id} posted to thread "${task.thread}" for ${task.assignee}, as a PROPOSAL.`,
     "Tell the user: it waits for their approval in the ctxfile dashboard ('ctxfile ui') or with",
     `'ctxfile tasks approve ${task.task_id}'.${ctx.proposals === "ask" ? " The assignee may also start it after asking the user in its own chat." : ""}`,
-    `Side effects (${task.capabilities.filter((c) => ["write:code", "send:message", "publish:external", "spend:money"].includes(c)).join(", ") || "none requested"}) always need the user's yes per effect.`,
+    `Side effects (${task.capabilities.filter(isSideEffect).join(", ") || "none requested"}) always need the user's yes per effect.`,
   ];
   return textResult(lines.join("\n"), { posted: true, ...taskSummaryObject(task, now) });
 }
