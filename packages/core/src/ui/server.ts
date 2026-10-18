@@ -2,6 +2,7 @@ import { createReadStream, existsSync, realpathSync, statSync } from "node:fs";
 import type { AddressInfo } from "node:net";
 import { createServer as createHttpServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import path from "node:path";
+import { loadOrCreateApprovalKey, type ApprovalKey } from "../approval-keys.js";
 import type { ResolvedConfig } from "../config.js";
 import { filterScope } from "../engine/build.js";
 import { CONTEXT_SCOPES, type ContextObject, type ContextScope } from "../engine/types.js";
@@ -10,14 +11,30 @@ import { inspectLicenseKey } from "../license-inspect.js";
 import { storeLicenseKey } from "../license-store.js";
 import { extractJsonPayload, memoryImportPrompt, memoryInputSchema, withMemoryDefaults } from "../memory.js";
 import type { ProModule, ProUiFeatures } from "../plugin.js";
+import type { IngestStore } from "../storage/ingest-store.js";
 import type { MemoryListScope, MemoryListStatus, MemoryStore } from "../storage/memory-store.js";
+import { readTasksSwitch, writeTasksSwitch } from "../storage/task-store.js";
+import {
+  isOpenState,
+  TASK_CAPABILITIES,
+  taskContentHash,
+  type HumanAction,
+  type HumanContext,
+  type TaskCapability,
+  type TaskTransition,
+} from "../tasks.js";
 import { VERSION } from "../version.js";
 import { hostAllowed, tokenMatches } from "./security.js";
+import { isWaitingOnYou, taskView, type TaskView } from "./task-view.js";
 
 export const DEFAULT_UI_PORT = 4747;
 const MAX_BODY_BYTES = 64 * 1024;
 /** A pasted memory export can hold 100 entries of up to 1,000 chars each. */
 const MAX_IMPORT_BODY_BYTES = 512 * 1024;
+/** Task ids are `t_` + 20 lowercase hex characters (newTaskId). */
+const TASK_ID = /^t_[0-9a-f]{20}$/;
+const MAX_REASON_CHARS = 1_000;
+const MAX_THREAD_CHARS = 200;
 const NO_FEATURES: ProUiFeatures = { sessions: false, memory: false, consult: false, voice: false };
 const CONTENT_TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -42,6 +59,73 @@ export interface UiServerDeps {
   homedir?: string;
   /** Free imported memory (core, not Pro); null/absent when the store is off. */
   memory?: MemoryStore | null;
+  /** Cross-agent tasks and the Phase 0 gate counters (the shared ingest
+      store); null/absent when the store is off. */
+  ingest?: UiIngestStore | null;
+  /** Clock override for tests. */
+  now?: () => number;
+}
+
+/** The slice of the ingest store the dashboard uses. */
+export type UiIngestStore = Pick<IngestStore, "tasks" | "gateCounts">;
+
+export interface TaskCountsView {
+  open: number;
+  /** Agent proposals still in the proposed state. */
+  proposals: number;
+  awaitingApproval: number;
+  /** Open tasks that need a decision from the user (effects and unapproved proposals). */
+  waiting: number;
+  finished: number;
+}
+
+export interface TaskListResponse {
+  tasks: TaskView[];
+  /** The global kill switch (`ctxfile tasks off`). */
+  off: boolean;
+  proposals: "ask" | "require_approval";
+  counts: TaskCountsView;
+  /** Titles of this project's threads (among those with tasks) frozen for tasks. */
+  frozen_threads: string[];
+}
+
+/** A request body the task routes refuse; its message is written for people. */
+class BodyError extends Error {}
+
+/** Optional human-written reason: trimmed, at most 1,000 characters. */
+function optionalReason(body: Record<string, unknown>): string | undefined {
+  const reason = body["reason"];
+  if (reason === undefined || reason === null) return undefined;
+  if (typeof reason !== "string") throw new BodyError("reason must be a string");
+  const trimmed = reason.trim();
+  if (trimmed.length > MAX_REASON_CHARS) throw new BodyError(`reason is limited to ${MAX_REASON_CHARS} characters`);
+  return trimmed === "" ? undefined : trimmed;
+}
+
+function optionalHash(body: Record<string, unknown>, field: string): string | undefined {
+  const value = body[field];
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "string" || !/^[0-9a-f]{64}$/.test(value)) throw new BodyError(`${field} must be a 64-character hex hash`);
+  return value;
+}
+
+/** Granted capabilities: absent means the model's default (requested minus
+    side effects); present must name only known capabilities. Whether each was
+    requested is the model's check, so the CLI and dashboard refuse alike. */
+function optionalGranted(body: Record<string, unknown>): TaskCapability[] | undefined {
+  const granted = body["granted"];
+  if (granted === undefined || granted === null) return undefined;
+  if (!Array.isArray(granted) || granted.length > TASK_CAPABILITIES.length * 2) {
+    throw new BodyError("granted must be an array of capabilities");
+  }
+  const out: TaskCapability[] = [];
+  for (const cap of granted) {
+    if (typeof cap !== "string" || !(TASK_CAPABILITIES as readonly string[]).includes(cap)) {
+      throw new BodyError(`unknown capability ${JSON.stringify(cap)}; use one of ${TASK_CAPABILITIES.join(", ")}`);
+    }
+    out.push(cap as TaskCapability);
+  }
+  return out;
 }
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
@@ -113,6 +197,10 @@ function proGate(
 }
 
 export function createUiServer(deps: UiServerDeps): Server {
+  const clock = deps.now ?? Date.now;
+  /** This device's approval key, loaded (or minted) on the first decision. */
+  let approvalKey: ApprovalKey | null = null;
+
   const server = createHttpServer((req, res) => {
     void handle(req, res).catch((error: unknown) => {
       console.error(`ctxfile ui: ${error instanceof Error ? error.message : String(error)}`);
@@ -206,6 +294,18 @@ export function createUiServer(deps: UiServerDeps): Server {
 
     if (url.pathname === "/api/internal/memories" || url.pathname.startsWith("/api/internal/memories/")) {
       await handleMemories(req, res, url);
+      return;
+    }
+
+    if (url.pathname === "/api/internal/tasks" || url.pathname.startsWith("/api/internal/tasks/")) {
+      await handleTasks(req, res, url);
+      return;
+    }
+
+    if (route === "GET /api/internal/handoff-stats") {
+      const store = deps.ingest ?? null;
+      if (!store) sendJson(res, 503, { error: "Handoff stats are unavailable in this run (the local store is off)." });
+      else sendJson(res, 200, store.gateCounts(clock()));
       return;
     }
 
@@ -416,6 +516,180 @@ export function createUiServer(deps: UiServerDeps): Server {
       return;
     }
     sendJson(res, 404, { error: "not found" });
+  }
+
+  // --- cross-agent tasks (free, core) ---------------------------------------
+  // The human half of the task state machine. Every decision is signed with
+  // this device's approval key, exactly like `ctxfile tasks` on a terminal.
+  // The MCP server runs in another process; both share the SQLite file, so
+  // the dashboard polls GET /tasks instead of listening for events.
+
+  function humanContext(now: number): HumanContext {
+    approvalKey ??= loadOrCreateApprovalKey(deps.config.cacheDir);
+    return { now, via: "dashboard", signer: { key_id: approvalKey.keyId, public_key: approvalKey.publicKey, sign: approvalKey.sign } };
+  }
+
+  function buildTaskList(store: UiIngestStore, all: boolean, now: number): TaskListResponse {
+    const root = deps.config.root;
+    const every = store.tasks.list(root, now);
+    const frozenByThread = new Map<string, boolean>();
+    const frozen = (thread: string): boolean => {
+      const key = thread.toLowerCase();
+      let value = frozenByThread.get(key);
+      if (value === undefined) {
+        value = store.tasks.isFrozen(root, thread);
+        frozenByThread.set(key, value);
+      }
+      return value;
+    };
+    const frozenThreads = new Map<string, string>();
+    for (const task of every) if (frozen(task.thread)) frozenThreads.set(task.thread.toLowerCase(), task.thread);
+    const open = every.filter((t) => isOpenState(t.state));
+    return {
+      tasks: every.filter((t) => all || isOpenState(t.state)).map((t) => taskView(t, now, frozen(t.thread))),
+      off: readTasksSwitch(deps.config.cacheDir).off,
+      proposals: deps.config.tasks.proposals,
+      counts: {
+        open: open.length,
+        proposals: open.filter((t) => t.state === "proposed").length,
+        awaitingApproval: open.filter((t) => t.state === "awaiting_approval").length,
+        waiting: open.filter((t) => isWaitingOnYou(t, now)).length,
+        finished: every.length - open.length,
+      },
+      frozen_threads: [...frozenThreads.values()],
+    };
+  }
+
+  function sendTransition(
+    res: ServerResponse,
+    store: UiIngestStore,
+    result: TaskTransition | { ok: false; code: "not_found"; error: string },
+    now: number
+  ): void {
+    if (result.ok) {
+      sendJson(res, 200, { task: taskView(result.task, now, store.tasks.isFrozen(deps.config.root, result.task.thread)) });
+      return;
+    }
+    const status =
+      result.code === "not_found" ? 404 : result.code === "invalid_input" ? 400 : result.code === "forbidden" ? 403 : 409;
+    sendJson(res, status, { error: result.error, code: result.code });
+  }
+
+  async function readObjectBody(req: IncomingMessage): Promise<Record<string, unknown>> {
+    let body: unknown;
+    try {
+      body = await readJsonBody(req);
+    } catch (error) {
+      throw new BodyError(error instanceof Error && error.message === "request body too large" ? error.message : "body must be JSON");
+    }
+    if (typeof body !== "object" || body === null || Array.isArray(body)) throw new BodyError("body must be a JSON object");
+    return body as Record<string, unknown>;
+  }
+
+  async function handleTasks(req: IncomingMessage, res: ServerResponse, url: URL): Promise<void> {
+    const store = deps.ingest ?? null;
+    if (!store) {
+      sendJson(res, 503, { error: "Tasks are unavailable in this run (the local store is off)." });
+      return;
+    }
+    try {
+      await routeTasks(req, res, url, store);
+    } catch (error) {
+      if (!(error instanceof BodyError)) throw error;
+      sendJson(res, 400, { error: error.message });
+    }
+  }
+
+  async function routeTasks(req: IncomingMessage, res: ServerResponse, url: URL, store: UiIngestStore): Promise<void> {
+    const root = deps.config.root;
+    const method = req.method ?? "GET";
+    const sub = url.pathname.slice("/api/internal/tasks".length);
+    const now = clock();
+
+    if (method === "GET" && sub === "") {
+      const state = url.searchParams.get("state") ?? "open";
+      if (state !== "open" && state !== "all") {
+        sendJson(res, 400, { error: 'state must be "open" or "all"' });
+        return;
+      }
+      sendJson(res, 200, buildTaskList(store, state === "all", now));
+      return;
+    }
+
+    if (method === "POST" && sub === "/switch") {
+      const body = await readObjectBody(req);
+      const off = body["off"];
+      if (typeof off !== "boolean") throw new BodyError('body must be {"off": boolean}');
+      writeTasksSwitch(deps.config.cacheDir, { off, at: new Date(now).toISOString() });
+      sendJson(res, 200, { off });
+      return;
+    }
+
+    if (method === "POST" && sub === "/freeze") {
+      const body = await readObjectBody(req);
+      const thread = typeof body["thread"] === "string" ? body["thread"].trim() : "";
+      const frozen = body["frozen"];
+      if (thread === "" || thread.length > MAX_THREAD_CHARS || typeof frozen !== "boolean") {
+        throw new BodyError('body must be {"thread": string, "frozen": boolean}');
+      }
+      const canceled = store.tasks.freezeThread(root, thread, frozen, humanContext(now));
+      if (canceled === null) {
+        sendJson(res, 404, { error: `no thread "${thread}" in this project` });
+        return;
+      }
+      sendJson(res, 200, { thread, frozen, canceled });
+      return;
+    }
+
+    const match = /^\/([^/]+)\/(approve|reject|cancel|effect)$/.exec(sub);
+    if (!match || method !== "POST") {
+      sendJson(res, 404, { error: "not found" });
+      return;
+    }
+    const id = match[1] ?? "";
+    if (!TASK_ID.test(id)) {
+      sendJson(res, 400, { error: "invalid task id" });
+      return;
+    }
+    const body = await readObjectBody(req);
+    const current = store.tasks.get(root, id, now);
+    if (!current) {
+      sendJson(res, 404, { error: `no task ${id} in this project`, code: "not_found" });
+      return;
+    }
+
+    let action: HumanAction;
+    switch (match[2]) {
+      case "approve": {
+        const granted = optionalGranted(body);
+        // Approve what the person saw: a task whose content changed since the
+        // dashboard loaded it (say, replaced by a sync) must be reviewed again.
+        const seen = optionalHash(body, "content_hash");
+        if (seen !== undefined && seen !== taskContentHash(current)) {
+          sendJson(res, 409, { error: "This task changed since you opened it. Review it again before approving.", code: "conflict" });
+          return;
+        }
+        action = granted === undefined ? { kind: "approve" } : { kind: "approve", granted };
+        break;
+      }
+      case "reject":
+        action = { kind: "reject", reason: optionalReason(body) };
+        break;
+      case "cancel":
+        action = { kind: "cancel", reason: optionalReason(body) };
+        break;
+      default: {
+        const decision = body["decision"];
+        if (decision !== "approve" && decision !== "deny") throw new BodyError('decision must be "approve" or "deny"');
+        const seen = optionalHash(body, "effect_hash");
+        if (seen !== undefined && current.pending_effect !== null && seen !== current.pending_effect.effect_hash) {
+          sendJson(res, 409, { error: "The effect this task is waiting on changed since you opened it. Review it again.", code: "conflict" });
+          return;
+        }
+        action = decision === "approve" ? { kind: "approve_effect" } : { kind: "deny_effect", reason: optionalReason(body) };
+      }
+    }
+    sendTransition(res, store, store.tasks.humanAction(root, id, action, humanContext(now)), now);
   }
 
   async function streamConsult(req: IncomingMessage, res: ServerResponse, ui: NonNullable<ProModule["ui"]>): Promise<void> {

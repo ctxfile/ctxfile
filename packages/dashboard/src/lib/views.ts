@@ -6,6 +6,7 @@ export type ViewId =
   | "git"
   | "sessions"
   | "memory"
+  | "tasks"
   | "playbooks"
   | "consult"
   | "settings";
@@ -30,6 +31,8 @@ export const VIEWS: readonly ViewDef[] = [
   { id: "git", label: "Git", description: "Branch, changes, commits, diff summary", group: "workspace", shortcut: "3" },
   // Free: imported memory lives here; the Pro encrypted store is a section inside.
   { id: "memory", label: "Memory", description: "Imported memory, plus encrypted Pro memory", group: "workspace", shortcut: "4" },
+  // Free: the human side of cross-agent tasks. Shortcut 9 so 1–8 keep their keys.
+  { id: "tasks", label: "Tasks", description: "Approve work agents leave for each other", group: "workspace", shortcut: "9" },
   { id: "sessions", label: "Sessions", description: "Agent session digests, redacted", group: "pro", shortcut: "5", pro: "sessions" },
   { id: "playbooks", label: "Playbooks", description: "Reusable prompts distilled from sessions", group: "pro", shortcut: "6", pro: "memory" },
   { id: "consult", label: "Consult", description: "Ask several providers over live context", group: "pro", shortcut: "7", pro: "consult" },

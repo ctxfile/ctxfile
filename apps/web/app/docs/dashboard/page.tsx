@@ -4,7 +4,7 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "Dashboard",
   description:
-    "The ctxfile ui local dashboard: live snapshot runs, context explorer, git, sessions, memory, playbooks, consult, settings, and how its security works.",
+    "The ctxfile ui local dashboard: live snapshot runs, context explorer, git, sessions, memory, cross-agent tasks, playbooks, consult, settings, and how its security works.",
 };
 
 export default function Dashboard() {
@@ -44,7 +44,10 @@ ctxfile ui --port 5000    # explicit port (default 4747)`}</code>
               <td>
                 Run snapshots and watch them live: each connector lights up as it starts and finishes (streamed
                 over SSE), the token meter fills against the budget, and recent snapshots chart their token
-                usage. Stats: tokens used, key files, redactions, snapshot age (flags stale).
+                usage. Stats: tokens used, key files, redactions, snapshot age (flags stale). A small &ldquo;Work
+                crossing tools (30 days)&rdquo; card counts, across your projects on this machine, threads that two or
+                more different tools worked on, handoffs saved, handoffs picked up by a different tool, and resumes
+                that came with the suggested first prompt.
               </td>
             </tr>
             <tr>
@@ -78,6 +81,22 @@ ctxfile ui --port 5000    # explicit port (default 4747)`}</code>
                 pending queue with approve and reject, and an Import sheet that copies the export prompt and takes a
                 pasted reply. Pro adds the encrypted memory entries below it, grouped by the agent that wrote them,
                 with provenance, search, and forget behind a confirmation.
+              </td>
+            </tr>
+            <tr>
+              <td>Tasks</td>
+              <td>
+                Free: the human side of <Link href="/docs/tasks">cross-agent tasks</Link> (key 9).
+                &ldquo;Waiting on you&rdquo; holds agents&apos; proposals and the side effects they want to perform;
+                &ldquo;Open&rdquo; holds approved work; &ldquo;Finished&rdquo; is collapsed. Each card shows the title,
+                who it is from, who it is for, the thread, its state, and when it expires. Approving shows the task
+                text as plain text in a fenced block labeled as written by an agent, with a checkbox per requested
+                capability (side effects start unticked; each use still asks you) and a warning when an agent-written
+                task can both read private data and send or publish. Effects show their full details (recipients and
+                body, the diff) before Approve once or Deny. Every approval and effect decision is signed with this
+                device&apos;s approval key, the same as <code>ctxfile tasks</code>. Reject and cancel ask to confirm;
+                a thread can be frozen for tasks, and one switch turns task tools off for every agent. The view
+                refreshes every 10 seconds while open.
               </td>
             </tr>
             <tr>
@@ -125,7 +144,7 @@ ctxfile ui --port 5000    # explicit port (default 4747)`}</code>
               <td>Command palette: fuzzy search, grouped by views, actions, and settings.</td>
             </tr>
             <tr>
-              <td>1 – 8</td>
+              <td>1 – 9</td>
               <td>Switch views.</td>
             </tr>
             <tr>

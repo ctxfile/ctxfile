@@ -4,6 +4,7 @@ import type {
   ContextObject,
   ContextScope,
   DashboardState,
+  HandoffStats,
   ImportedMemoryList,
   LicenseActivation,
   LicenseState,
@@ -13,6 +14,10 @@ import type {
   MemoryScope,
   PlaybookEntry,
   SnapshotJob,
+  TaskCapability,
+  TaskList,
+  TaskListState,
+  TaskView,
 } from "./types";
 
 /** Non-2xx response from the API; carries feature name on pro 403s. */
@@ -78,6 +83,18 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await res.json()) as T;
 }
 
+function postJson<T>(path: string, body: unknown): Promise<T> {
+  return request(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+}
+
+const taskPath = (id: string, action: string): string => `/api/internal/tasks/${encodeURIComponent(id)}/${action}`;
+
+/** Drops an empty or missing reason so the server applies its default. */
+function withReason(reason: string | undefined): { reason?: string } {
+  const trimmed = reason?.trim() ?? "";
+  return trimmed === "" ? {} : { reason: trimmed };
+}
+
 export const api = {
   state: (): Promise<DashboardState> => request("/api/internal/state"),
 
@@ -114,6 +131,28 @@ export const api = {
 
   rejectMemory: (id: number): Promise<{ rejected: boolean }> =>
     request(`/api/internal/memories/${id}`, { method: "DELETE" }),
+
+  tasks: (state: TaskListState): Promise<TaskList> => request(`/api/internal/tasks?state=${state}`),
+
+  /** Approves exactly the content the person saw (content_hash) and grants
+      exactly the capabilities they ticked. */
+  approveTask: (id: string, granted: TaskCapability[], contentHash: string): Promise<{ task: TaskView }> =>
+    postJson(taskPath(id, "approve"), { granted, content_hash: contentHash }),
+
+  rejectTask: (id: string, reason?: string): Promise<{ task: TaskView }> => postJson(taskPath(id, "reject"), withReason(reason)),
+
+  cancelTask: (id: string, reason?: string): Promise<{ task: TaskView }> => postJson(taskPath(id, "cancel"), withReason(reason)),
+
+  /** Decides the one effect the task is waiting on (effect_hash binds it). */
+  decideEffect: (id: string, decision: "approve" | "deny", effectHash: string, reason?: string): Promise<{ task: TaskView }> =>
+    postJson(taskPath(id, "effect"), { decision, effect_hash: effectHash, ...(decision === "deny" ? withReason(reason) : {}) }),
+
+  freezeThread: (thread: string, frozen: boolean): Promise<{ thread: string; frozen: boolean; canceled: number }> =>
+    postJson("/api/internal/tasks/freeze", { thread, frozen }),
+
+  setTasksOff: (off: boolean): Promise<{ off: boolean }> => postJson("/api/internal/tasks/switch", { off }),
+
+  handoffStats: (): Promise<HandoffStats> => request("/api/internal/handoff-stats"),
 
   license: (): Promise<LicenseState> => request("/api/internal/license"),
 

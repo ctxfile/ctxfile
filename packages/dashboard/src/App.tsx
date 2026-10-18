@@ -19,6 +19,7 @@ import { Memory } from "./views/Memory";
 import { Playbooks } from "./views/Playbooks";
 import { Consult } from "./views/Consult";
 import { Settings } from "./views/Settings";
+import { Tasks } from "./views/Tasks";
 
 type Theme = "dark" | "light";
 
@@ -39,7 +40,7 @@ function isTypingTarget(target: EventTarget | null): boolean {
 const SHORTCUTS: { keys: string[]; label: string }[] = [
   { keys: ["⌘", "K"], label: "Command palette" },
   { keys: ["R"], label: "Run a snapshot" },
-  { keys: ["1", "…", "8"], label: "Switch views" },
+  { keys: ["1", "…", "9"], label: "Switch views" },
   { keys: ["/"], label: "Focus the filter in the current view" },
   { keys: ["["], label: "Collapse or expand the sidebar" },
   { keys: ["?"], label: "This help" },
@@ -151,7 +152,7 @@ function Shell({ demo }: { demo: boolean }) {
       } else if (key === "[") {
         event.preventDefault();
         toggleCollapsed();
-      } else if (/^[1-8]$/.test(key)) {
+      } else if (/^[1-9]$/.test(key)) {
         const target = VIEWS.find((v) => v.shortcut === key);
         if (target !== undefined) {
           event.preventDefault();
@@ -267,6 +268,7 @@ function Shell({ demo }: { demo: boolean }) {
             {view === "git" && <GitPanel onServerGone={reportServerGone} refreshKey={run.completedRuns} />}
             {view === "sessions" && <Sessions features={features} onServerGone={reportServerGone} />}
             {view === "memory" && <Memory features={features} onServerGone={reportServerGone} />}
+            {view === "tasks" && <Tasks onServerGone={reportServerGone} />}
             {view === "playbooks" && <Playbooks features={features} onServerGone={reportServerGone} />}
             {view === "consult" && (
               <Consult features={features} providers={state?.config.consult.providers ?? []} onServerGone={reportServerGone} />
