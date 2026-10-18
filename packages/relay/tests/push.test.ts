@@ -138,6 +138,9 @@ describe("push end to end: approve at the desk, the agent's webhook fires", () =
       loadRelayConfig({ dataDir: dirs[0], port: 0, orgId: "org-push", pushAllowHttp: true, pushAllowPrivate: true }, {})
     );
     hub = { ctx, running: await startRelay(ctx) };
+    // Tests drive delivery with explicit tick() calls; the background timer
+    // would race them.
+    ctx.push.stop();
     hook = await receiver();
     desk = new IngestStore(path.join(dirs[1] as string, "ingest.db"));
     vault = (
