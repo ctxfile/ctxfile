@@ -4,7 +4,7 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "CLI reference",
   description:
-    "Every ctxfile command, flag, and environment variable: server, serve, ui, export, hooks, ingest, memory, threads, activate.",
+    "Every ctxfile command, flag, and environment variable: server, serve, ui, export, hooks, ingest, memory, threads, tasks, activate.",
 };
 
 export default function Cli() {
@@ -74,10 +74,11 @@ ctxfile resume            # re-enable`}</code>
         </table>
       </div>
       <p>
-        The HTTP door: the same six core tools over Streamable HTTP, one MCP session per client, each session
+        The HTTP door: the same nine core tools over Streamable HTTP, one MCP session per client, each session
         bound to the bearer token that opened it. Tokens are named env vars with{" "}
-        <code>read:context</code>/<code>write:sessions</code> scopes; without tokens the server is
-        loopback-only and DNS-rebinding-protected. Pro tools stay on stdio. See{" "}
+        <code>read:context</code>, <code>write:sessions</code>, <code>read:tasks</code>, and{" "}
+        <code>write:tasks</code> scopes; without tokens the server is loopback-only and
+        DNS-rebinding-protected. Pro tools stay on stdio. See{" "}
         <Link href="/docs/sync">Sync &amp; roaming</Link> for the config shape and where this door leads.
       </p>
 
@@ -207,6 +208,41 @@ ctxfile memory export [--format md|json] [--scope global|project|all]`}</code>
         The durable work identities sessions attach to, most recently active first. Threads are created by
         saving a session with a thread name; there is deliberately no create/delete ceremony here. See{" "}
         <Link href="/docs/threads">Threads &amp; handoff</Link>.
+      </p>
+
+      <h2>ctxfile tasks</h2>
+      <pre>
+        <code>{`ctxfile tasks [--all] [--thread <title>]   # open tasks for this project (--all adds finished ones)
+ctxfile tasks show <id>                    # one task in full, as the assignee sees it, plus history
+ctxfile tasks post --thread <t> --title <t> --to <client|any> [--cap <c>]... [--days <n>]
+                   [--text <t> | --file <path>]   # task text from a flag, a file, or stdin
+ctxfile tasks approve <id> [--grant <cap,cap>]
+ctxfile tasks reject <id> [--reason <r>]
+ctxfile tasks cancel <id> [--reason <r>]
+ctxfile tasks approve-effect <id>          # the exact side effect the task is waiting on, once
+ctxfile tasks deny-effect <id> [--reason <r>]
+ctxfile tasks freeze <thread> [--off]      # cancel open tasks and block new ones; --off lifts it
+ctxfile tasks off | on                     # every task tool on this machine refuses, or works again
+ctxfile tasks status                       # on or off, proposal mode, and counts
+ctxfile tasks target add --kind webhook --url <https-url> [--to <client|any>] [--name <n>]
+ctxfile tasks target add --kind claude-code-routine --url <routine fire URL> --token-env <VAR>
+                         [--to claude-code]
+ctxfile tasks target list | rm <id> | test <id>`}</code>
+      </pre>
+      <p>
+        The human side of <Link href="/docs/tasks">cross-agent tasks</Link>. Anything that widens what agents
+        may do (<code>approve</code>, <code>approve-effect</code>, <code>post</code>, <code>on</code>,{" "}
+        <code>freeze --off</code>) prints what you are agreeing to and asks for a yes on an interactive
+        terminal. A script or an agent&apos;s shell tool is not one, so the command refuses there and points to
+        the dashboard. Approvals are signed with this device&apos;s approval key. <code>approve</code> grants
+        the task&apos;s non-side-effect capabilities unless <code>--grant</code> narrows them; side effects
+        always ask per effect. A task you post yourself starts approved.
+      </p>
+      <p>
+        <code>target</code> registers push targets on your vault&apos;s relay (Sync): a webhook prints its{" "}
+        <code>whsec_</code> signing secret once; a Claude Code Routine target reads the routine&apos;s token
+        from the named environment variable, never from the command line. See{" "}
+        <Link href="/docs/tasks#push">Push</Link>.
       </p>
 
       <h2>ctxfile activate</h2>

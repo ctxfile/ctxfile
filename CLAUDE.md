@@ -6,7 +6,7 @@ Guidance for AI coding agents and contributors working in this repository.
 
 **ctxfile** — a local-first MCP server (stdio + Streamable HTTP, MCP spec 2025-11-25, SDK v1.x) that snapshots a project's working state into a structured `ContextObject`, with cross-provider threads and an end-to-end encrypted Sync vault. This is the open-source repo:
 
-- `packages/core` — `ctxfile` (Apache-2.0, published to npm). MCP server (stdio + `ctxfile serve`), snapshot engine, file/git/Notion/Ollama connectors, SQLite cache, redaction, ingest/threads/handoff schema, Sync crypto + client, the Behavior Layer (`ctxfile init`), local dashboard (`ctxfile ui`), opt-in telemetry.
+- `packages/core` — `ctxfile` (Apache-2.0, published to npm). MCP server (stdio + `ctxfile serve`), snapshot engine, file/git/Notion/Ollama connectors, SQLite cache, redaction, ingest/threads/handoff schema, cross-agent tasks (`post_task`/`list_tasks`/`update_task`, signed device approvals), Sync crypto + client, the Behavior Layer (`ctxfile init`), local dashboard (`ctxfile ui`), opt-in telemetry.
 - `packages/relay` — `@ctxfile/relay` (Apache-2.0, self-hostable). Sync relay + Team/Enterprise hub: encrypted vaults, bearer-token auth, Standard-mode `/mcp`, thread-scoped handoff grants, Ed25519 org federation, append-only audit, Docker + Fly.
 - `packages/dashboard` + `packages/ui-kit` — the local instrument UI served by `ctxfile ui`.
 - `apps/web` — the ctxfile.dev marketing site and docs (Next.js).
@@ -32,6 +32,7 @@ See `CONTRIBUTING.md` for the contributor workflow.
 - `npm run mcpb:pack` — builds `ctxfile.mcpb` from `packages/core` (copies dist + ui-dist + behaviors; asserts them present)
 - `npm run behaviors:render` — regenerate the per-harness behavior files from `behaviors/canonical.md`
 - Local run: `node packages/core/dist/cli.js --root <dir>` (stdio); `ctxfile ui` (dashboard)
+- Tasks: `ctxfile tasks [show|post|approve|reject|cancel|approve-effect|deny-effect|freeze|off|on|status]` (approvals, posting, `on`, and `freeze --off` need an interactive terminal; agents never run them)
 - Sync vault: `ctxfile vault create|join|recover|status`, `ctxfile sync` (passphrase via `CTXFILE_VAULT_PASSPHRASE`, recovery code via `CTXFILE_VAULT_RECOVERY_CODE`; never on argv)
 - Relay/hub: `node packages/relay/dist/cli.js start` (or `ctxfile-relay ...`); config via `CTXFILE_RELAY_*` env
 - Inspect: `npx @modelcontextprotocol/inspector node packages/core/dist/cli.js`

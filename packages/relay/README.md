@@ -7,8 +7,10 @@ The relay is open source on purpose: it is the component that momentarily holds 
 ## What it does
 
 - **Stores ciphertext.** Devices encrypt every record client-side (XChaCha20-Poly1305, keys derived via Argon2id) and sync blobs up under opaque ids. The datastore never contains plaintext, and blob names leak nothing.
-- **Serves the six ctxfile tools over Streamable HTTP** (`get_context`, `save_session`, `continue_thread`, `list_threads`, `ingest_context`, `ingest_memory`) so any MCP-capable client surface — phone, web, chat app, another machine — can save and resume threads, and export its memory of the user into the vault (instructions and identity stay pending until approved on the user's own device; handoff grants and federation never see memory). Standard-mode vaults only: serve-time decryption happens in memory, per request, under a key wrapped by the keyring; nothing decrypted is persisted or logged.
+- **Serves eleven ctxfile tools over Streamable HTTP**: the nine core tools (`get_context`, `save_session`, `continue_thread`, `list_threads`, `ingest_context`, `ingest_memory`, `post_task`, `list_tasks`, `update_task`) plus `search` and `fetch` for ChatGPT's data path, so any MCP-capable client surface — phone, web, chat app, another machine — can save and resume threads, and export its memory of the user into the vault (instructions and identity stay pending until approved on the user's own device; handoff grants and federation never see memory). Standard-mode vaults only: serve-time decryption happens in memory, per request, under a key wrapped by the keyring; nothing decrypted is persisted or logged.
 - **Strict vaults are a wall:** the relay holds ciphertext it can never decrypt. Sync works; `/mcp` refuses; that refusal is the feature.
+- **Cross-agent tasks:** on Standard vaults, ChatGPT, Claude.ai, Grok, and Perplexity can post and pick up [tasks](https://ctxfile.dev/docs/tasks) through `/mcp`. Tasks an agent posts are proposals; the user approves on their own device, and the approval (signed with that device's Ed25519 approval key) syncs back. Strict vaults refuse task tools. Handoff grants do not get task tools yet. Task blobs are compare-and-set: a `PUT` with `If-Match: "<version>"` or `If-None-Match: *` that no longer matches the stored version gets `409`, so two devices never both win a claim.
+- **Push:** the relay wakes an agent the moment a task is approved for it. Targets are registered from a device (`ctxfile tasks target add --kind webhook|claude-code-routine ...`). Events `task.assigned` and `task.effect_decided`; the payload carries a summary (task id, thread, title, assignee, poster), never the task text. Webhooks are signed per [Standard Webhooks](https://www.standardwebhooks.com) (`webhook-id`, `webhook-timestamp`, `webhook-signature: v1,<base64 HMAC-SHA256>`), retried after 1 min, 5 min, 30 min, 2 h, and 12 h, then marked failed. HTTPS only; private and link-local addresses are refused after DNS lookup; 5 s timeout; 64 KB response cap. Push fires only for a task whose approval signature verifies against an approval key the vault's devices enrolled (`ctxfile sync` enrolls it); a proposal never wakes anything.
 - **Handoff grants:** thread-scoped, read-only (or read+ingest), expiring, revocable bearer tokens — "take over my project while I'm out", enforced server-side.
 - **Federation (Enterprise):** org identities (Ed25519), signed org-to-org grants, invite-only trusted-peer redemption, pull-model thread exchange between two hubs. No central server in the data path.
 - **Append-only audit:** every vault event, blob push, MCP call, grant issue/redeem/denial, with actor and org attribution. `audit export` emits JSONL for your SIEM.
@@ -38,14 +40,16 @@ Fly.io: `fly deploy -c packages/relay/fly.toml` (see the file's header for secre
 | `POST /v1/vaults` | none (when registration is open) | Create a vault: salt, KDF params, passphrase/recovery key wraps; returns vault id + device token |
 | `GET /v1/vaults/me` | bearer | Vault metadata a new device needs to unlock (salt, wraps) |
 | `POST /v1/vaults/enroll-key` | bearer (write) | Standard mode only: the data key, immediately wrapped by the keyring |
-| `GET /v1/blobs`, `GET/PUT /v1/blobs/:id` | bearer (read/write) | Ciphertext sync; LWW versions enforced server-side too; 512KB cap, per-token rate limits |
+| `GET /v1/blobs`, `GET/PUT /v1/blobs/:id` | bearer (read/write) | Ciphertext sync; LWW versions enforced server-side too; compare-and-set on `PUT` with `If-Match` / `If-None-Match: *` (`409` on mismatch); 512KB cap, per-token rate limits |
 | `POST /v1/grants`, `GET /v1/grants`, `POST /v1/grants/:id/revoke` | bearer (write to issue) | Handoff grants |
 | `POST /v1/federation/grants` | bearer (write) | Org-signed federation grant for an audience org |
 | `POST /v1/federation/redeem` | signatures, not bearer | Trusted-peer redemption; every denial is audited |
 | `GET /v1/audit` | bearer | The vault's audit rows |
 | `/mcp` | bearer (vault or grant token) | Streamable HTTP MCP; one session per client, session bound to its token |
 
-Tokens are stored as SHA-256 hashes and carry scopes (`read:context`, `write:sessions`). CLI: `vaults`, `tokens list|create|revoke`, `grants issue`, `org show|trust`, `federation issue|redeem`, `audit tail|export`.
+Tokens are stored as SHA-256 hashes and carry scopes (`read:context`, `write:sessions`, `read:tasks`, `write:tasks`). CLI: `vaults`, `tokens list|create|revoke`, `grants issue`, `org show|trust`, `federation issue|redeem`, `audit tail|export`, `stats`.
+
+`stats` is for the operator: it prints aggregate cross-vendor resume counts from the audit log (how often a thread saved by one client is resumed by another). The audit rows behind it record which client resumed a thread, never titles or content.
 
 ## Security model, in one paragraph
 

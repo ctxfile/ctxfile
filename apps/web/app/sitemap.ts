@@ -16,6 +16,7 @@ const ROUTES: { path: string; priority: number }[] = [
   { path: "/docs/playbooks", priority: 0.8 },
   { path: "/docs/memory", priority: 0.8 },
   { path: "/docs/threads", priority: 0.7 },
+  { path: "/docs/tasks", priority: 0.7 },
   { path: "/docs/sync", priority: 0.7 },
   { path: "/docs/cli", priority: 0.6 },
   { path: "/docs/mcp", priority: 0.6 },

@@ -62,6 +62,16 @@ export default function Configuration() {
     "profile": "repo-safe",
     "include": ["plan", "gitState", "keyFiles"]
   },
+  "tasks": {
+    "proposals": "ask",
+    "defaultTtlDays": 7
+  },
+  "serve": {
+    "port": 4949,
+    "tokens": [
+      { "name": "tablet", "tokenEnv": "CTXFILE_TABLET_TOKEN", "scopes": ["read:context", "read:tasks"] }
+    ]
+  },
   "telemetry": { "enabled": false }
 }`}</code>
       </pre>
@@ -179,12 +189,39 @@ export default function Configuration() {
               </td>
             </tr>
             <tr>
+              <td>tasks.proposals</td>
+              <td>&quot;ask&quot;</td>
+              <td>
+                How agent-posted tasks are gated. <code>ask</code>: the assignee may start a proposal after asking
+                you in its own chat. <code>require_approval</code>: proposals wait until you approve them in the
+                dashboard or the CLI. Side effects always need your yes per effect, and push never fires for a
+                proposal, in either mode. See <Link href="/docs/tasks">Tasks</Link>.
+              </td>
+            </tr>
+            <tr>
+              <td>tasks.defaultTtlDays</td>
+              <td>7</td>
+              <td>
+                Days a task stays open when the poster does not set <code>expires_in_days</code>. 1 to 30.
+              </td>
+            </tr>
+            <tr>
+              <td>serve.port / serve.host</td>
+              <td>4949 / 127.0.0.1</td>
+              <td>
+                Where <code>ctxfile serve</code> (Pro) listens. Binding beyond loopback requires{" "}
+                <code>serve.tokens</code>.
+              </td>
+            </tr>
+            <tr>
               <td>serve.tokens</td>
               <td>[]</td>
               <td>
-                Reserved for the upcoming <code>ctxfile serve</code>: named tokens (<code>name</code>,{" "}
-                <code>tokenEnv</code>, <code>scopes</code>). Validated today, used by nothing yet; tokens are
-                env-var <em>names</em>, never literal secrets.
+                Named bearer tokens for <code>ctxfile serve</code>: <code>name</code>, <code>tokenEnv</code> (the
+                env var holding the value, never the value itself), and optional <code>scopes</code> from{" "}
+                <code>read:context</code>, <code>write:sessions</code>, <code>read:tasks</code>,{" "}
+                <code>write:tasks</code>. A token without <code>scopes</code> gets all four. A token with a list
+                gets exactly that list, and upgrades never add to it. See <Link href="/docs/mcp">MCP surface</Link>.
               </td>
             </tr>
           </tbody>
@@ -229,6 +266,7 @@ ctxfile --config <path>    # explicit config file
 ctxfile ui                 # local dashboard on 127.0.0.1
 ctxfile export             # write .ctxfile/context.{json,md}
 ctxfile hooks install      # pre-commit export refresh
+ctxfile tasks              # tasks other agents left, waiting for you
 ctxfile activate <key>     # activate a Pro license
 ctxfile --version`}</code>
       </pre>

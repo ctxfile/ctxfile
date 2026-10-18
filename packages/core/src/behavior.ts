@@ -30,7 +30,7 @@ export type BehaviorHarness = (typeof BEHAVIOR_HARNESSES)[number];
 function skillFile(body: string): string {
   return `---
 name: ctxfile
-description: Automatic context checkpointing via the ctxfile MCP tools. Use throughout every session - at session start (load context), when tasks complete or decisions are made (checkpoint), and when the user hands work off or says goodbye.
+description: Automatic context checkpointing and cross-agent tasks via the ctxfile MCP tools. Use throughout every session - at session start (load context and check for tasks other agents left you), when work completes or decisions are made (checkpoint), when the user hands work off or asks another tool to pick something up, and when they say goodbye.
 ---
 
 ${body}

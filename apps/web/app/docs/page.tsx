@@ -84,6 +84,13 @@ export default function Quickstart() {
               </td>
             </tr>
             <tr>
+              <td>post_task · list_tasks · update_task</td>
+              <td>
+                Agents leave work for each other on a thread; you approve on your own device. See{" "}
+                <Link href="/docs/tasks">Tasks</Link>.
+              </td>
+            </tr>
+            <tr>
               <td>context://current</td>
               <td>Resource returning the full ContextObject as JSON.</td>
             </tr>
