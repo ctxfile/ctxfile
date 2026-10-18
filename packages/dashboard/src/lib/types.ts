@@ -252,3 +252,119 @@ export interface ApiIssue {
   path: string;
   message: string;
 }
+
+/* ---------- cross-agent tasks (free, core) ---------- */
+
+export type TaskState =
+  | "proposed"
+  | "pending"
+  | "claimed"
+  | "awaiting_approval"
+  | "completed"
+  | "failed"
+  | "rejected"
+  | "canceled";
+
+export type TaskCapability =
+  | "read:thread"
+  | "read:files"
+  | "draft:content"
+  | "write:code"
+  | "send:message"
+  | "publish:external"
+  | "spend:money";
+
+/** Mirrors SIDE_EFFECT_CAPABILITIES in core: each use asks per effect. */
+export const SIDE_EFFECT_CAPABILITIES: readonly TaskCapability[] = ["write:code", "send:message", "publish:external", "spend:money"];
+
+export interface TaskArtifact {
+  ref: string;
+  role: string;
+}
+
+export interface TaskApprovalView {
+  by: "dashboard" | "cli";
+  at: string;
+  granted: TaskCapability[];
+  expires_at: string;
+  signed: boolean;
+  key_id: string | null;
+  /** Still matches the task's content and has not expired. */
+  current: boolean;
+}
+
+export interface TaskEffectView {
+  capability: TaskCapability;
+  summary: string;
+  details: string;
+  requested_at: string;
+  effect_hash: string;
+}
+
+export interface TaskDecisionView {
+  capability: TaskCapability;
+  summary: string;
+  decision: "approved" | "denied";
+  by: "dashboard" | "cli";
+  at: string;
+}
+
+/** One task as GET /api/internal/tasks serves it (see core ui/task-view.ts).
+    Every string an agent wrote is data: render it as plain text only. */
+export interface TaskView {
+  task_id: string;
+  thread: string;
+  title: string;
+  instructions: string;
+  input_artifacts: TaskArtifact[];
+  assignee: string;
+  capabilities: TaskCapability[];
+  side_effects: TaskCapability[];
+  state: TaskState;
+  a2a_state: string;
+  open: boolean;
+  origin: "agent" | "human";
+  from: string;
+  posted_by: { kind: "agent" | "human"; harness: string | null; door: string; client: string | null; token: string | null };
+  provenance: string;
+  approved: boolean;
+  waiting_on_you: boolean;
+  trifecta: boolean;
+  content_hash: string;
+  approval: TaskApprovalView | null;
+  pending_effect: TaskEffectView | null;
+  effect_decisions: TaskDecisionView[];
+  lease: { harness: string; expires_at: string } | null;
+  result: { summary: string; artifacts: TaskArtifact[]; at: string } | null;
+  reason: string | null;
+  thread_frozen: boolean;
+  expires_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TaskCounts {
+  open: number;
+  proposals: number;
+  awaitingApproval: number;
+  waiting: number;
+  finished: number;
+}
+
+export interface TaskList {
+  tasks: TaskView[];
+  off: boolean;
+  proposals: "ask" | "require_approval";
+  counts: TaskCounts;
+  frozen_threads: string[];
+}
+
+export type TaskListState = "open" | "all";
+
+/** Phase 0 gate metrics: is work actually crossing tools? */
+export interface HandoffStats {
+  cross_vendor_threads_30d: number;
+  handoffs_saved_30d: number;
+  handoffs_resumed_cross_vendor_30d: number;
+  resumes_with_prompt_30d: number;
+}

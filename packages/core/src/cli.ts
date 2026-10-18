@@ -251,6 +251,8 @@ async function runUi(args: CliArgs): Promise<void> {
     token,
     staticDir: existsSync(staticDir) ? staticDir : undefined,
     memory: runtime.ingest?.memory ?? null,
+    // Tasks and gate metrics: the same SQLite file the MCP server writes.
+    ingest: runtime.ingest ?? null,
   });
   const port = await listenOnAvailablePort(server, args.port ?? DEFAULT_UI_PORT);
   // Token travels in the URL FRAGMENT: fragments never appear in logs or Referer headers.

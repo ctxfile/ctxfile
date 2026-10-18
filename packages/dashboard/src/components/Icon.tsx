@@ -10,6 +10,7 @@ export type IconName =
   | "git"
   | "sessions"
   | "memory"
+  | "tasks"
   | "playbooks"
   | "consult"
   | "settings"
@@ -65,6 +66,7 @@ const PATHS: Record<IconName, string> = {
   git: "M6 3v12M6 15a3 3 0 1 0 0 6 3 3 0 1 0 0-6zM18 3a3 3 0 1 0 0 6 3 3 0 1 0 0-6zM18 9c0 4-3 4-6 5.5S6 15 6 15",
   sessions: "M12 3a9 9 0 1 0 0 18 9 9 0 1 0 0-18zM12 7v5l3 2",
   memory: "M4 6h16v4H4zM4 14h16v4H4zM8 8h.01M8 16h.01",
+  tasks: "M11 6h9M11 12h9M11 18h9M4 6l1.5 1.5L8 5M4 12l1.5 1.5L8 11M4 18l1.5 1.5L8 17",
   playbooks: "M6 4l13 8-13 8z",
   consult: "M4 6h10a3 3 0 0 1 3 3v2a3 3 0 0 1-3 3H9l-4 3v-3a3 3 0 0 1-1-2V9a3 3 0 0 1 0-3zM17 10h1a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2v3l-3-3",
   settings:

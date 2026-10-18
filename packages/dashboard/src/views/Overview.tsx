@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { api } from "../lib/api";
 import { formatAge, formatCompact, formatDuration, percent, splitPath } from "../lib/format";
 import { useNow, type LiveConnector, type LiveRun } from "../lib/hooks";
-import type { DashboardState, KeyFile } from "../lib/types";
+import type { DashboardState, HandoffStats, KeyFile } from "../lib/types";
 import { ConnectorRow } from "../components/ConnectorRow";
 import { EmptyState } from "../components/EmptyState";
 import { Icon } from "../components/Icon";
@@ -101,7 +101,7 @@ export function Overview({ state, run, onRunSnapshot, onOpenContext }: OverviewP
         <section className="grid-3">
           <Hint icon="context" title="Context, browsable" body="Every key file, the plan, and git state as one inspectable object." />
           <Hint icon="shield" title="Redacted before storage" body="Secrets and denied paths never reach the snapshot." />
-          <Hint icon="command" title="Keyboard first" body="Press ⌘K for the palette, R to snapshot, 1–8 to switch views." />
+          <Hint icon="command" title="Keyboard first" body="Press ⌘K for the palette, R to snapshot, 1–9 to switch views." />
         </section>
       </div>
     );
@@ -275,7 +275,56 @@ export function Overview({ state, run, onRunSnapshot, onOpenContext }: OverviewP
           )}
         </div>
       </section>
+
+      <CrossingTools />
     </div>
+  );
+}
+
+/** Phase 0 gate metrics, kept small: is work actually moving between tools?
+    Hidden when the local store is off (the route answers 503). */
+export function CrossingTools() {
+  const [stats, setStats] = useState<HandoffStats | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .handoffStats()
+      .then((next) => {
+        if (!cancelled) setStats(next);
+      })
+      .catch(() => {
+        // Store off or server gone: the card stays out of the way.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  if (stats === null) return null;
+  return (
+    <section className="panel crossing-panel" aria-label="Work crossing tools (30 days)">
+      <div className="panel-title">
+        Work crossing tools (30 days)
+        <span className="panel-title-meta">all projects · counted on this machine</span>
+      </div>
+      <div className="crossing-facts">
+        <Fact
+          label="Cross-vendor threads"
+          value={stats.cross_vendor_threads_30d.toLocaleString()}
+          hint="Threads that two or more different tools worked on"
+        />
+        <Fact label="Handoffs saved" value={stats.handoffs_saved_30d.toLocaleString()} hint="Handoff packages saved at the end of a session" />
+        <Fact
+          label="Picked up by another tool"
+          value={stats.handoffs_resumed_cross_vendor_30d.toLocaleString()}
+          hint="Handoffs resumed by a different tool within 7 days of being saved"
+        />
+        <Fact
+          label="Resumes with first prompt"
+          value={stats.resumes_with_prompt_30d.toLocaleString()}
+          hint="Resumes that came with the suggested first prompt"
+        />
+      </div>
+    </section>
   );
 }
 
