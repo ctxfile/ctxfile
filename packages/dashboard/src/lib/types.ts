@@ -361,6 +361,21 @@ export interface TaskList {
 
 export type TaskListState = "open" | "all";
 
+/** One MCP client that connected to this project (recorded on this machine only). */
+export interface ConnectedClient {
+  harness: string;
+  client_name: string;
+  client_version: string | null;
+  surface: "stdio" | "http";
+  first_seen: number;
+  last_seen: number;
+  connections: number;
+}
+
+export interface ConnectedClients {
+  clients: ConnectedClient[];
+}
+
 /** Phase 0 gate metrics: is work actually crossing tools? */
 export interface HandoffStats {
   cross_vendor_threads_30d: number;

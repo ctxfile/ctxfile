@@ -4,6 +4,7 @@ import type {
   ContextObject,
   ContextScope,
   DashboardState,
+  ConnectedClients,
   HandoffStats,
   ImportedMemoryList,
   LicenseActivation,
@@ -153,6 +154,7 @@ export const api = {
   setTasksOff: (off: boolean): Promise<{ off: boolean }> => postJson("/api/internal/tasks/switch", { off }),
 
   handoffStats: (): Promise<HandoffStats> => request("/api/internal/handoff-stats"),
+  connectedClients: (): Promise<ConnectedClients> => request("/api/internal/clients"),
 
   license: (): Promise<LicenseState> => request("/api/internal/license"),
 

@@ -11,6 +11,7 @@ import type {
   ContextObject,
   ContextScope,
   DashboardState,
+  ConnectedClients,
   HandoffStats,
   ImportedMemory,
   LicenseState,
@@ -711,6 +712,14 @@ let demoTasks: TaskView[] = [
   }),
 ];
 
+const CONNECTED_CLIENTS: ConnectedClients = {
+  clients: [
+    { harness: "claude-code", client_name: "claude-code", client_version: "2.1.4", surface: "stdio", first_seen: Date.now() - 9 * DAY, last_seen: Date.now() - 4 * MIN, connections: 41 },
+    { harness: "cursor", client_name: "cursor-vscode", client_version: "1.7.2", surface: "stdio", first_seen: Date.now() - 6 * DAY, last_seen: Date.now() - 2 * HOUR, connections: 18 },
+    { harness: "codex", client_name: "codex-mcp-client", client_version: "0.46.0", surface: "stdio", first_seen: Date.now() - 3 * DAY, last_seen: Date.now() - 1 * DAY, connections: 5 },
+  ],
+};
+
 const HANDOFF_STATS: HandoffStats = {
   cross_vendor_threads_30d: 3,
   handoffs_saved_30d: 7,
@@ -756,6 +765,7 @@ function bodyOf(init?: RequestInit): Record<string, unknown> {
 
 function tasksRoute(path: string, method: string, parsed: URL, init?: RequestInit): Response | null {
   if (path === "/api/internal/handoff-stats" && method === "GET") return json(HANDOFF_STATS);
+  if (path === "/api/internal/clients" && method === "GET") return json(CONNECTED_CLIENTS);
   if (path === "/api/internal/tasks" && method === "GET") return json(taskList(parsed.searchParams.get("state") === "all"));
   if (path === "/api/internal/tasks/switch" && method === "POST") {
     tasksOff = bodyOf(init)["off"] === true;

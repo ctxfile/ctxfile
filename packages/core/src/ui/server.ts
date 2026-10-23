@@ -68,7 +68,7 @@ export interface UiServerDeps {
 }
 
 /** The slice of the ingest store the dashboard uses. */
-export type UiIngestStore = Pick<IngestStore, "tasks" | "gateCounts" | "trustedApproverKeyIds">;
+export type UiIngestStore = Pick<IngestStore, "tasks" | "gateCounts" | "trustedApproverKeyIds" | "listClients">;
 
 export interface TaskCountsView {
   open: number;
@@ -307,6 +307,13 @@ export function createUiServer(deps: UiServerDeps): Server {
       const store = deps.ingest ?? null;
       if (!store) sendJson(res, 503, { error: "Handoff stats are unavailable in this run (the local store is off)." });
       else sendJson(res, 200, store.gateCounts(clock()));
+      return;
+    }
+
+    if (route === "GET /api/internal/clients") {
+      const store = deps.ingest ?? null;
+      if (!store) sendJson(res, 503, { error: "The connected-agents list is unavailable in this run (the local store is off)." });
+      else sendJson(res, 200, { clients: store.listClients(deps.config.root) });
       return;
     }
 

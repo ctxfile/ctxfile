@@ -109,6 +109,7 @@ describe("api client", () => {
     await api.freezeThread("Q4 leads", true);
     await api.setTasksOff(true);
     await api.handoffStats();
+    await api.connectedClients();
     const calls = (fetchMock.mock.calls as [string, RequestInit][]).map(([url, init]) => ({
       call: `${init.method ?? "GET"} ${url}`,
       body: typeof init.body === "string" ? (JSON.parse(init.body) as unknown) : undefined,
@@ -127,6 +128,7 @@ describe("api client", () => {
       ["POST /api/internal/tasks/freeze", { thread: "Q4 leads", frozen: true }],
       ["POST /api/internal/tasks/switch", { off: true }],
       ["GET /api/internal/handoff-stats", undefined],
+      ["GET /api/internal/clients", undefined],
     ]);
     expect(calls.filter((c) => c.call.startsWith("POST")).every((c) => c.json)).toBe(true);
     expect(calls.every((c) => c.auth === "Bearer test-token")).toBe(true);

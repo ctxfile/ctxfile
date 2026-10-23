@@ -53,6 +53,23 @@ describe("task tools over MCP (Grok posts, ChatGPT picks it up)", () => {
     expect(grok.getInstructions()).toContain("list_tasks");
   });
 
+  it("remembers which clients connected, for the dashboard's connected-agents list", async () => {
+    await connect("cursor-vscode");
+    await connect("cursor-vscode");
+    await connect("claude-code");
+    // The initialized notification is delivered asynchronously.
+    await new Promise((r) => setTimeout(r, 20));
+    const seen = store.listClients(config.root);
+    const cursor = seen.find((c) => c.client_name === "cursor-vscode");
+    expect(cursor).toMatchObject({ harness: "cursor", surface: "stdio", client_version: "1.0.0" });
+    expect(cursor!.connections).toBeGreaterThanOrEqual(2);
+    expect(seen.find((c) => c.client_name === "claude-code")?.harness).toBe("claude-code");
+    store.recordClient(config.root, { harness: "x", clientName: "evil\u202e\u0000name".repeat(30), clientVersion: "1", surface: "stdio" });
+    const evil = store.listClients(config.root).find((c) => c.harness === "x")!;
+    expect(evil.client_name).not.toMatch(/[\u0000\u202e]/);
+    expect(evil.client_name.length).toBeLessThanOrEqual(120);
+  });
+
   it("posts an agent task as a proposal, inferring the poster from the client", async () => {
     const grok = await connect("connectors-manager");
     const result = await call(grok, "post_task", {

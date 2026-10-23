@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../lib/api";
-import { formatAge, formatCompact, formatDuration, percent, splitPath } from "../lib/format";
+import { formatAge, formatCompact, formatDuration, formatRelative, percent, splitPath } from "../lib/format";
 import { useNow, type LiveConnector, type LiveRun } from "../lib/hooks";
-import type { DashboardState, HandoffStats, KeyFile } from "../lib/types";
+import type { ConnectedClient, DashboardState, HandoffStats, KeyFile } from "../lib/types";
 import { ConnectorRow } from "../components/ConnectorRow";
 import { EmptyState } from "../components/EmptyState";
 import { Icon } from "../components/Icon";
@@ -276,8 +276,87 @@ export function Overview({ state, run, onRunSnapshot, onOpenContext }: OverviewP
         </div>
       </section>
 
+      <ConnectedAgents />
       <CrossingTools />
     </div>
+  );
+}
+
+const CLIENT_LABELS: Record<string, string> = {
+  "claude-code": "Claude Code",
+  "claude-desktop": "Claude Desktop",
+  "claude-ai": "Claude.ai",
+  cursor: "Cursor",
+  codex: "Codex",
+  "gemini-cli": "Gemini CLI",
+  gemini: "Gemini",
+  opencode: "OpenCode",
+  openclaw: "OpenClaw",
+  hermes: "Hermes",
+  chatgpt: "ChatGPT",
+  grok: "Grok",
+  perplexity: "Perplexity",
+  vscode: "VS Code",
+  windsurf: "Windsurf",
+  zed: "Zed",
+  cline: "Cline",
+  goose: "Goose",
+};
+
+export function clientLabel(harness: string): string {
+  return CLIENT_LABELS[harness] ?? (harness.startsWith("custom:") ? harness.slice("custom:".length) : harness);
+}
+
+/** Every agent that has connected to ctxfile for this project, and when it
+    last did: the proof that setup worked. Hidden when the store is off. */
+export function ConnectedAgents() {
+  const [clients, setClients] = useState<ConnectedClient[] | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .connectedClients()
+      .then((next) => {
+        if (!cancelled) setClients(next.clients);
+      })
+      .catch(() => {
+        // Store off or server gone: the card stays out of the way.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  if (clients === null) return null;
+  return (
+    <section className="panel agents-panel" aria-label="Connected agents">
+      <div className="panel-title">
+        Connected agents
+        <span className="panel-title-meta">this project · recorded on this machine</span>
+      </div>
+      {clients.length === 0 ? (
+        <EmptyState
+          compact
+          icon="command"
+          title="No agent has connected yet"
+          body="Add ctxfile to Claude Code, Cursor, Codex, VS Code, or any MCP client (ctxfile.dev/docs/clients); it shows up here the first time it connects."
+        />
+      ) : (
+        <ul className="agents-list">
+          {clients.map((client) => (
+            <li key={`${client.harness}|${client.client_name}|${client.surface}`} className="agent-row">
+              <span className="agent-name">{clientLabel(client.harness)}</span>
+              <span className="agent-client mono" title={client.client_name}>
+                {client.client_name}
+                {client.client_version ? ` ${client.client_version}` : ""}
+              </span>
+              <span className="chip">{client.surface === "http" ? "HTTP" : "local"}</span>
+              <span className="agent-seen num" title={`${client.connections.toLocaleString()} connections`}>
+                {formatRelative(client.last_seen)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 

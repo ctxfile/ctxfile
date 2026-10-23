@@ -97,6 +97,24 @@ export function createServerForRuntime(
   const clientName = (): string | null => server.server.getClientVersion()?.name ?? null;
   const clientHarness = (): string => inferHarnessFromClientName(clientName() ?? undefined);
 
+  // Remember which client connected (on this machine only), so the dashboard
+  // can show the user every agent that has ctxfile wired in, and when each
+  // last connected. A store failure never blocks the connection.
+  server.server.oninitialized = () => {
+    if (ingest === null) return;
+    try {
+      const info = server.server.getClientVersion();
+      ingest.recordClient(config.root, {
+        harness: clientHarness(),
+        clientName: info?.name ?? "unknown",
+        clientVersion: info?.version ?? null,
+        surface,
+      });
+    } catch (error) {
+      console.error(`ctxfile: could not record the client connection: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+
   /** Tasks as this device should see them: approvals only count when they
       verify against this device's key or one its vault enrolled. */
   const present = (): ((task: TaskRecord) => TaskRecord) => {

@@ -44,7 +44,10 @@ ctxfile ui --port 5000    # explicit port (default 4747)`}</code>
               <td>
                 Run snapshots and watch them live: each connector lights up as it starts and finishes (streamed
                 over SSE), the token meter fills against the budget, and recent snapshots chart their token
-                usage. Stats: tokens used, key files, redactions, snapshot age (flags stale). A small &ldquo;Work
+                usage. Stats: tokens used, key files, redactions, snapshot age (flags stale). &ldquo;Connected
+                agents&rdquo; lists every MCP client that has connected to ctxfile for this project (Claude Code,
+                Cursor, Codex, VS Code, anything) with its client id and when it last connected, so you can see
+                setup worked. A small &ldquo;Work
                 crossing tools (30 days)&rdquo; card counts, across your projects on this machine, threads that two or
                 more different tools worked on, handoffs saved, handoffs picked up by a different tool, and resumes
                 that came with the suggested first prompt.

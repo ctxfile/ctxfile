@@ -91,7 +91,7 @@ export {
   type ThreadResolution,
   type ThreadSummary,
 } from "./ingest.js";
-export { IngestStore, type GateCounts, type IngestResult } from "./storage/ingest-store.js";
+export { IngestStore, type ClientConnection, type GateCounts, type IngestResult } from "./storage/ingest-store.js";
 export {
   readTasksSwitch,
   redactPostInput,

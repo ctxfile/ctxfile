@@ -173,6 +173,7 @@ describe("ui task routes: access", () => {
       ["/api/internal/tasks/switch", { method: "POST", body: JSON.stringify({ off: true }) }],
       ["/api/internal/tasks/freeze", { method: "POST", body: JSON.stringify({ thread: "x", frozen: true }) }],
       ["/api/internal/handoff-stats", {}],
+      ["/api/internal/clients", {}],
     ];
     for (const [p, init] of checks) {
       const res = await api(p, init);
@@ -429,6 +430,18 @@ describe("ui task routes: freeze and switch", () => {
     expect(await readJson(await postJson("/api/internal/tasks/switch", { off: false }))).toEqual({ off: false });
     expect(readTasksSwitch(config.cacheDir).off).toBe(false);
     expect((await postJson("/api/internal/tasks/switch", { off: "no" })).status).toBe(400);
+  });
+});
+
+describe("ui connected clients", () => {
+  it("lists the clients that connected to this project, newest first", async () => {
+    await start();
+    store.recordClient(config.root, { harness: "cursor", clientName: "cursor-vscode", clientVersion: "1.7", surface: "stdio" }, NOW - 5_000);
+    store.recordClient(config.root, { harness: "claude-code", clientName: "claude-code", clientVersion: "2.1", surface: "stdio" }, NOW);
+    store.recordClient("/other/project", { harness: "codex", clientName: "codex", clientVersion: null, surface: "stdio" }, NOW);
+    const body = await readJson<{ clients: { harness: string }[] }>(await api("/api/internal/clients"));
+    expect(body.clients.map((c) => c.harness)).toEqual(["claude-code", "cursor"]);
+    expect((await fetch(`http://127.0.0.1:${port}/api/internal/clients`)).status).toBe(401);
   });
 });
 

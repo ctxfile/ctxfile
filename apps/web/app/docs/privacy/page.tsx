@@ -124,6 +124,14 @@ export default function Privacy() {
         signatures before it wakes an agent; the private key stays on the device.
       </p>
 
+      <h2>Which clients connected</h2>
+      <p>
+        When an MCP client connects, ctxfile notes its name and version (as the client reports them), which
+        project it connected to, whether it came in locally or over HTTP, and when. The dashboard&apos;s
+        Connected agents card reads it. It lives in the local store on this machine, is never synced, and is
+        never part of telemetry.
+      </p>
+
       <h2>Telemetry, precisely</h2>
       <p>
         <strong>Off by default.</strong> If, and only if, you set <code>telemetry.enabled: true</code>, an

@@ -31,6 +31,17 @@ const DAY_MS = 86_400_000;
 
 /** The validation-gate counters (Phase 0). Whole numbers only: they may ride
     the opt-in telemetry ping, so they never carry titles, text, or ids. */
+/** One MCP client seen connecting to a project. */
+export interface ClientConnection {
+  harness: string;
+  client_name: string;
+  client_version: string | null;
+  surface: "stdio" | "http";
+  first_seen: number;
+  last_seen: number;
+  connections: number;
+}
+
 export interface GateCounts {
   /** Threads with sessions or resumes from 2+ harnesses in the last 30 days. */
   cross_vendor_threads_30d: number;
@@ -293,6 +304,17 @@ export class IngestStore {
         at INTEGER NOT NULL
       );
       CREATE INDEX IF NOT EXISTS idx_thread_events_at ON thread_events (at);
+      CREATE TABLE IF NOT EXISTS client_connections (
+        root TEXT NOT NULL,
+        harness TEXT NOT NULL,
+        client_name TEXT NOT NULL,
+        client_version TEXT,
+        surface TEXT NOT NULL,
+        first_seen INTEGER NOT NULL,
+        last_seen INTEGER NOT NULL,
+        connections INTEGER NOT NULL DEFAULT 1,
+        PRIMARY KEY (root, harness, client_name, surface)
+      );
       CREATE TABLE IF NOT EXISTS trusted_approver_keys (
         key_id TEXT PRIMARY KEY,
         learned_at INTEGER NOT NULL
@@ -345,6 +367,45 @@ export class IngestStore {
 
   trustedApproverKeyIds(): string[] {
     return (this.db.prepare("SELECT key_id FROM trusted_approver_keys").all() as { key_id: string }[]).map((r) => r.key_id);
+  }
+
+  /** Notes that an MCP client connected to this project (local only; never
+      synced or sent). Powers the dashboard's connected-agents list. */
+  recordClient(
+    root: string,
+    client: { harness: string; clientName: string; clientVersion: string | null; surface: "stdio" | "http" },
+    now = Date.now()
+  ): void {
+    const clip = (value: string, max: number): string =>
+      value.replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff]/g, "").slice(0, max);
+    this.db
+      .prepare(
+        `INSERT INTO client_connections (root, harness, client_name, client_version, surface, first_seen, last_seen, connections)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+         ON CONFLICT (root, harness, client_name, surface) DO UPDATE SET
+           last_seen = MAX(last_seen, excluded.last_seen),
+           client_version = excluded.client_version,
+           connections = connections + 1`
+      )
+      .run(
+        root,
+        clip(client.harness, 80),
+        clip(client.clientName, 120) || "unknown",
+        client.clientVersion === null ? null : clip(client.clientVersion, 40),
+        client.surface,
+        now,
+        now
+      );
+  }
+
+  /** Clients that connected to this project, most recent first. */
+  listClients(root: string, limit = 50): ClientConnection[] {
+    return this.db
+      .prepare(
+        `SELECT harness, client_name, client_version, surface, first_seen, last_seen, connections
+         FROM client_connections WHERE root = ? ORDER BY last_seen DESC LIMIT ?`
+      )
+      .all(root, limit) as ClientConnection[];
   }
 
   /** The four gate counters, across every project in this store. */
