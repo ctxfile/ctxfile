@@ -2,6 +2,8 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { loadRelayConfig, type RelayConfigOverrides } from "./config.js";
 import { redeemFederatedGrant } from "./federation.js";
 import { createRelayContext, startRelay } from "./http.js";
+import { newMasterKey } from "./keyring.js";
+import { keyringStatus, retireKeyFile, rewrapAll } from "./keyring-admin.js";
 import { relayGateStats } from "./stats.js";
 import { DEVICE_SCOPES } from "./store.js";
 import { VERSION } from "./version.js";
@@ -10,6 +12,12 @@ const USAGE = `ctxfile-relay v${VERSION} — the ctxfile relay / self-hosted hub
 
 Usage: ctxfile-relay start [options]          Run the relay (default command)
        ctxfile-relay vaults                   List vaults on this hub
+       ctxfile-relay vaults delete --vault <id> --confirm <id>
+                                              Delete a vault and everything stored for it
+       ctxfile-relay keyring new              Print a fresh master key (for CTXFILE_RELAY_MASTER_KEY)
+       ctxfile-relay keyring status           Which key each stored wrap depends on (ids and counts)
+       ctxfile-relay keyring rewrap           Move every wrap onto the current master key
+       ctxfile-relay keyring retire-file      Delete relay-master.key once nothing depends on it
        ctxfile-relay tokens list [--vault <id>]
        ctxfile-relay tokens create --vault <id> --name <n> [--scopes s1,s2]
        ctxfile-relay tokens revoke --id <token-id>
@@ -29,8 +37,13 @@ Options (start):
   --org <id>          Org identity id (default org-local; env CTXFILE_RELAY_ORG)
   --registration <m>  open|closed (default open; env CTXFILE_RELAY_REGISTRATION)
 
-All state (SQLite, keyring master key, org identity) lives in the data dir:
-one folder to volume-mount in Docker, one folder to back up.
+All state (SQLite, org identity) lives in the data dir: one folder to
+volume-mount in Docker, one folder to back up. The master key that wraps
+Standard vaults' data keys comes from CTXFILE_RELAY_MASTER_KEY when set (keep
+it in your platform's secret store, off the volume); otherwise from
+relay-master.key in the data dir. CTXFILE_RELAY_REQUIRE_SECRET_KEY=1 refuses
+to start without the secret. Rotate: set the new key, move the old one to
+CTXFILE_RELAY_MASTER_KEY_PREVIOUS, run 'keyring rewrap'.
 `;
 
 interface Flags {
@@ -70,6 +83,11 @@ async function main(): Promise<void> {
   const command = argv[0] && !argv[0].startsWith("--") ? argv[0] : "start";
   const sub = argv[1] && !argv[1].startsWith("--") ? argv[1] : undefined;
   const flags = parseFlags(argv);
+  if (command === "keyring" && sub === "new") {
+    process.stdout.write(`${newMasterKey()}\n`);
+    console.error("ctxfile-relay: a fresh 32-byte master key, printed once; set it as CTXFILE_RELAY_MASTER_KEY in your secret store");
+    return;
+  }
   const config = loadRelayConfig(overridesFrom(flags));
   const ctx = createRelayContext(config);
 
@@ -88,6 +106,35 @@ async function main(): Promise<void> {
   }
 
   try {
+    if (command === "vaults" && sub === "delete") {
+      if (!flags.vault) throw new Error("vaults delete requires --vault <id>");
+      if (flags.confirm !== flags.vault) throw new Error("vaults delete also requires --confirm <the same vault id>; deletion cannot be undone");
+      const deleted = ctx.db.deleteVault(flags.vault, "cli");
+      console.error(
+        deleted
+          ? `ctxfile-relay: vault ${flags.vault} deleted (blobs, key wraps, tokens, grants, push targets). Platform backups or volume snapshots taken earlier still hold its ciphertext until they expire.`
+          : `ctxfile-relay: no vault ${flags.vault}`
+      );
+      return;
+    }
+    if (command === "keyring" && sub === "status") {
+      process.stdout.write(`${JSON.stringify(keyringStatus(ctx.db, ctx.keyring), null, 2)}\n`);
+      return;
+    }
+    if (command === "keyring" && sub === "rewrap") {
+      const result = rewrapAll(ctx.db, ctx.keyring);
+      console.error(
+        `ctxfile-relay: re-wrapped ${result.rewrapped} key(s) under ${ctx.keyring.primary.id} (${ctx.keyring.primary.source})` +
+          (result.unreadable > 0 ? `; ${result.unreadable} could not be opened with any loaded key` : "")
+      );
+      return;
+    }
+    if (command === "keyring" && sub === "retire-file") {
+      const result = retireKeyFile(ctx.db, ctx.keyring, config.dataDir);
+      if (!result.ok) throw new Error(result.error);
+      console.error("ctxfile-relay: relay-master.key overwritten and deleted; the master key now lives only in your secret store");
+      return;
+    }
     if (command === "vaults") {
       for (const vault of ctx.db.listVaults()) {
         process.stdout.write(`${vault.id}  "${vault.name}"  ${vault.mode}  created ${new Date(vault.created_at).toISOString()}\n`);

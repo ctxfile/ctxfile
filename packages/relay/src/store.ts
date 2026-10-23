@@ -96,6 +96,9 @@ export class RelayDb {
   constructor(dataDir: string) {
     this.db = new Database(path.join(dataDir, "relay.db"));
     this.db.pragma("journal_mode = WAL");
+    // Deleted rows are overwritten, not just unlinked, so a deleted vault's
+    // ciphertext and key wraps do not linger in free pages of the file.
+    this.db.pragma("secure_delete = ON");
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS vaults (
         id TEXT PRIMARY KEY,
@@ -172,6 +175,29 @@ export class RelayDb {
   }
 
   // --- vaults ---------------------------------------------------------------
+
+  /** Deletes a vault and everything stored for it: blobs, key wraps, tokens,
+      grants, approver keys, and push targets with their queued events. The
+      audit trail keeps its rows (ids and counts only) plus one for the
+      deletion. Returns false if there was no such vault. */
+  deleteVault(vaultId: string, actor: string): boolean {
+    const existed = this.db.transaction(() => {
+      const row = this.db.prepare("SELECT id FROM vaults WHERE id = ?").get(vaultId);
+      if (!row) return false;
+      const tables = ["blobs", "tokens", "federation_grants", "approver_keys", "push_outbox", "push_targets"];
+      for (const table of tables) {
+        const present = this.db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(table);
+        if (present) this.db.prepare(`DELETE FROM ${table} WHERE vault_id = ?`).run(vaultId);
+      }
+      this.db.prepare("DELETE FROM vaults WHERE id = ?").run(vaultId);
+      this.audit({ vaultId, actor, action: "vault.delete" });
+      return true;
+    })();
+    // Fold the write-ahead log back into the main file so the old pages do
+    // not survive there either.
+    if (existed) this.db.pragma("wal_checkpoint(TRUNCATE)");
+    return existed;
+  }
 
   createVault(input: {
     name: string;

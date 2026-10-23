@@ -1,7 +1,19 @@
 export { DEFAULT_RELAY_PORT, loadRelayConfig, type RelayConfig, type RelayConfigOverrides } from "./config.js";
 export { redeemFederatedGrant, type RedeemOptions } from "./federation.js";
 export { createRelayContext, startRelay, type RelayContext, type RunningRelay } from "./http.js";
-export { LocalKeyProvider, type KeyProvider } from "./keyring.js";
+export {
+  LocalKeyProvider,
+  loadKeyring,
+  MasterKeyring,
+  masterKeyId,
+  newMasterKey,
+  parseMasterKey,
+  type KeyProvider,
+  type KeyringSettings,
+  type MasterKey,
+  type MasterKeySource,
+} from "./keyring.js";
+export { keyringStatus, retireKeyFile, rewrapAll, type KeyringStatus } from "./keyring-admin.js";
 export { createVaultMcpServer, type GrantScope, type VaultServerOptions } from "./mcp.js";
 export {
   canonicalJson,

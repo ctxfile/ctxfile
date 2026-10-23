@@ -273,6 +273,7 @@ export {
   assertPassphraseStrength,
   createVault,
   DEFAULT_VAULT_CONFIG_PATH,
+  deleteVault,
   enrollApprovalKey,
   fetchApproverKeyIds,
   fetchVaultMeta,

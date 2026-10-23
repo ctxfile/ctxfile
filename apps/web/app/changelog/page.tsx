@@ -66,6 +66,16 @@ export default function Changelog() {
                   AI tools. Counts only; see <a href="/docs/privacy">Privacy</a>. Devices also stop
                   re-downloading sync blobs of kinds they do not understand.
                 </li>
+                <li>
+                  Relay key hardening: the master key that wraps Standard vaults&apos; data keys now comes from a
+                  platform secret (<code>CTXFILE_RELAY_MASTER_KEY</code>), so it is never on the data volume or in
+                  its snapshots; the hosted relay refuses to start without it. New{" "}
+                  <code>ctxfile-relay keyring status|rewrap|retire-file|new</code> for rotation.
+                </li>
+                <li>
+                  <code>ctxfile vault delete</code> removes a vault from the relay for every device, ciphertext
+                  and key wraps overwritten in place.
+                </li>
               </ul>
               <p>
                 <a href="/docs/tasks">Read the tasks guide</a>.

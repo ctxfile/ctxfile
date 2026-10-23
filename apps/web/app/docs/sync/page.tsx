@@ -93,7 +93,9 @@ export default function SyncDocs() {
                 Everything is encrypted on your device before upload (XChaCha20-Poly1305; keys derived from
                 your passphrase via Argon2id). Storage holds ciphertext only. For a request from an authorized
                 client, a worker decrypts in memory, answers over TLS, and discards; plaintext is never
-                persisted, never logged, and keys live in a KMS, never in the datastore.
+                persisted or logged. The vault&apos;s data key is stored only wrapped (AES-256-GCM) under the
+                relay&apos;s master key, and on the hosted relay that master key is a platform secret: it is
+                never on the data volume or in its snapshots, so a copy of the disk holds nothing it can open.
               </td>
               <td>
                 Encrypted at rest and in transit, zero plaintext persistence. <strong>Not zero-knowledge</strong>;
@@ -127,8 +129,11 @@ export default function SyncDocs() {
       </div>
       <p>
         One rule of thumb: <strong>Strict follows your hardware; Standard follows you everywhere.</strong> Key
-        recovery is passphrase plus a printed recovery code; a Strict vault cannot be reset by us, and vault
-        deletion destroys its keys (crypto-shredding).
+        recovery is passphrase plus a printed recovery code; a Strict vault cannot be reset by us.{" "}
+        <code>ctxfile vault delete</code> (on a terminal, after you type the vault&apos;s name) removes the vault
+        from the relay for every device: its ciphertext, key wraps, tokens, grants, and push targets, overwritten
+        in the database rather than just unlinked. Backups the hosting platform took earlier still hold the
+        ciphertext until they expire (days, not months), and without the vault&apos;s keys it stays unreadable.
       </p>
 
       <h2>Auth and tokens</h2>
@@ -180,7 +185,15 @@ ctxfile sync
 #    device token: run where you have vault.json, or set CTXFILE_VAULT_TOKEN)
 export CTXFILE_VAULT_RECOVERY_CODE="ABCDE-FGHJK-..."   # the code shown at create
 export CTXFILE_VAULT_PASSPHRASE="a new long passphrase"
-ctxfile vault recover   # unwraps with the code, re-wraps, prints a fresh code`}</pre>
+ctxfile vault recover   # unwraps with the code, re-wraps, prints a fresh code
+
+# 6. Done with it? Delete the vault on the relay for every device (asks you
+#    to type its name; local data on this machine stays)
+ctxfile vault delete
+
+# Self-hosting for real: keep the relay's master key out of the data folder
+export CTXFILE_RELAY_MASTER_KEY="$(ctxfile-relay keyring new)"   # store it in your secret manager
+ctxfile-relay keyring status   # which key each stored wrap depends on`}</pre>
       <p>
         Standard mode serves the ctxfile tools from the vault (the nine core tools plus <code>search</code> and{" "}
         <code>fetch</code>); Strict mode makes step 3 refuse by design while step 4 keeps working. Handoff grants (<code>ctxfile-relay grants issue</code>), org-to-org federation

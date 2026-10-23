@@ -66,8 +66,10 @@ const VIEW_CACHE_TTL_MS = 60_000;
 const VIEW_CACHE_MAX_VAULTS = 200;
 const viewCache = new Map<string, { fingerprint: string; at: number; payloads: SyncPayload[] }>();
 
-export function clearViewCache(): void {
-  viewCache.clear();
+/** Drops cached plaintext: for one vault (after it is deleted), or all. */
+export function clearViewCache(vaultId?: string): void {
+  if (vaultId === undefined) viewCache.clear();
+  else viewCache.delete(vaultId);
 }
 
 async function cachedPayloads(db: RelayDb, keyring: KeyProvider, vault: VaultRow): Promise<SyncPayload[]> {

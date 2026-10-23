@@ -3,7 +3,7 @@ import http from "node:http";
 import type { AddressInfo } from "node:net";
 import { approvalKeyId, type SyncBlobMeta, type TaskRecord } from "ctxfile";
 import type { RelayConfig } from "./config.js";
-import { LocalKeyProvider, type KeyProvider } from "./keyring.js";
+import { loadKeyring, type MasterKeyring } from "./keyring.js";
 import {
   createVaultMcpServer,
   StreamableHTTPServerTransport,
@@ -22,7 +22,7 @@ import {
 } from "./org.js";
 import { PushService, type AddTargetInput } from "./push.js";
 import { RelayDb, type TokenRow, type VaultRow } from "./store.js";
-import { loadVaultPayloads, unwrapDataKey } from "./vault-view.js";
+import { clearViewCache, loadVaultPayloads, unwrapDataKey } from "./vault-view.js";
 import { VERSION } from "./version.js";
 
 /**
@@ -49,7 +49,7 @@ const SESSION_SWEEP_MS = 5 * 60_000;
 export interface RelayContext {
   config: RelayConfig;
   db: RelayDb;
-  keyring: KeyProvider;
+  keyring: MasterKeyring;
   org: OrgIdentity;
   /** How this relay names itself in federation grants (redeemers call it back here). */
   publicUrl: string;
@@ -63,7 +63,7 @@ export interface RelayContext {
 
 export function createRelayContext(config: RelayConfig, publicUrl?: string): RelayContext {
   const db = new RelayDb(config.dataDir);
-  const keyring = new LocalKeyProvider(config.dataDir);
+  const keyring = loadKeyring(config.dataDir, config.keyring);
   const push = new PushService(db, keyring, { allowHttp: config.pushAllowHttp, allowPrivate: config.pushAllowPrivate });
   return {
     config,
@@ -212,7 +212,9 @@ export async function startRelay(ctx: RelayContext): Promise<RunningRelay> {
     const pathname = urlToken !== undefined ? "/mcp" : rawPath;
 
     if (pathname === "/healthz") {
-      json(res, 200, { ok: true, org: ctx.org.orgId, version: VERSION });
+      // key_source says where the master key lives ("secret" or "file"), so an
+      // operator can verify a deploy never fell back to a key on the volume.
+      json(res, 200, { ok: true, org: ctx.org.orgId, version: VERSION, key_source: ctx.keyring.primary.source });
       return;
     }
 
@@ -342,6 +344,23 @@ export async function startRelay(ctx: RelayContext): Promise<RunningRelay> {
       db.setWrappedDataKey(vault.id, ctx.keyring.wrap(new Uint8Array(dataKey)));
       db.audit({ vaultId: vault.id, actor: token.name, action: "vault.enroll_key", detail: { keyring: ctx.keyring.name } });
       json(res, 200, { ok: true, keyring: ctx.keyring.name });
+      return;
+    }
+
+    if (pathname === "/v1/vaults/me" && method === "DELETE") {
+      if (!canRead || !canWrite) {
+        json(res, 403, { error: "deleting a vault requires a full device token (read:context and write:sessions)" });
+        return;
+      }
+      // A second, explicit factor against a stray request: the caller must
+      // name the vault it means to destroy.
+      if (req.headers["x-ctxfile-confirm-delete"] !== vault.id) {
+        json(res, 400, { error: "set the x-ctxfile-confirm-delete header to this vault's id to confirm deletion" });
+        return;
+      }
+      const deleted = db.deleteVault(vault.id, token.name);
+      clearViewCache(vault.id);
+      json(res, 200, { ok: true, deleted });
       return;
     }
 

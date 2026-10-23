@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -31,6 +31,7 @@ import { loadOrCreateApprovalKey } from "./approval-keys.js";
 import {
   createVault,
   DEFAULT_VAULT_CONFIG_PATH,
+  deleteVault,
   enrollApprovalKey,
   fetchApproverKeyIds,
   fetchVaultMeta,
@@ -61,7 +62,7 @@ Usage: ctxfile [options]
        ctxfile memory prompt|import|list|approve|reject|export [options]
        ctxfile threads [options]
        ctxfile tasks [list|show|post|approve|reject|cancel|approve-effect|deny-effect|freeze|off|on|status] [options]
-       ctxfile vault create|join|recover|status [options]
+       ctxfile vault create|join|recover|status|delete [options]
        ctxfile sync [options]
        ctxfile activate <license-key>
 
@@ -570,7 +571,33 @@ async function runVault(argv: string[]): Promise<void> {
     }
     return;
   }
-  throw new Error('vault requires "create", "join", "recover", or "status" (see --help)');
+  if (sub === "delete") {
+    const config = loadVaultConfig();
+    if (!config) throw new Error("no vault configured on this device");
+    if (!process.stdin.isTTY || !process.stderr.isTTY) {
+      throw new Error("vault delete needs an interactive terminal: deleting a vault is for people, not scripts or agents");
+    }
+    console.error(`ctxfile: this deletes vault "${config.name}" [${config.vaultId}] on ${config.relayUrl} for EVERY device:`);
+    console.error("  all synced sessions, threads, memory and tasks, its key wraps, tokens, grants and push targets.");
+    console.error("  It cannot be undone. Data already on this machine stays here.");
+    const readline = await import("node:readline/promises");
+    const rl = readline.createInterface({ input: process.stdin, output: process.stderr });
+    let typed = "";
+    try {
+      typed = (await rl.question(`Type the vault name (${config.name}) to delete it: `)).trim();
+    } finally {
+      rl.close();
+    }
+    if (typed !== config.name) {
+      console.error("ctxfile: names did not match; nothing deleted");
+      return;
+    }
+    if (!(await deleteVault(config))) throw new Error("this relay does not support vault deletion yet (upgrade it)");
+    rmSync(DEFAULT_VAULT_CONFIG_PATH, { force: true });
+    console.error(`ctxfile: vault "${config.name}" deleted on the relay; removed ${DEFAULT_VAULT_CONFIG_PATH}`);
+    return;
+  }
+  throw new Error('vault requires "create", "join", "recover", "status", or "delete" (see --help)');
 }
 
 async function runSync(argv: string[]): Promise<void> {

@@ -297,6 +297,23 @@ export async function fetchApproverKeyIds(config: VaultConfig, fetchImpl: typeof
   return (body.keys ?? []).map((k) => k.key_id).filter((id): id is string => typeof id === "string");
 }
 
+/** Deletes the vault on its relay: every blob, key wrap, token, grant and
+    push target goes, for every device. Local data on this machine is not
+    touched. Needs a full device token. Returns false when the relay predates
+    vault deletion (404 or 405). */
+export async function deleteVault(config: VaultConfig, fetchImpl: typeof fetch = fetch): Promise<boolean> {
+  const response = await fetchImpl(`${config.relayUrl.replace(/\/+$/, "")}/v1/vaults/me`, {
+    method: "DELETE",
+    headers: { authorization: `Bearer ${config.token}`, "x-ctxfile-confirm-delete": config.vaultId },
+  });
+  if (response.status === 404 || response.status === 405) return false;
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+    throw new Error(`relay /v1/vaults/me DELETE failed: ${response.status} ${body.slice(0, 200)}`);
+  }
+  return true;
+}
+
 /** Everything wired: unlock, point the local store at the relay, sync. */
 export async function openVaultSync(
   config: VaultConfig,

@@ -136,7 +136,7 @@ ctxfile ingest list|rm <id>                # review agent-reported sessions
 ctxfile threads                            # list threads (durable, resumable work identities)
 ctxfile tasks [show|post|approve|reject|cancel|approve-effect|deny-effect|freeze|off|on|status]
                                            # cross-agent tasks: review and approve what agents left
-ctxfile vault create|join|status           # encrypted Sync vault on a relay (passphrase via env)
+ctxfile vault create|join|status|delete    # encrypted Sync vault on a relay (passphrase via env)
 ctxfile sync                               # push/pull sessions + threads through the vault
 ctxfile activate <license-key>             # store + verify a Pro license (offline)
 ctxfile --version | --help

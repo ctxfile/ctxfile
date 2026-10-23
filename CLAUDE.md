@@ -33,7 +33,7 @@ See `CONTRIBUTING.md` for the contributor workflow.
 - `npm run behaviors:render` — regenerate the per-harness behavior files from `behaviors/canonical.md`
 - Local run: `node packages/core/dist/cli.js --root <dir>` (stdio); `ctxfile ui` (dashboard)
 - Tasks: `ctxfile tasks [show|post|approve|reject|cancel|approve-effect|deny-effect|freeze|off|on|status]` (approvals, posting, `on`, and `freeze --off` need an interactive terminal; agents never run them)
-- Sync vault: `ctxfile vault create|join|recover|status`, `ctxfile sync` (passphrase via `CTXFILE_VAULT_PASSPHRASE`, recovery code via `CTXFILE_VAULT_RECOVERY_CODE`; never on argv)
+- Sync vault: `ctxfile vault create|join|recover|status|delete`, `ctxfile sync` (passphrase via `CTXFILE_VAULT_PASSPHRASE`, recovery code via `CTXFILE_VAULT_RECOVERY_CODE`; never on argv)
 - Relay/hub: `node packages/relay/dist/cli.js start` (or `ctxfile-relay ...`); config via `CTXFILE_RELAY_*` env
 - Inspect: `npx @modelcontextprotocol/inspector node packages/core/dist/cli.js`
 
@@ -45,7 +45,7 @@ Run top to bottom whenever changes are pushed; skip only steps whose area is unt
 2. **Versions move together.** Core bump = `packages/core/package.json` + `packages/core/src/version.ts` + BOTH `version` fields in `/server.json` + `packages/core/manifest.json` (the .mcpb shown in Claude Desktop; it silently lagged at 0.1.0 until 0.3.1). Relay bump = `packages/relay/package.json` + `packages/relay/src/version.ts`, and widen the relay's `ctxfile` dep when core bumped.
 3. **Publish order:** `ctxfile` (from `packages/core`) BEFORE `@ctxfile/relay` — the relay builds against the published core.
 4. **Deploy what changed:**
-   - Relay code → `flyctl deploy . --config packages/relay/fly.toml --dockerfile packages/relay/Dockerfile -a ctxfile-relay` (repo root context).
+   - Relay code → `flyctl deploy . --config packages/relay/fly.toml --dockerfile packages/relay/Dockerfile -a ctxfile-relay` (repo root context). The hosted relay refuses to start without the `CTXFILE_RELAY_MASTER_KEY` Fly secret; the one-time setup and rotation steps are in `packages/relay/fly.toml`. Never put that key in Notion, chat, or a commit.
    - Site or docs → `npm --prefix apps/web run build && npx wrangler pages deploy apps/web/out --project-name ctxfile --branch main`.
 5. **MCP Registry:** whenever the core version was published, `mcp-publisher login dns` (maintainer holds the ctxfile.dev key) then `mcp-publisher publish` from the repo root.
 6. **Verify live, never assume:** relay `/healthz` reports the new version; a changed docs URL returns 200 with the new content; `npm view` shows the new versions.

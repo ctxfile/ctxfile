@@ -4,6 +4,17 @@
 #   fly deploy . --config packages/relay/fly.toml --dockerfile packages/relay/Dockerfile
 # Prereqs (FOUNDER-ACTIONS §2.1): fly app + volume, then
 #   fly secrets set CTXFILE_RELAY_ORG=org-ctxfile
+#   fly secrets set CTXFILE_RELAY_MASTER_KEY="$(openssl rand -base64 32)" -a ctxfile-relay
+# The master key wraps every Standard vault's data key. As a Fly secret it
+# never lands on the relay_data volume or its snapshots. The relay refuses to
+# start without it (CTXFILE_RELAY_REQUIRE_SECRET_KEY below), so a forgotten
+# secret fails the health check and the deploy rolls back instead of quietly
+# minting a key file on the volume.
+# Moving off an older key file (first deploy with this setting), once:
+#   fly ssh console -a ctxfile-relay -C "node /app/packages/relay/dist/cli.js keyring rewrap"
+#   fly ssh console -a ctxfile-relay -C "node /app/packages/relay/dist/cli.js keyring retire-file"
+# Rotating later: set the new key, put the old one in
+# CTXFILE_RELAY_MASTER_KEY_PREVIOUS, run 'keyring rewrap', then drop PREVIOUS.
 # Registration is closed here in [env] AND belongs in secrets: hosted vaults are
 # provisioned by the Sync subscription flow, never open signup.
 
@@ -21,6 +32,7 @@ primary_region = "iad"
   # Belt-and-suspenders: closed by config so a forgotten secret cannot leave
   # public vault creation open on the hosted relay.
   CTXFILE_RELAY_REGISTRATION = "closed"
+  CTXFILE_RELAY_REQUIRE_SECRET_KEY = "1"
 
 [[mounts]]
   source = "relay_data"
