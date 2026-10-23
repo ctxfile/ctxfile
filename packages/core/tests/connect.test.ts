@@ -183,7 +183,8 @@ describe("ctxfile connect: launch and links", () => {
     const result = connectClient(findClient("jetbrains-ai") as ClientSpec, ctx);
     expect(result.action).toBe("printed");
     expect(result.detail).toContain('"mcpServers"');
-    expect(result.detail).toContain(root);
+    // The path appears JSON-encoded (Windows backslashes are escaped there).
+    expect(result.detail).toContain(JSON.stringify(root));
   });
 
   it("knows every client by a unique id and gives each a docs link", () => {
