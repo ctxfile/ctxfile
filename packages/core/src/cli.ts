@@ -45,6 +45,7 @@ import { storeLicenseKey } from "./license-store.js";
 import { appendVaultToConfig, detectVaultNear, paraDefaultExcludes, tildeRelative } from "./vault-detect.js";
 import { MEMORY_USAGE, runIngestImport, runMemory } from "./cli-memory.js";
 import { runTasks, TASKS_USAGE } from "./cli-tasks.js";
+import { CONNECT_USAGE, runConnect } from "./cli-connect.js";
 import { generateToken } from "./ui/security.js";
 import { createUiServer, DEFAULT_UI_PORT, listenOnAvailablePort } from "./ui/server.js";
 import { VERSION } from "./version.js";
@@ -52,6 +53,7 @@ import { VERSION } from "./version.js";
 const USAGE = `ctxfile v${VERSION} — local-first MCP context server (stdio)
 
 Usage: ctxfile [options]
+       ctxfile connect [<client>...|--all|--print <client>] [options]
        ctxfile init [--yes|--no-auto|--uninstall|--print <harness>] [options]
        ctxfile pause | resume
        ctxfile serve [options]
@@ -95,6 +97,9 @@ ingest (agent-reported sessions via ingest_context / save_session):
 
 ${MEMORY_USAGE}
 ${TASKS_USAGE}
+connect (register ctxfile in your MCP clients):
+${CONNECT_USAGE.replace(/^/gm, "  ")}
+
 init (the behavior layer: agents checkpoint automatically, announced, never silent):
   --yes             Consent to auto-capture and install the skill for detected harnesses
   --no-auto         Record that auto-capture stays OFF (skills not installed)
@@ -812,6 +817,10 @@ async function main(): Promise<void> {
   }
   if (argv[0] === "threads") {
     runThreads(argv.slice(1));
+    return;
+  }
+  if (argv[0] === "connect") {
+    await runConnect(argv.slice(1));
     return;
   }
   if (argv[0] === "tasks") {

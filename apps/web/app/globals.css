@@ -3016,6 +3016,36 @@ footer {
   right: 8px;
 }
 
+.cs-install {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: var(--radius-lg);
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+  font-size: 14px;
+  text-decoration: none;
+}
+
+.cs-install:hover {
+  filter: brightness(1.08);
+  text-decoration: none;
+}
+
+.agent-setup {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 16px 18px;
+  margin: 20px 0 28px;
+  background: var(--surface-solid);
+}
+
+.agent-setup h2 {
+  margin-top: 0;
+}
+
 /* ---------- blog ---------- */
 
 .blog-index {

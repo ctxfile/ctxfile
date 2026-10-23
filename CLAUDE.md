@@ -32,6 +32,7 @@ See `CONTRIBUTING.md` for the contributor workflow.
 - `npm run mcpb:pack` — builds `ctxfile.mcpb` from `packages/core` (copies dist + ui-dist + behaviors; asserts them present)
 - `npm run behaviors:render` — regenerate the per-harness behavior files from `behaviors/canonical.md`
 - Local run: `node packages/core/dist/cli.js --root <dir>` (stdio); `ctxfile ui` (dashboard)
+- Connect clients: `ctxfile connect [<client>...|--all|--print <client>] [--project|--global] [--dry-run]` (client registry in `packages/core/src/connect.ts`; agent-readable steps at `apps/web/public/setup.md`)
 - Tasks: `ctxfile tasks [show|post|approve|reject|cancel|approve-effect|deny-effect|freeze|off|on|status]` (approvals, posting, `on`, and `freeze --off` need an interactive terminal; agents never run them)
 - Sync vault: `ctxfile vault create|join|recover|status|delete`, `ctxfile sync` (passphrase via `CTXFILE_VAULT_PASSPHRASE`, recovery code via `CTXFILE_VAULT_RECOVERY_CODE`; never on argv)
 - Relay/hub: `node packages/relay/dist/cli.js start` (or `ctxfile-relay ...`); config via `CTXFILE_RELAY_*` env

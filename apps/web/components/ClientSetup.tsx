@@ -109,6 +109,8 @@ interface Step {
   title: string;
   body?: ReactNode;
   code?: string;
+  /** A one-click install link (a client's own deeplink scheme). */
+  link?: { href: string; label: string };
 }
 
 interface Client {
@@ -453,6 +455,13 @@ export function ClientSetup() {
               <h3>{step.title}</h3>
             </div>
             {step.body ? <p>{step.body}</p> : null}
+            {step.link ? (
+              <p>
+                <a className="cs-install" href={step.link.href}>
+                  {step.link.label}
+                </a>
+              </p>
+            ) : null}
             {step.code ? <StepCode code={step.code} /> : null}
           </div>
         ))}

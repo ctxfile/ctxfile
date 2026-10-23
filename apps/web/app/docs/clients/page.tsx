@@ -4,7 +4,7 @@ import { ClientSetup } from "../../../components/ClientSetup";
 export const metadata: Metadata = {
   title: "How to add ctxfile to Claude Code, Cursor, Codex, and other MCP clients",
   description:
-    "Copy-paste setup for Claude Code, Cursor, Codex CLI, OpenCode, Gemini CLI, OpenClaw, Hermes, Claude Desktop, and any stdio MCP client, plus the nvm PATH fix when a client cannot find the server.",
+    "One command (ctxfile connect) or copy-paste setup for Claude Code, Cursor, VS Code, Windsurf, Codex CLI, OpenCode, Gemini CLI, Claude Desktop, and any stdio MCP client, with one-click install links where a client supports them.",
 };
 
 export default function Clients() {
@@ -19,6 +19,25 @@ export default function Clients() {
         Requires Node.js 20+ on macOS and Linux, and <strong>Node.js 22+ on Windows</strong> (a native dependency
         ships no Node 20 Windows prebuild). Node 22 and 24 are both current LTS lines.
       </p>
+
+      <div className="agent-setup">
+        <h2>Fastest: one command, or let your agent do it</h2>
+        <p>
+          <code>ctxfile connect</code> lists the MCP clients on your machine and registers ctxfile in the ones you
+          pick. It drives a client&apos;s own <code>mcp add</code> command where there is one, and otherwise merges
+          into its JSON config: only the <code>ctxfile</code> entry changes, every other server stays, and the old
+          file is kept as <code>&lt;file&gt;.ctxfile-backup</code>.
+        </p>
+        <pre>{`npm install -g ctxfile
+ctxfile connect              # what is on this machine
+ctxfile connect --all        # connect every client found
+ctxfile connect --print cursor   # just show the config and one-click link`}</pre>
+        <p>
+          Or paste this into any coding agent (Claude Code, Cursor, Codex, Gemini CLI) and it does the steps for
+          you, asking before it changes anything:
+        </p>
+        <pre>{`Set up ctxfile for me by following https://ctxfile.dev/setup.md`}</pre>
+      </div>
 
       <ClientSetup />
 

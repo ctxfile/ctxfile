@@ -134,6 +134,7 @@ ctxfile export [--profile <p>] [--stdout]  # write the .ctxfile convention artif
 ctxfile hooks install|uninstall            # managed pre-commit export refresh
 ctxfile ingest list|rm <id>                # review agent-reported sessions
 ctxfile threads                            # list threads (durable, resumable work identities)
+ctxfile connect [<client>...|--all|--print <client>]  # register ctxfile in your MCP clients (backups kept)
 ctxfile tasks [show|post|approve|reject|cancel|approve-effect|deny-effect|freeze|off|on|status]
                                            # cross-agent tasks: review and approve what agents left
 ctxfile vault create|join|status|delete    # encrypted Sync vault on a relay (passphrase via env)
