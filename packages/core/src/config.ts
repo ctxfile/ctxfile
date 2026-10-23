@@ -212,9 +212,35 @@ export interface LoadConfigOptions {
   env?: NodeJS.ProcessEnv;
 }
 
+/**
+ * The project directory to serve. Clients disagree on where they start a
+ * stdio server and on which placeholders they expand, so this is forgiving:
+ * - an explicit --root wins, unless it still holds an unexpanded client
+ *   placeholder like `${workspaceFolder}` (that client does not expand it);
+ * - otherwise CLAUDE_PROJECT_DIR, which Claude Code sets for the servers it
+ *   starts;
+ * - otherwise the working directory the client gave us.
+ */
+export function resolveRootDir(given: string | undefined, env: NodeJS.ProcessEnv, cwd: string): string {
+  if (given !== undefined && /\$\{[^}]*\}/.test(given)) {
+    console.error(`ctxfile: --root "${given}" has a placeholder this client did not expand; using the project directory it started ctxfile in`);
+    given = undefined;
+  }
+  if (given !== undefined && given.trim() !== "") return path.resolve(cwd, given);
+  const fromClaude = env.CLAUDE_PROJECT_DIR?.trim();
+  if (fromClaude) {
+    try {
+      if (statSync(fromClaude).isDirectory()) return path.resolve(fromClaude);
+    } catch {
+      // not a directory here: fall through to the working directory
+    }
+  }
+  return path.resolve(cwd);
+}
+
 export function loadConfig(opts: LoadConfigOptions = {}): ResolvedConfig {
   const env = opts.env ?? process.env;
-  const root = path.resolve(opts.root ?? process.cwd());
+  const root = resolveRootDir(opts.root, env, process.cwd());
 
   let rootStat;
   try {

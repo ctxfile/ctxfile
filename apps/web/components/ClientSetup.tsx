@@ -103,29 +103,86 @@ function HermesMark() {
   );
 }
 
+/** A neutral monogram for clients without a mark here (nominative use only). */
+function LetterMark({ letter }: { letter: string }) {
+  return (
+    <svg viewBox="-8 -8 16 16" width="18" height="18" aria-hidden="true">
+      <rect x="-7" y="-7" width="14" height="14" rx="3.4" fill="none" stroke="currentColor" strokeWidth={1.2} />
+      <text x="0" y="3.4" textAnchor="middle" fontSize="9" fontWeight="700" fill="currentColor" fontFamily="inherit">
+        {letter}
+      </text>
+    </svg>
+  );
+}
+
 /* ---- data ---- */
+
+/** Snippets and links that need the project's absolute path take it as an
+    argument; the panel fills in what the reader typed. */
+type WithRoot = string | ((root: string) => string);
 
 interface Step {
   title: string;
   body?: ReactNode;
-  code?: string;
-  /** A one-click install link (a client's own deeplink scheme). */
-  link?: { href: string; label: string };
+  code?: WithRoot;
+  /** One-click install links (each client's own deeplink scheme). */
+  links?: { label: string; href: WithRoot }[];
 }
 
 interface Client {
   id: string;
   name: string;
   mark: ReactNode;
-  note?: ReactNode;
+  /** True when this client needs an absolute project path. */
+  needsRoot?: boolean;
   steps: Step[];
 }
+
+const PLACEHOLDER_ROOT = "/absolute/path/to/project";
+const WORKSPACE = "${workspaceFolder}";
 
 const INSTALL: Step = {
   title: "Install ctxfile",
   body: "One global install serves every client on the machine.",
   code: "npm install -g ctxfile",
 };
+
+function connectStep(id: string): Step {
+  return {
+    title: "Or let ctxfile write it",
+    body: (
+      <>
+        Fills in this project&apos;s path, keeps a backup of the old file, and leaves every other server alone.
+      </>
+    ),
+    code: `ctxfile connect ${id}`,
+  };
+}
+
+function json(value: unknown): string {
+  return JSON.stringify(value, null, 2);
+}
+
+function servers(key: string, entry: Record<string, unknown>): string {
+  return json({ [key]: { ctxfile: entry } });
+}
+
+function stdio(root: string): { command: string; args: string[] } {
+  return { command: "ctxfile", args: ["--root", root] };
+}
+
+function base64(text: string): string {
+  // Snippets are ASCII except for paths the reader types; encode UTF-8 safely.
+  const bytes = new TextEncoder().encode(text);
+  let binary = "";
+  for (const b of bytes) binary += String.fromCharCode(b);
+  return btoa(binary);
+}
+
+const CURSOR_LINK = `cursor://anysphere.cursor-deeplink/mcp/install?name=ctxfile&config=${encodeURIComponent(
+  base64(JSON.stringify(stdio(WORKSPACE)))
+)}`;
+const VSCODE_CONFIG = JSON.stringify({ name: "ctxfile", type: "stdio", ...stdio(WORKSPACE) });
 
 const CLIENTS: Client[] = [
   {
@@ -135,21 +192,26 @@ const CLIENTS: Client[] = [
     steps: [
       INSTALL,
       {
-        title: "Register the server",
+        title: "Register it once, for every project",
         body: (
           <>
-            Run from your project directory; that is what <code>--root .</code> points at. Defaults to{" "}
-            <code>local</code> scope (just you, this project). Add <code>--scope project</code> to commit it to
-            the repo for your team, or <code>--scope user</code> for all your projects.
+            Claude Code tells ctxfile which project is open (<code>CLAUDE_PROJECT_DIR</code>), so one user-scope entry
+            serves them all. For a team, <code>--scope project</code> writes <code>.mcp.json</code> to commit; each
+            teammate approves it once.
           </>
         ),
-        code: "claude mcp add ctxfile -- ctxfile --root .",
+        code: "claude mcp add --scope user ctxfile -- ctxfile",
+      },
+      {
+        title: "Or install the plugin",
+        body: "Inside Claude Code (2.1.275 or later). It runs ctxfile through npx, so no global install is needed.",
+        code: "/plugin install ctxfile --marketplace ctxfile/ctxfile",
       },
       {
         title: "Verify",
         body: (
           <>
-            The ctxfile tools appear in the list, or run <code>/mcp</code> inside a session.
+            The list shows ctxfile as connected, or run <code>/mcp</code> inside a session.
           </>
         ),
         code: "claude mcp list",
@@ -162,26 +224,49 @@ const CLIENTS: Client[] = [
     mark: <CursorMark />,
     steps: [
       INSTALL,
+      { title: "Add it in one click", links: [{ label: "Add to Cursor", href: CURSOR_LINK }] },
       {
-        title: "Add the server",
+        title: "Or add it by hand",
         body: (
           <>
-            In <code>.cursor/mcp.json</code> in the project, or <code>~/.cursor/mcp.json</code> globally:
+            In <code>~/.cursor/mcp.json</code> (every project) or <code>.cursor/mcp.json</code> (this one). Cursor
+            fills in <code>{WORKSPACE}</code> with the open project.
           </>
         ),
-        code: `{
-  "mcpServers": {
-    "ctxfile": {
-      "command": "ctxfile",
-      "args": ["--root", "."]
-    }
-  }
-}`,
+        code: servers("mcpServers", stdio(WORKSPACE)),
+      },
+      { title: "Verify", body: "Settings, MCP: ctxfile shows a green dot. From the Cursor CLI: agent mcp list." },
+    ],
+  },
+  {
+    id: "vscode",
+    name: "VS Code",
+    mark: <LetterMark letter="V" />,
+    steps: [
+      INSTALL,
+      {
+        title: "Add it in one click",
+        body: "Needs GitHub Copilot's agent mode.",
+        links: [
+          { label: "Install in VS Code", href: `vscode:mcp/install?${encodeURIComponent(VSCODE_CONFIG)}` },
+          { label: "Install in VS Code Insiders", href: `vscode-insiders:mcp/install?${encodeURIComponent(VSCODE_CONFIG)}` },
+        ],
       },
       {
-        title: "Verify",
-        body: "Settings, MCP: ctxfile shows a green dot. Its handful of tools sit far under Cursor's 40-tool cap.",
+        title: "Or from the terminal",
+        body: "Adds it to your user profile; VS Code fills in the open folder.",
+        code: `code --add-mcp '${VSCODE_CONFIG}'`,
       },
+      {
+        title: "Or per project",
+        body: (
+          <>
+            In <code>.vscode/mcp.json</code>:
+          </>
+        ),
+        code: servers("servers", { type: "stdio", ...stdio(WORKSPACE) }),
+      },
+      { title: "Verify", body: "Command Palette, MCP: List Servers, ctxfile, Show Output." },
     ],
   },
   {
@@ -194,13 +279,136 @@ const CLIENTS: Client[] = [
         title: "Register the server",
         body: (
           <>
-            One command; it writes <code>~/.codex/config.toml</code> for you. Codex config is global, so pin an
-            absolute <code>--root</code> if you do not always launch codex from the project.
+            Writes <code>~/.codex/config.toml</code> for you. Codex starts servers in the folder you run it from, so{" "}
+            <code>--root .</code> follows you between projects.
           </>
         ),
         code: "codex mcp add ctxfile -- ctxfile --root .",
       },
       { title: "Verify", code: "codex mcp list" },
+    ],
+  },
+  {
+    id: "gemini",
+    name: "Gemini CLI",
+    mark: <GeminiMark />,
+    steps: [
+      INSTALL,
+      {
+        title: "Register the server",
+        body: (
+          <>
+            <code>-s user</code> for every project; leave it off for this project only. Gemini CLI starts local servers
+            only in a trusted folder (<code>gemini trust</code>).
+          </>
+        ),
+        code: "gemini mcp add -s user ctxfile ctxfile --root .",
+      },
+      {
+        title: "Or edit settings.json",
+        body: (
+          <>
+            <code>~/.gemini/settings.json</code> or the project&apos;s <code>.gemini/settings.json</code>:
+          </>
+        ),
+        code: servers("mcpServers", stdio(".")),
+      },
+      { title: "Verify", code: "gemini mcp list" },
+    ],
+  },
+  {
+    id: "claude-desktop",
+    name: "Claude Desktop",
+    mark: <ClaudeMark />,
+    needsRoot: true,
+    steps: [
+      {
+        title: "On an Apple Silicon Mac: install the extension",
+        body: (
+          <>
+            Download{" "}
+            <a href="https://github.com/ctxfile/ctxfile/releases/latest/download/ctxfile-macos-arm64.mcpb" rel="noopener">
+              <code>ctxfile-macos-arm64.mcpb</code>
+            </a>{" "}
+            and drag it into Settings, Extensions. It carries its own runtime; set the project folder in its settings.
+          </>
+        ),
+      },
+      {
+        title: "Anywhere else: add it to the config",
+        body: (
+          <>
+            After <code>npm install -g ctxfile</code>, in <code>claude_desktop_config.json</code> (macOS{" "}
+            <code>~/Library/Application Support/Claude/</code>, Windows <code>%APPDATA%\Claude\</code>, Linux{" "}
+            <code>~/.config/Claude/</code>). Desktop apps need the absolute path:
+          </>
+        ),
+        code: (root) => servers("mcpServers", stdio(root)),
+      },
+      connectStep("claude-desktop"),
+      { title: "Verify", body: "Quit and reopen Claude Desktop, then +, Connectors: ctxfile is listed." },
+    ],
+  },
+  {
+    id: "windsurf",
+    name: "Windsurf",
+    mark: <LetterMark letter="W" />,
+    needsRoot: true,
+    steps: [
+      INSTALL,
+      {
+        title: "Add the server",
+        body: (
+          <>
+            In <code>~/.codeium/windsurf/mcp_config.json</code>. Windsurf has no project placeholder, so give the
+            absolute path:
+          </>
+        ),
+        code: (root) => servers("mcpServers", stdio(root)),
+      },
+      connectStep("windsurf"),
+      { title: "Verify", body: "Cascade's MCP panel, Refresh: ctxfile is listed with its tools." },
+    ],
+  },
+  {
+    id: "zed",
+    name: "Zed",
+    mark: <LetterMark letter="Z" />,
+    steps: [
+      INSTALL,
+      {
+        title: "Add the server",
+        body: (
+          <>
+            In Zed&apos;s settings (<code>~/.config/zed/settings.json</code>, Windows <code>%APPDATA%\Zed\</code>) or the
+            project&apos;s <code>.zed/settings.json</code>. Zed starts servers in the open project, so{" "}
+            <code>--root .</code> works:
+          </>
+        ),
+        code: servers("context_servers", { ...stdio("."), env: {} }),
+      },
+      { title: "Verify", body: "Settings, AI, MCP Servers: a green dot and “Server is active”." },
+    ],
+  },
+  {
+    id: "cline",
+    name: "Cline",
+    mark: <LetterMark letter="C" />,
+    needsRoot: true,
+    steps: [
+      INSTALL,
+      {
+        title: "Add the server",
+        body: (
+          <>
+            Cline&apos;s MCP Servers panel, Configure, opens <code>cline_mcp_settings.json</code>. Cline starts servers
+            outside the project, so give the absolute path:
+          </>
+        ),
+        code: (root) => servers("mcpServers", { ...stdio(root), disabled: false, autoApprove: [] }),
+      },
+      { title: "Or with the Cline CLI", code: (root) => `cline mcp add ctxfile --yes -- ctxfile --root ${quotePath(root)}` },
+      connectStep("cline"),
     ],
   },
   {
@@ -213,19 +421,14 @@ const CLIENTS: Client[] = [
         title: "Add the server",
         body: (
           <>
-            In <code>opencode.json</code> in the project (or the global config):
+            In <code>opencode.json</code> in the project, or <code>~/.config/opencode/opencode.json</code>. OpenCode 2
+            also takes <code>opencode mcp add ctxfile -- ctxfile --root .</code>.
           </>
         ),
-        code: `{
-  "$schema": "https://opencode.ai/config.json",
-  "mcp": {
-    "ctxfile": {
-      "type": "local",
-      "command": ["ctxfile", "--root", "."],
-      "enabled": true
-    }
-  }
-}`,
+        code: json({
+          $schema: "https://opencode.ai/config.json",
+          mcp: { ctxfile: { type: "local", command: ["ctxfile", "--root", "."], enabled: true } },
+        }),
       },
       {
         title: "Local model? Check tool support",
@@ -236,60 +439,211 @@ const CLIENTS: Client[] = [
           </>
         ),
       },
+      { title: "Verify", code: "opencode mcp list" },
     ],
   },
   {
-    id: "gemini",
-    name: "Gemini CLI",
-    mark: <GeminiMark />,
+    id: "warp",
+    name: "Warp",
+    mark: <LetterMark letter="W" />,
+    steps: [
+      INSTALL,
+      {
+        title: "Add the server",
+        body: (
+          <>
+            In the project&apos;s <code>.warp/.mcp.json</code>. Warp starts project servers from the repo root, so{" "}
+            <code>--root .</code> works; press Start in Settings, Agents, MCP servers. In the global{" "}
+            <code>~/.warp/.mcp.json</code>, use an absolute path instead.
+          </>
+        ),
+        code: servers("mcpServers", stdio(".")),
+      },
+    ],
+  },
+  {
+    id: "copilot-cli",
+    name: "Copilot CLI",
+    mark: <LetterMark letter="G" />,
     steps: [
       INSTALL,
       {
         title: "Register the server",
-        body: "Recent Gemini CLI has a one-command shortcut that writes settings.json for you:",
-        code: "gemini mcp add ctxfile ctxfile --root .",
-      },
-      {
-        title: "Or edit settings.json directly",
         body: (
           <>
-            In <code>~/.gemini/settings.json</code> (global) or the project&apos;s{" "}
-            <code>.gemini/settings.json</code>:
+            Writes <code>~/.copilot/mcp-config.json</code>.
           </>
         ),
-        code: `{
-  "mcpServers": {
-    "ctxfile": {
-      "command": "ctxfile",
-      "args": ["--root", "."]
-    }
-  }
-}`,
+        code: "copilot mcp add ctxfile -- ctxfile --root .",
       },
-      { title: "Verify", code: "gemini mcp list" },
+    ],
+  },
+  {
+    id: "goose",
+    name: "Goose",
+    mark: <LetterMark letter="G" />,
+    needsRoot: true,
+    steps: [
+      {
+        title: "Add it in one click",
+        body: "Goose links run ctxfile through npx, so no global install is needed. It loads in your next session.",
+        links: [
+          {
+            label: "Add to Goose",
+            href: (root) =>
+              `goose://extension?cmd=npx&arg=-y&arg=ctxfile&arg=--root&arg=${encodeURIComponent(root)}&id=ctxfile&name=ctxfile&description=${encodeURIComponent(
+                "Project context, threads, and tasks"
+              )}&timeout=300`,
+          },
+        ],
+      },
+      {
+        title: "Or edit config.yaml",
+        body: (
+          <>
+            In <code>~/.config/goose/config.yaml</code>:
+          </>
+        ),
+        code: (root) =>
+          `extensions:\n  ctxfile:\n    name: ctxfile\n    type: stdio\n    cmd: npx\n    args: ${JSON.stringify(["-y", "ctxfile", "--root", root])}\n    enabled: true\n    timeout: 300`,
+      },
+    ],
+  },
+  {
+    id: "lm-studio",
+    name: "LM Studio",
+    mark: <LetterMark letter="L" />,
+    needsRoot: true,
+    steps: [
+      INSTALL,
+      {
+        title: "Add it in one click",
+        body: "LM Studio 0.3.17 or newer.",
+        links: [
+          {
+            label: "Add to LM Studio",
+            href: (root) => `lmstudio://add_mcp?name=ctxfile&config=${encodeURIComponent(base64(JSON.stringify(stdio(root))))}`,
+          },
+        ],
+      },
+      {
+        title: "Or edit mcp.json",
+        body: "Program tab, Install, Edit mcp.json:",
+        code: (root) => servers("mcpServers", stdio(root)),
+      },
+    ],
+  },
+  {
+    id: "kiro",
+    name: "Kiro",
+    mark: <LetterMark letter="K" />,
+    needsRoot: true,
+    steps: [
+      INSTALL,
+      {
+        title: "Add it in one click",
+        body: "Kiro asks you to confirm, then writes it to your user config.",
+        links: [
+          {
+            label: "Add to Kiro",
+            href: (root) => `https://kiro.dev/launch/mcp/add?name=ctxfile&config=${encodeURIComponent(JSON.stringify(stdio(root)))}`,
+          },
+        ],
+      },
+      {
+        title: "Or edit mcp.json",
+        body: (
+          <>
+            <code>~/.kiro/settings/mcp.json</code>, or the workspace&apos;s <code>.kiro/settings/mcp.json</code>:
+          </>
+        ),
+        code: (root) => servers("mcpServers", stdio(root)),
+      },
+      connectStep("kiro"),
+    ],
+  },
+  {
+    id: "jetbrains",
+    name: "JetBrains",
+    mark: <LetterMark letter="J" />,
+    needsRoot: true,
+    steps: [
+      INSTALL,
+      {
+        title: "AI Assistant",
+        body: "Settings, Tools, AI Assistant, Model Context Protocol (MCP), Add, then paste:",
+        code: (root) => servers("mcpServers", stdio(root)),
+      },
+      {
+        title: "Junie",
+        body: (
+          <>
+            Tools, Junie, MCP Settings, or <code>~/.junie/mcp/mcp.json</code> (project: <code>.junie/mcp/mcp.json</code>)
+            with the same JSON. <code>ctxfile connect junie</code> writes it for you.
+          </>
+        ),
+      },
+    ],
+  },
+  {
+    id: "visual-studio",
+    name: "Visual Studio",
+    mark: <LetterMark letter="V" />,
+    needsRoot: true,
+    steps: [
+      INSTALL,
+      {
+        title: "Add it in one click",
+        body: "Visual Studio 2022 17.14 or newer, with GitHub Copilot.",
+        links: [
+          {
+            label: "Install in Visual Studio",
+            href: (root) => `https://vs-open.link/mcp-install?${encodeURIComponent(JSON.stringify({ name: "ctxfile", type: "stdio", ...stdio(root) }))}`,
+          },
+        ],
+      },
+      {
+        title: "Or edit .mcp.json",
+        body: (
+          <>
+            <code>%USERPROFILE%\.mcp.json</code>, or <code>.mcp.json</code> in the solution folder:
+          </>
+        ),
+        code: (root) => servers("servers", { type: "stdio", ...stdio(root) }),
+      },
+    ],
+  },
+  {
+    id: "amp",
+    name: "Amp",
+    mark: <LetterMark letter="A" />,
+    steps: [
+      INSTALL,
+      {
+        title: "Register the server",
+        body: (
+          <>
+            Add <code>--workspace</code> to keep it in this project&apos;s <code>.amp/settings.json</code> (then{" "}
+            <code>amp mcp approve ctxfile</code>).
+          </>
+        ),
+        code: "amp mcp add ctxfile -- ctxfile --root .",
+      },
     ],
   },
   {
     id: "openclaw",
     name: "OpenClaw",
     mark: <OpenClawMark />,
+    needsRoot: true,
     steps: [
       INSTALL,
       {
         title: "Register the server",
-        body: (
-          <>
-            OpenClaw&apos;s gateway does not run from your project directory, so give it an absolute{" "}
-            <code>--root</code>:
-          </>
-        ),
-        code: `openclaw mcp add ctxfile --command ctxfile --arg --root --arg /absolute/path/to/project`,
+        body: "OpenClaw's gateway does not run from your project, so give the absolute path:",
+        code: (root) => `openclaw mcp set ctxfile '${JSON.stringify(stdio(root))}'`,
       },
-      {
-        title: "Verify",
-        body: "ctxfile's tools are listed and callable from any connected channel.",
-        code: "openclaw mcp list",
-      },
+      { title: "Verify", code: "openclaw mcp probe ctxfile" },
     ],
   },
   {
@@ -302,69 +656,42 @@ const CLIENTS: Client[] = [
         title: "Add the server",
         body: (
           <>
-            In <code>~/.hermes/config.yaml</code>. Hermes runs as a resident agent, so use an absolute{" "}
-            <code>--root</code>:
+            In <code>~/.hermes/config.yaml</code>. Hermes fills in <code>{WORKSPACE}</code> with the session&apos;s
+            folder:
           </>
         ),
-        code: `mcp_servers:
-  ctxfile:
-    command: "ctxfile"
-    args: ["--root", "/absolute/path/to/project"]`,
+        code: `mcp_servers:\n  ctxfile:\n    command: "ctxfile"\n    args: ["--root", "${WORKSPACE}"]`,
       },
       {
         title: "Verify",
         body: (
           <>
-            Hermes namespaces MCP tools as <code>mcp_&lt;server&gt;_&lt;tool&gt;</code>, so ctxfile&apos;s appear as{" "}
-            <code>mcp_ctxfile_get_context</code> and friends. <code>hermes mcp list</code> shows them.
+            Tools show up as <code>mcp_ctxfile_get_context</code> and friends. In a session, run{" "}
+            <code>/reload-mcp</code>.
           </>
         ),
+        code: "hermes mcp test ctxfile",
       },
     ],
   },
   {
-    id: "claude-desktop",
-    name: "Claude Desktop",
-    mark: <ClaudeMark />,
+    id: "mistral-vibe",
+    name: "Mistral Vibe",
+    mark: <LetterMark letter="M" />,
+    needsRoot: true,
     steps: [
+      INSTALL,
       {
-        title: "Install the extension",
+        title: "Add the server",
         body: (
           <>
-            Download{" "}
-            <a
-              href="https://github.com/ctxfile/ctxfile/releases/latest/download/ctxfile-macos-arm64.mcpb"
-              rel="noopener"
-            >
-              <code>ctxfile-macos-arm64.mcpb</code>
-            </a>{" "}
-            and drag it into Settings, Extensions. No terminal, no global install: the bundle carries its
-            own runtime.
+            In <code>~/.vibe/config.toml</code>:
           </>
         ),
+        code: (root) =>
+          `[[mcp_servers]]\nname = "ctxfile"\ntransport = "stdio"\ncommand = "ctxfile"\nargs = ${JSON.stringify(["--root", root])}`,
       },
-      {
-        title: "On Windows or an Intel Mac?",
-        body: (
-          <>
-            The bundle embeds a compiled native module, so today it is built for Apple Silicon only. Everywhere
-            else, run <code>npm install -g ctxfile</code> and add the generic stdio JSON to{" "}
-            <code>claude_desktop_config.json</code>:
-          </>
-        ),
-        code: `{
-  "mcpServers": {
-    "ctxfile": {
-      "command": "ctxfile",
-      "args": ["--root", "/absolute/path/to/project"]
-    }
-  }
-}`,
-      },
-      {
-        title: "Point it at your project",
-        body: "Set the project root in the extension's settings pane. Desktop apps do not inherit your shell PATH; if the server fails to start, see the nvm note below.",
-      },
+      { title: "Verify", body: "Run /mcp status in a Vibe session." },
     ],
   },
   {
@@ -377,8 +704,8 @@ const CLIENTS: Client[] = [
         title: "Load context by file",
         body: (
           <>
-            Aider has no MCP client yet, so use the exported artifact instead. Run this and add the file to the
-            chat with <code>/read .ctxfile/context.json</code>:
+            Aider has no MCP client, so use the exported artifact instead. Run this and add the file to the chat with{" "}
+            <code>/read .ctxfile/context.json</code>:
           </>
         ),
         code: "ctxfile export",
@@ -396,16 +723,16 @@ const CLIENTS: Client[] = [
   },
   {
     id: "web",
-    name: "Grok / ChatGPT / Claude web",
+    name: "ChatGPT / Claude.ai / Grok",
     mark: <GrokMark />,
     steps: [
       {
-        title: "Web chatbots connect through Sync",
+        title: "Web and hosted apps connect through Sync",
         body: (
           <>
-            Browser chatbots cannot launch a local process; they connect to your encrypted Sync vault through the
-            relay&apos;s connector URL instead. The full walkthrough for each surface is on the{" "}
-            <a href="/docs/webchat">web chatbots page</a>.
+            ChatGPT (developer mode), Claude.ai, Grok, Perplexity, Le Chat, and Copilot Studio only reach remote MCP
+            servers, so they connect to your encrypted Sync vault through the relay&apos;s connector URL. The
+            walkthrough for each is on the <a href="/docs/webchat">web chatbots page</a>.
           </>
         ),
       },
@@ -413,8 +740,18 @@ const CLIENTS: Client[] = [
   },
 ];
 
+/** Quotes a path for a shell line when it has spaces or quotes. */
+function quotePath(root: string): string {
+  return /^[\w./:\\-]+$/.test(root) ? root : `'${root.replace(/'/g, "'\\''")}'`;
+}
+
+function resolve(value: WithRoot, root: string): string {
+  return typeof value === "function" ? value(root) : value;
+}
+
 export function ClientSetup() {
   const [active, setActive] = useState(CLIENTS[0]!.id);
+  const [root, setRoot] = useState("");
 
   useEffect(() => {
     const wanted = new URLSearchParams(window.location.search).get("tab");
@@ -429,6 +766,8 @@ export function ClientSetup() {
   }
 
   const client = CLIENTS.find((c) => c.id === active) ?? CLIENTS[0]!;
+  const typedRoot = root.trim();
+  const effectiveRoot = typedRoot || PLACEHOLDER_ROOT;
 
   return (
     <div className="cs">
@@ -448,6 +787,19 @@ export function ClientSetup() {
         ))}
       </div>
       <div className="cs-panel" role="tabpanel">
+        {client.needsRoot ? (
+          <label className="cs-root">
+            <span>Your project folder (absolute path; it stays in this page)</span>
+            <input
+              type="text"
+              value={root}
+              placeholder={PLACEHOLDER_ROOT}
+              spellCheck={false}
+              autoComplete="off"
+              onChange={(event) => setRoot(event.target.value)}
+            />
+          </label>
+        ) : null}
         {client.steps.map((step, i) => (
           <div className="cs-step" key={i}>
             <div className="cs-step-head">
@@ -455,14 +807,23 @@ export function ClientSetup() {
               <h3>{step.title}</h3>
             </div>
             {step.body ? <p>{step.body}</p> : null}
-            {step.link ? (
-              <p>
-                <a className="cs-install" href={step.link.href}>
-                  {step.link.label}
-                </a>
+            {step.links ? (
+              <p className="cs-install-row">
+                {step.links.map((link) => {
+                  const waiting = client.needsRoot && typeof link.href === "function" && typedRoot === "";
+                  return waiting ? (
+                    <span key={link.label} className="cs-install" data-disabled="true" title="Enter your project folder above first">
+                      {link.label}
+                    </span>
+                  ) : (
+                    <a key={link.label} className="cs-install" href={resolve(link.href, effectiveRoot)}>
+                      {link.label}
+                    </a>
+                  );
+                })}
               </p>
             ) : null}
-            {step.code ? <StepCode code={step.code} /> : null}
+            {step.code ? <StepCode code={resolve(step.code, effectiveRoot)} /> : null}
           </div>
         ))}
       </div>
@@ -473,6 +834,7 @@ export function ClientSetup() {
 /** Config snippets are JSON, YAML, or TOML; anything else is a shell line. */
 function guessLang(code: string): Lang {
   const t = code.trimStart();
+  if (t.startsWith("[[")) return "toml";
   if (t.startsWith("{") || t.startsWith("[")) return "json";
   if (/^[\w-]+:\s*(\n|$)/m.test(t) && !t.includes("=")) return "yaml";
   if (/^\[[^\]]+\]\s*$/m.test(t)) return "toml";

@@ -39,10 +39,21 @@ you → ctxfile → the same context, in every agent
 
 ## 30-second quickstart
 
-**Claude Code**
+**Every client on your machine at once**
 
 ```bash
-claude mcp add ctxfile -- npx -y ctxfile
+npm install -g ctxfile
+ctxfile connect          # lists the MCP clients it found
+ctxfile connect --all    # adds ctxfile to each (backups kept, other servers untouched)
+```
+
+Or tell any coding agent: *"Set up ctxfile for me by following https://ctxfile.dev/setup.md"*.
+
+**Claude Code** (as a plugin, or one command)
+
+```bash
+/plugin install ctxfile --marketplace ctxfile/ctxfile
+claude mcp add --scope user ctxfile -- npx -y ctxfile
 ```
 
 **Cursor** (`.cursor/mcp.json` in your project, or `~/.cursor/mcp.json` globally)
@@ -50,7 +61,7 @@ claude mcp add ctxfile -- npx -y ctxfile
 ```json
 {
   "mcpServers": {
-    "ctxfile": { "command": "npx", "args": ["-y", "ctxfile"] }
+    "ctxfile": { "command": "npx", "args": ["-y", "ctxfile", "--root", "${workspaceFolder}"] }
   }
 }
 ```
@@ -63,7 +74,7 @@ codex mcp add ctxfile -- npx -y ctxfile --root .
 
 **Claude Desktop** (no terminal needed): download [`ctxfile-macos-arm64.mcpb`](https://github.com/ctxfile/ctxfile/releases/latest/download/ctxfile-macos-arm64.mcpb) and drag it into Settings → Extensions. The bundle carries a compiled native module, so it is macOS (Apple Silicon) only for now; on Windows or an Intel Mac, add the stdio JSON above to `claude_desktop_config.json` instead.
 
-**Every other client**: ctxfile is a standard stdio server, so `npx -y ctxfile` is the whole command. Copy-paste setup for **OpenCode, Gemini CLI, OpenClaw, Hermes, Aider**, and more is on the per-client tabs at [ctxfile.dev/docs/clients](https://ctxfile.dev/docs/clients).
+**Every other client**: ctxfile is a standard stdio server, so `npx -y ctxfile` is the whole command. One-click install links and copy-paste setup for **VS Code, Windsurf, Zed, Cline, Gemini CLI, OpenCode, Warp, Goose, LM Studio, Kiro, JetBrains, Visual Studio, Amp, OpenClaw, Hermes**, and more are on the per-client tabs at [ctxfile.dev/docs/clients](https://ctxfile.dev/docs/clients).
 
 Then, in your agent: *"load my context"* (or call `get_context`). Requires Node ≥ 20 (≥ 22 on Windows).
 

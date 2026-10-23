@@ -44,20 +44,38 @@ export interface Launch {
 
 export type ConnectScope = "project" | "global";
 
-interface JsonTarget {
-  kind: "json";
+/**
+ * How a client tells ctxfile which project to serve. Clients start stdio
+ * servers in different folders and expand different placeholders, so each
+ * target says which of these is true for it:
+ * - "workspace": pass `${workspaceFolder}`, which the client expands (Cursor,
+ *   VS Code, Hermes). One global entry then serves whatever project is open.
+ * - "launch": pass `.`; the client starts servers in the project (Codex,
+ *   Gemini CLI, OpenCode, Zed, Warp project configs, CLI agents).
+ * - "auto": pass no --root; ctxfile reads CLAUDE_PROJECT_DIR, which Claude
+ *   Code sets, then falls back to the working directory.
+ * - "absolute": this project's absolute path; the client gives no usable
+ *   working directory (Claude Desktop, Windsurf, Cline, Warp global, Kiro).
+ */
+export type RootStrategy = "workspace" | "launch" | "auto" | "absolute";
+
+interface TargetBase {
   scope: ConnectScope;
+  root: RootStrategy;
+}
+
+interface JsonTarget extends TargetBase {
+  kind: "json";
   file: (ctx: ConnectContext) => string;
   /** Object path to the map of servers, e.g. ["mcpServers"]. */
   container: string[];
-  entry: (ctx: ConnectContext, scope: ConnectScope) => Record<string, unknown>;
+  entry: (ctx: ConnectContext, target: TargetBase) => Record<string, unknown>;
 }
 
-interface CliTarget {
+interface CliTarget extends TargetBase {
   kind: "cli";
-  scope: ConnectScope;
   bin: string;
-  args: (ctx: ConnectContext, scope: ConnectScope) => string[];
+  args: (ctx: ConnectContext, target: TargetBase) => string[];
 }
 
 type Target = JsonTarget | CliTarget;
@@ -72,39 +90,91 @@ export interface ClientSpec {
   manual?: (ctx: ConnectContext) => string;
   /** One-click install link, when the client supports one for stdio servers. */
   installLink?: (ctx: ConnectContext) => string;
+  /** One line on anything the person must do after connecting. */
+  note?: string;
   docs: string;
 }
 
-/** The args ctxfile itself takes: always an absolute root for global configs
-    (a global config has no project to be relative to). */
+/** Project-level configs get committed and shared, so they never hold this
+    machine's paths: they use the portable launch. */
 function launchFor(ctx: ConnectContext, scope: ConnectScope): { command: string; prefix: string[] } {
   return scope === "project" ? ctx.launch.portable : ctx.launch;
 }
 
-function launchCommand(ctx: ConnectContext, scope: ConnectScope): string {
-  return launchFor(ctx, scope).command;
+function rootArgs(ctx: ConnectContext, root: RootStrategy): string[] {
+  if (root === "auto") return [];
+  if (root === "launch") return ["--root", "."];
+  if (root === "workspace") return ["--root", "${workspaceFolder}"];
+  return ["--root", ctx.root];
 }
 
-function serveArgs(ctx: ConnectContext, scope: ConnectScope): string[] {
-  return [...launchFor(ctx, scope).prefix, "--root", scope === "project" ? "." : ctx.root];
+/** The command and its arguments for one target. */
+function launchLine(ctx: ConnectContext, target: TargetBase): { command: string; args: string[] } {
+  const launch = launchFor(ctx, target.scope);
+  return { command: launch.command, args: [...launch.prefix, ...rootArgs(ctx, target.root)] };
 }
 
-function stdioEntry(ctx: ConnectContext, scope: ConnectScope): Record<string, unknown> {
-  return { command: launchCommand(ctx, scope), args: serveArgs(ctx, scope) };
+function stdioEntry(ctx: ConnectContext, target: TargetBase): Record<string, unknown> {
+  return launchLine(ctx, target);
+}
+
+function typedStdioEntry(ctx: ConnectContext, target: TargetBase): Record<string, unknown> {
+  return { type: "stdio", ...launchLine(ctx, target) };
+}
+
+/** Arguments for `<client> mcp add ctxfile -- <command> <args...>`. */
+function dashDash(ctx: ConnectContext, target: TargetBase): string[] {
+  const line = launchLine(ctx, target);
+  return ["--", line.command, ...line.args];
 }
 
 function homeDir(ctx: ConnectContext, ...parts: string[]): string {
   return path.join(ctx.home, ...parts);
 }
 
+function appData(ctx: ConnectContext): string {
+  return ctx.appData ?? homeDir(ctx, "AppData", "Roaming");
+}
+
 function claudeDesktopConfig(ctx: ConnectContext): string {
   if (ctx.platform === "darwin") return homeDir(ctx, "Library", "Application Support", "Claude", "claude_desktop_config.json");
-  if (ctx.platform === "win32") return path.join(ctx.appData ?? homeDir(ctx, "AppData", "Roaming"), "Claude", "claude_desktop_config.json");
+  if (ctx.platform === "win32") return path.join(appData(ctx), "Claude", "claude_desktop_config.json");
   return homeDir(ctx, ".config", "Claude", "claude_desktop_config.json");
+}
+
+function vscodeUserDir(ctx: ConnectContext): string {
+  if (ctx.platform === "darwin") return homeDir(ctx, "Library", "Application Support", "Code", "User");
+  if (ctx.platform === "win32") return path.join(appData(ctx), "Code", "User");
+  return homeDir(ctx, ".config", "Code", "User");
+}
+
+function clineExtensionSettings(ctx: ConnectContext): string {
+  return path.join(vscodeUserDir(ctx), "globalStorage", "saoudrizwan.claude-dev", "settings", "cline_mcp_settings.json");
+}
+
+function clineSettings(ctx: ConnectContext): string {
+  const extension = clineExtensionSettings(ctx);
+  if (existsSync(path.dirname(path.dirname(extension)))) return extension;
+  return homeDir(ctx, ".cline", "data", "settings", "cline_mcp_settings.json");
+}
+
+function zedSettings(ctx: ConnectContext): string {
+  if (ctx.platform === "win32") return path.join(appData(ctx), "Zed", "settings.json");
+  return homeDir(ctx, ".config", "zed", "settings.json");
+}
+
+function jetbrainsDir(ctx: ConnectContext): string {
+  if (ctx.platform === "darwin") return homeDir(ctx, "Library", "Application Support", "JetBrains");
+  if (ctx.platform === "win32") return path.join(appData(ctx), "JetBrains");
+  return homeDir(ctx, ".config", "JetBrains");
 }
 
 function anyExists(...paths: string[]): string | null {
   return paths.find((p) => existsSync(p)) ?? null;
+}
+
+function present(reason: string, ...paths: string[]): string | null {
+  return anyExists(...paths) ? reason : null;
 }
 
 function jsonSnippet(container: string[], entry: Record<string, unknown>): string {
@@ -113,147 +183,308 @@ function jsonSnippet(container: string[], entry: Record<string, unknown>): strin
   return JSON.stringify(value, null, 2);
 }
 
+function base64Json(value: unknown): string {
+  return Buffer.from(JSON.stringify(value)).toString("base64");
+}
+
+const GLOBAL_WORKSPACE: TargetBase = { scope: "global", root: "workspace" };
+const GLOBAL_ABSOLUTE: TargetBase = { scope: "global", root: "absolute" };
+
+function docs(id: string): string {
+  return `https://ctxfile.dev/docs/clients?tab=${id}`;
+}
+
 export const CLIENTS: ClientSpec[] = [
   {
     id: "claude-code",
     name: "Claude Code",
-    detect: (ctx) => (anyExists(homeDir(ctx, ".claude"), path.join(ctx.root, ".claude")) ? ".claude directory present" : null),
+    detect: (ctx) => present(".claude directory present", homeDir(ctx, ".claude"), path.join(ctx.root, ".claude")),
     targets: [
-      {
-        kind: "cli",
-        scope: "global",
-        bin: "claude",
-        args: (ctx, scope) => ["mcp", "add", "--scope", "user", "ctxfile", "--", launchCommand(ctx, scope), ...serveArgs(ctx, scope)],
-      },
-      {
-        kind: "cli",
-        scope: "project",
-        bin: "claude",
-        args: (ctx, scope) => ["mcp", "add", "--scope", "project", "ctxfile", "--", launchCommand(ctx, scope), ...serveArgs(ctx, scope)],
-      },
+      // No --root: Claude Code sets CLAUDE_PROJECT_DIR for every server it
+      // starts, so one user-scope entry serves each project you open.
+      { kind: "cli", scope: "global", root: "auto", bin: "claude", args: (ctx, t) => ["mcp", "add", "--scope", "user", "ctxfile", ...dashDash(ctx, t)] },
+      { kind: "cli", scope: "project", root: "auto", bin: "claude", args: (ctx, t) => ["mcp", "add", "--scope", "project", "ctxfile", ...dashDash(ctx, t)] },
     ],
-    docs: "https://ctxfile.dev/docs/clients#claude-code",
+    note: "A project-scope (.mcp.json) server asks each teammate to approve it once.",
+    docs: docs("claude-code"),
   },
   {
     id: "cursor",
     name: "Cursor",
-    detect: (ctx) => (anyExists(homeDir(ctx, ".cursor"), path.join(ctx.root, ".cursor")) ? ".cursor directory present" : null),
+    detect: (ctx) => present(".cursor directory present", homeDir(ctx, ".cursor"), path.join(ctx.root, ".cursor")),
     targets: [
-      { kind: "json", scope: "project", file: (ctx) => path.join(ctx.root, ".cursor", "mcp.json"), container: ["mcpServers"], entry: stdioEntry },
-      { kind: "json", scope: "global", file: (ctx) => homeDir(ctx, ".cursor", "mcp.json"), container: ["mcpServers"], entry: stdioEntry },
+      { kind: "json", scope: "global", root: "workspace", file: (ctx) => homeDir(ctx, ".cursor", "mcp.json"), container: ["mcpServers"], entry: stdioEntry },
+      { kind: "json", scope: "project", root: "workspace", file: (ctx) => path.join(ctx.root, ".cursor", "mcp.json"), container: ["mcpServers"], entry: stdioEntry },
     ],
     installLink: (ctx) =>
-      `cursor://anysphere.cursor-deeplink/mcp/install?name=ctxfile&config=${encodeURIComponent(
-        Buffer.from(JSON.stringify(stdioEntry(ctx, "global"))).toString("base64")
-      )}`,
-    docs: "https://ctxfile.dev/docs/clients#cursor",
+      `cursor://anysphere.cursor-deeplink/mcp/install?name=ctxfile&config=${encodeURIComponent(base64Json(stdioEntry(ctx, GLOBAL_WORKSPACE)))}`,
+    docs: docs("cursor"),
   },
   {
     id: "vscode",
     name: "VS Code (GitHub Copilot)",
-    detect: (ctx) =>
-      anyExists(
-        path.join(ctx.root, ".vscode"),
-        homeDir(ctx, ".vscode"),
-        homeDir(ctx, "Library", "Application Support", "Code"),
-        homeDir(ctx, ".config", "Code"),
-        path.join(ctx.appData ?? homeDir(ctx, "AppData", "Roaming"), "Code")
-      )
-        ? "VS Code settings present"
-        : null,
+    detect: (ctx) => present("VS Code settings present", vscodeUserDir(ctx), path.join(ctx.root, ".vscode")),
     targets: [
-      {
-        kind: "json",
-        scope: "project",
-        file: (ctx) => path.join(ctx.root, ".vscode", "mcp.json"),
-        container: ["servers"],
-        entry: (ctx) => ({ type: "stdio", command: ctx.launch.portable.command, args: [...ctx.launch.portable.prefix, "--root", "${workspaceFolder}"] }),
-      },
       {
         kind: "cli",
         scope: "global",
+        root: "workspace",
         bin: "code",
-        args: (ctx) => ["--add-mcp", JSON.stringify({ name: "ctxfile", type: "stdio", ...stdioEntry(ctx, "global") })],
+        args: (ctx, t) => ["--add-mcp", JSON.stringify({ name: "ctxfile", ...typedStdioEntry(ctx, t) })],
       },
+      { kind: "json", scope: "project", root: "workspace", file: (ctx) => path.join(ctx.root, ".vscode", "mcp.json"), container: ["servers"], entry: typedStdioEntry },
     ],
-    installLink: (ctx) =>
-      `vscode:mcp/install?${encodeURIComponent(JSON.stringify({ name: "ctxfile", type: "stdio", ...stdioEntry(ctx, "global") }))}`,
-    docs: "https://ctxfile.dev/docs/clients#vscode",
+    installLink: (ctx) => `vscode:mcp/install?${encodeURIComponent(JSON.stringify({ name: "ctxfile", ...typedStdioEntry(ctx, GLOBAL_WORKSPACE) }))}`,
+    docs: docs("vscode"),
+  },
+  {
+    id: "copilot-cli",
+    name: "GitHub Copilot CLI",
+    detect: (ctx) => present("~/.copilot present", homeDir(ctx, ".copilot")),
+    targets: [{ kind: "cli", scope: "global", root: "launch", bin: "copilot", args: (ctx, t) => ["mcp", "add", "ctxfile", ...dashDash(ctx, t)] }],
+    docs: docs("copilot-cli"),
   },
   {
     id: "windsurf",
     name: "Windsurf",
-    detect: (ctx) => (anyExists(homeDir(ctx, ".codeium", "windsurf")) ? "~/.codeium/windsurf present" : null),
+    detect: (ctx) => present("~/.codeium/windsurf present", homeDir(ctx, ".codeium", "windsurf")),
     targets: [
-      { kind: "json", scope: "global", file: (ctx) => homeDir(ctx, ".codeium", "windsurf", "mcp_config.json"), container: ["mcpServers"], entry: stdioEntry },
+      { kind: "json", scope: "global", root: "absolute", file: (ctx) => homeDir(ctx, ".codeium", "windsurf", "mcp_config.json"), container: ["mcpServers"], entry: stdioEntry },
     ],
-    docs: "https://ctxfile.dev/docs/clients#windsurf",
+    note: "Windsurf has no project-folder placeholder, so this entry serves this one project.",
+    docs: docs("windsurf"),
+  },
+  {
+    id: "zed",
+    name: "Zed",
+    detect: (ctx) => present("Zed settings present", path.dirname(zedSettings(ctx)), path.join(ctx.root, ".zed")),
+    targets: [
+      { kind: "json", scope: "global", root: "launch", file: zedSettings, container: ["context_servers"], entry: (ctx, t) => ({ ...launchLine(ctx, t), env: {} }) },
+      {
+        kind: "json",
+        scope: "project",
+        root: "launch",
+        file: (ctx) => path.join(ctx.root, ".zed", "settings.json"),
+        container: ["context_servers"],
+        entry: (ctx, t) => ({ ...launchLine(ctx, t), env: {} }),
+      },
+    ],
+    note: "Zed's settings file usually has comments; if so, connect prints the block to paste.",
+    docs: docs("zed"),
+  },
+  {
+    id: "cline",
+    name: "Cline",
+    detect: (ctx) =>
+      present("Cline settings present", path.dirname(path.dirname(clineExtensionSettings(ctx))), homeDir(ctx, ".cline")),
+    targets: [
+      {
+        kind: "json",
+        scope: "global",
+        root: "absolute",
+        file: clineSettings,
+        container: ["mcpServers"],
+        entry: (ctx, t) => ({ ...launchLine(ctx, t), disabled: false, autoApprove: [] }),
+      },
+    ],
+    note: "Cline starts servers outside the project, so this entry serves this one project.",
+    docs: docs("cline"),
   },
   {
     id: "claude-desktop",
     name: "Claude Desktop",
-    detect: (ctx) => (existsSync(path.dirname(claudeDesktopConfig(ctx))) ? "Claude Desktop settings folder present" : null),
-    targets: [{ kind: "json", scope: "global", file: claudeDesktopConfig, container: ["mcpServers"], entry: stdioEntry }],
-    docs: "https://ctxfile.dev/docs/clients#claude-desktop",
+    detect: (ctx) => present("Claude Desktop settings folder present", path.dirname(claudeDesktopConfig(ctx))),
+    targets: [{ kind: "json", scope: "global", root: "absolute", file: claudeDesktopConfig, container: ["mcpServers"], entry: stdioEntry }],
+    note: "Quit and reopen Claude Desktop to load it.",
+    docs: docs("claude-desktop"),
   },
   {
     id: "codex",
     name: "Codex CLI",
-    detect: (ctx) => (anyExists(homeDir(ctx, ".codex")) ? "~/.codex present" : null),
-    targets: [
-      {
-        kind: "cli",
-        scope: "global",
-        bin: "codex",
-        args: (ctx, scope) => ["mcp", "add", "ctxfile", "--", launchCommand(ctx, scope), ...serveArgs(ctx, scope)],
-      },
-    ],
-    docs: "https://ctxfile.dev/docs/clients#codex",
+    detect: (ctx) => present("~/.codex present", homeDir(ctx, ".codex")),
+    targets: [{ kind: "cli", scope: "global", root: "launch", bin: "codex", args: (ctx, t) => ["mcp", "add", "ctxfile", ...dashDash(ctx, t)] }],
+    docs: docs("codex"),
   },
   {
     id: "gemini",
     name: "Gemini CLI",
-    detect: (ctx) => (anyExists(homeDir(ctx, ".gemini"), path.join(ctx.root, ".gemini")) ? ".gemini directory present" : null),
+    detect: (ctx) => present(".gemini directory present", homeDir(ctx, ".gemini"), path.join(ctx.root, ".gemini")),
     targets: [
       {
         kind: "cli",
         scope: "global",
+        root: "launch",
         bin: "gemini",
-        args: (ctx, scope) => ["mcp", "add", "--scope", "user", "ctxfile", launchCommand(ctx, scope), ...serveArgs(ctx, scope)],
+        args: (ctx, t) => {
+          const line = launchLine(ctx, t);
+          return ["mcp", "add", "-s", "user", "ctxfile", line.command, ...line.args];
+        },
       },
       {
         kind: "cli",
         scope: "project",
+        root: "launch",
         bin: "gemini",
-        args: (ctx, scope) => ["mcp", "add", "ctxfile", launchCommand(ctx, scope), ...serveArgs(ctx, scope)],
+        args: (ctx, t) => {
+          const line = launchLine(ctx, t);
+          return ["mcp", "add", "-s", "project", "ctxfile", line.command, ...line.args];
+        },
       },
     ],
-    docs: "https://ctxfile.dev/docs/clients#gemini",
+    note: "Gemini CLI only starts local servers in a trusted folder (gemini trust).",
+    docs: docs("gemini"),
   },
   {
     id: "opencode",
     name: "OpenCode",
     detect: (ctx) =>
-      anyExists(homeDir(ctx, ".config", "opencode"), path.join(ctx.root, ".opencode"), path.join(ctx.root, "opencode.json"))
-        ? "OpenCode config present"
-        : null,
+      present("OpenCode config present", homeDir(ctx, ".config", "opencode"), path.join(ctx.root, ".opencode"), path.join(ctx.root, "opencode.json")),
     targets: [
       {
         kind: "json",
-        scope: "project",
-        file: (ctx) => path.join(ctx.root, "opencode.json"),
+        scope: "global",
+        root: "launch",
+        file: (ctx) => homeDir(ctx, ".config", "opencode", "opencode.json"),
         container: ["mcp"],
-        entry: (ctx, scope) => ({ type: "local", command: [launchCommand(ctx, scope), ...serveArgs(ctx, scope)], enabled: true }),
+        entry: (ctx, t) => {
+          const line = launchLine(ctx, t);
+          return { type: "local", command: [line.command, ...line.args], enabled: true };
+        },
       },
       {
         kind: "json",
-        scope: "global",
-        file: (ctx) => homeDir(ctx, ".config", "opencode", "opencode.json"),
+        scope: "project",
+        root: "launch",
+        file: (ctx) => path.join(ctx.root, "opencode.json"),
         container: ["mcp"],
-        entry: (ctx, scope) => ({ type: "local", command: [launchCommand(ctx, scope), ...serveArgs(ctx, scope)], enabled: true }),
+        entry: (ctx, t) => {
+          const line = launchLine(ctx, t);
+          return { type: "local", command: [line.command, ...line.args], enabled: true };
+        },
       },
     ],
-    docs: "https://ctxfile.dev/docs/clients#opencode",
+    docs: docs("opencode"),
+  },
+  {
+    id: "warp",
+    name: "Warp",
+    detect: (ctx) => present("~/.warp present", homeDir(ctx, ".warp")),
+    targets: [
+      { kind: "json", scope: "global", root: "absolute", file: (ctx) => homeDir(ctx, ".warp", ".mcp.json"), container: ["mcpServers"], entry: stdioEntry },
+      { kind: "json", scope: "project", root: "launch", file: (ctx) => path.join(ctx.root, ".warp", ".mcp.json"), container: ["mcpServers"], entry: stdioEntry },
+    ],
+    note: "Warp starts project-level servers only when you press Start in Settings, Agents, MCP servers.",
+    docs: docs("warp"),
+  },
+  {
+    id: "kiro",
+    name: "Kiro",
+    detect: (ctx) => present("~/.kiro present", homeDir(ctx, ".kiro")),
+    targets: [
+      { kind: "json", scope: "global", root: "absolute", file: (ctx) => homeDir(ctx, ".kiro", "settings", "mcp.json"), container: ["mcpServers"], entry: stdioEntry },
+    ],
+    installLink: (ctx) =>
+      `https://kiro.dev/launch/mcp/add?name=ctxfile&config=${encodeURIComponent(JSON.stringify(stdioEntry(ctx, GLOBAL_ABSOLUTE)))}`,
+    docs: docs("kiro"),
+  },
+  {
+    id: "junie",
+    name: "Junie (JetBrains)",
+    detect: (ctx) => present("~/.junie present", homeDir(ctx, ".junie")),
+    targets: [
+      { kind: "json", scope: "global", root: "absolute", file: (ctx) => homeDir(ctx, ".junie", "mcp", "mcp.json"), container: ["mcpServers"], entry: stdioEntry },
+    ],
+    docs: docs("jetbrains"),
+  },
+  {
+    id: "jetbrains-ai",
+    name: "JetBrains AI Assistant",
+    detect: (ctx) => present("JetBrains settings present", jetbrainsDir(ctx)),
+    targets: [],
+    manual: (ctx) =>
+      `In the IDE: Settings, Tools, AI Assistant, Model Context Protocol (MCP), Add, then paste:\n${jsonSnippet(["mcpServers"], stdioEntry(ctx, GLOBAL_ABSOLUTE))}`,
+    docs: docs("jetbrains"),
+  },
+  {
+    id: "visual-studio",
+    name: "Visual Studio",
+    detect: (ctx) => (ctx.platform === "win32" ? present("Visual Studio folder present", path.join(ctx.home, "AppData", "Local", "Microsoft", "VisualStudio")) : null),
+    targets: [
+      { kind: "json", scope: "global", root: "absolute", file: (ctx) => homeDir(ctx, ".mcp.json"), container: ["servers"], entry: typedStdioEntry },
+    ],
+    installLink: (ctx) => `https://vs-open.link/mcp-install?${encodeURIComponent(JSON.stringify({ name: "ctxfile", ...typedStdioEntry(ctx, GLOBAL_ABSOLUTE) }))}`,
+    docs: docs("visual-studio"),
+  },
+  {
+    id: "goose",
+    name: "Goose",
+    detect: (ctx) => present("Goose config present", homeDir(ctx, ".config", "goose"), path.join(appData(ctx), "Block", "goose")),
+    targets: [],
+    // Goose links only run a short list of launchers, npx among them.
+    installLink: (ctx) =>
+      `goose://extension?cmd=npx&arg=-y&arg=ctxfile&arg=--root&arg=${encodeURIComponent(ctx.root)}&id=ctxfile&name=ctxfile&description=${encodeURIComponent(
+        "Project context, threads, and tasks"
+      )}&timeout=300`,
+    manual: (ctx) =>
+      `Open the install link above, or add to ~/.config/goose/config.yaml:\nextensions:\n  ctxfile:\n    name: ctxfile\n    type: stdio\n    cmd: ${launchLine(ctx, GLOBAL_ABSOLUTE).command}\n    args: ${JSON.stringify(launchLine(ctx, GLOBAL_ABSOLUTE).args)}\n    enabled: true\n    timeout: 300`,
+    note: "Goose loads a new extension in the next session.",
+    docs: docs("goose"),
+  },
+  {
+    id: "lm-studio",
+    name: "LM Studio",
+    detect: (ctx) => present("LM Studio folder present", homeDir(ctx, ".lmstudio"), homeDir(ctx, ".cache", "lm-studio")),
+    targets: [],
+    installLink: (ctx) => `lmstudio://add_mcp?name=ctxfile&config=${encodeURIComponent(base64Json(stdioEntry(ctx, GLOBAL_ABSOLUTE)))}`,
+    manual: (ctx) => `Or in LM Studio: Program, Install, Edit mcp.json, then add:\n${jsonSnippet(["mcpServers"], stdioEntry(ctx, GLOBAL_ABSOLUTE))}`,
+    docs: docs("lm-studio"),
+  },
+  {
+    id: "amp",
+    name: "Amp",
+    detect: (ctx) => present("Amp settings present", homeDir(ctx, ".config", "amp"), path.join(appData(ctx), "amp")),
+    targets: [{ kind: "cli", scope: "global", root: "launch", bin: "amp", args: (ctx, t) => ["mcp", "add", "ctxfile", ...dashDash(ctx, t)] }],
+    docs: docs("amp"),
+  },
+  {
+    id: "hermes",
+    name: "Hermes",
+    detect: (ctx) => present("~/.hermes present", homeDir(ctx, ".hermes")),
+    targets: [
+      {
+        kind: "cli",
+        scope: "global",
+        root: "workspace",
+        bin: "hermes",
+        // --args takes the rest of the line, so it goes last.
+        args: (ctx, t) => {
+          const line = launchLine(ctx, t);
+          return ["mcp", "add", "ctxfile", "--command", line.command, "--args", ...line.args];
+        },
+      },
+    ],
+    note: "Run /reload-mcp in a Hermes session to pick it up.",
+    docs: docs("hermes"),
+  },
+  {
+    id: "openclaw",
+    name: "OpenClaw",
+    detect: (ctx) => present("~/.openclaw present", homeDir(ctx, ".openclaw")),
+    targets: [
+      { kind: "cli", scope: "global", root: "absolute", bin: "openclaw", args: (ctx, t) => ["mcp", "set", "ctxfile", JSON.stringify(stdioEntry(ctx, t))] },
+    ],
+    docs: docs("openclaw"),
+  },
+  {
+    id: "mistral-vibe",
+    name: "Mistral Vibe CLI",
+    detect: (ctx) => present("~/.vibe present", homeDir(ctx, ".vibe")),
+    targets: [],
+    manual: (ctx) => {
+      const line = launchLine(ctx, GLOBAL_ABSOLUTE);
+      return `Add to ~/.vibe/config.toml:\n[[mcp_servers]]\nname = "ctxfile"\ntransport = "stdio"\ncommand = ${JSON.stringify(line.command)}\nargs = ${JSON.stringify(line.args)}`;
+    },
+    docs: docs("mistral-vibe"),
   },
 ];
 
@@ -339,8 +570,8 @@ function shellQuote(arg: string): string {
 }
 
 export function describeTarget(spec: ClientSpec, target: Target, ctx: ConnectContext): string {
-  if (target.kind === "cli") return [target.bin, ...target.args(ctx, target.scope)].map(shellQuote).join(" ");
-  return `${target.file(ctx)}:\n${jsonSnippet(target.container, target.entry(ctx, target.scope))}`;
+  if (target.kind === "cli") return [target.bin, ...target.args(ctx, target)].map(shellQuote).join(" ");
+  return `${target.file(ctx)}:\n${jsonSnippet(target.container, target.entry(ctx, target))}`;
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -353,7 +584,7 @@ function sameJson(a: unknown, b: unknown): boolean {
 
 function connectJson(spec: ClientSpec, target: JsonTarget, ctx: ConnectContext, options: ConnectOptions): ConnectResult {
   const file = target.file(ctx);
-  const entry = target.entry(ctx, target.scope);
+  const entry = target.entry(ctx, target);
   const base = { client: spec.id, scope: target.scope, target: file };
   let doc: Record<string, unknown> = {};
   let existed = false;
@@ -406,7 +637,7 @@ function connectJson(spec: ClientSpec, target: JsonTarget, ctx: ConnectContext, 
 }
 
 function connectCli(spec: ClientSpec, target: CliTarget, ctx: ConnectContext, options: ConnectOptions): ConnectResult {
-  const args = target.args(ctx, target.scope);
+  const args = target.args(ctx, target);
   const command = [target.bin, ...args].map(shellQuote).join(" ");
   const base = { client: spec.id, scope: target.scope, target: command };
   if (options.dryRun) return { ...base, action: "printed", detail: `would run: ${command}` };
@@ -422,13 +653,19 @@ function connectCli(spec: ClientSpec, target: CliTarget, ctx: ConnectContext, op
 export function connectClient(spec: ClientSpec, ctx: ConnectContext, options: ConnectOptions = {}): ConnectResult {
   const target = pickTarget(spec, options.scope);
   if (!target) {
+    const parts = [
+      spec.installLink ? `One-click install link:\n${spec.installLink(ctx)}` : null,
+      spec.manual ? spec.manual(ctx) : null,
+    ].filter((p): p is string => p !== null);
     return {
       client: spec.id,
       scope: options.scope ?? "global",
       action: "printed",
       target: spec.docs,
-      detail: spec.manual ? spec.manual(ctx) : `no ${options.scope ?? ""} config for ${spec.name}; see ${spec.docs}`,
+      detail: parts.length > 0 ? parts.join("\n") : `no ${options.scope ?? ""} config ctxfile can write for ${spec.name}; see ${spec.docs}`,
     };
   }
-  return target.kind === "json" ? connectJson(spec, target, ctx, options) : connectCli(spec, target, ctx, options);
+  const result = target.kind === "json" ? connectJson(spec, target, ctx, options) : connectCli(spec, target, ctx, options);
+  if (spec.note && (result.action === "added" || result.action === "ran")) result.detail = `${result.detail}\n${spec.note}`;
+  return result;
 }

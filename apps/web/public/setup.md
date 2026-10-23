@@ -38,9 +38,11 @@ ctxfile connect --dry-run --all       # show what would change, write nothing
 
 What it does, so you can explain it:
 
-- Clients with their own command (Claude Code, Codex CLI, Gemini CLI, VS Code) are configured through that command.
-- JSON configs (Cursor, Windsurf, Claude Desktop, OpenCode) are merged: only the `ctxfile` entry is added, every other server is kept, and the previous file is saved as `<file>.ctxfile-backup`.
+- Clients with their own command (Claude Code, Codex CLI, Gemini CLI, VS Code, Copilot CLI, Amp, Hermes, OpenClaw) are configured through that command.
+- JSON configs (Cursor, Windsurf, Zed, Cline, Claude Desktop, OpenCode, Warp, Kiro, Junie, Visual Studio) are merged: only the `ctxfile` entry is added, every other server is kept, and the previous file is saved as `<file>.ctxfile-backup`.
+- Goose, LM Studio, JetBrains AI Assistant, and Mistral Vibe get a one-click install link or the exact snippet to paste; nothing is written for them.
 - A config with comments, or one that already has a different `ctxfile` entry, is left untouched and the exact snippet is printed for the user to paste.
+- Each client gets the project the way it can use it: a `${workspaceFolder}` placeholder where the client expands it, `.` where it starts servers in the project, and this project's absolute path for desktop apps that do neither.
 
 To see the exact config, command, or one-click install link for one client without changing anything: `ctxfile connect --print <client>`.
 

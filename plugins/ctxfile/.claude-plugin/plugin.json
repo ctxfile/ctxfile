@@ -1,0 +1,20 @@
+{
+  "name": "ctxfile",
+  "version": "0.7.0",
+  "description": "Local-first MCP server: project context, cross-tool threads and handoffs, memory, and tasks between agents. Runs on your machine; no network calls unless you configure them.",
+  "author": {
+    "name": "ctxfile",
+    "email": "hello@ctxfile.dev",
+    "url": "https://ctxfile.dev"
+  },
+  "homepage": "https://ctxfile.dev",
+  "repository": "https://github.com/ctxfile/ctxfile",
+  "license": "Apache-2.0",
+  "keywords": [
+    "mcp",
+    "context",
+    "handoff",
+    "memory",
+    "local-first"
+  ]
+}

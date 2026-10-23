@@ -76,6 +76,17 @@ export default function Changelog() {
                   <code>ctxfile vault delete</code> removes a vault from the relay for every device, ciphertext
                   and key wraps overwritten in place.
                 </li>
+                <li>
+                  Connect to everything: <code>ctxfile connect</code> finds the MCP clients on your machine and
+                  registers ctxfile in them (22 clients, from Claude Code, Cursor, and VS Code to Zed, Goose, and
+                  JetBrains), keeping backups and every other server. The client setup page gains one-click install
+                  buttons, and <a href="/setup.md">ctxfile.dev/setup.md</a> lets any agent do the setup for you.
+                </li>
+                <li>
+                  The dashboard&apos;s Connected agents card shows every tool that has connected and when. With no{" "}
+                  <code>--root</code>, ctxfile now follows Claude Code&apos;s open project, and an unexpanded{" "}
+                  <code>{"${workspaceFolder}"}</code> falls back to the working directory instead of failing.
+                </li>
               </ul>
               <p>
                 <a href="/docs/tasks">Read the tasks guide</a>.

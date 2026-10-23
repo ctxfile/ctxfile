@@ -2,12 +2,13 @@
 
 > ctxfile is a local-first, open-source MCP server that snapshots a project's working state (plan, key files, git state, session digests) into one structured context object any AI agent can load. Threads give work a durable identity across providers; an encrypted Sync vault carries the same context to web chatbots (Grok, ChatGPT, Claude, Perplexity) via MCP connectors. Free core is Apache-2.0 on npm as `ctxfile`; Pro adds session connectors for 8 coding agents, encrypted memory, multi-provider consult (Anthropic, OpenRouter, OpenAI-compatible, local Ollama), AI-distilled prompt playbooks, and voice. Nothing leaves the machine by default; everything ingested is secret-redacted at write.
 
-Key facts: install with `npm install -g ctxfile`; works with any MCP client (Claude Code, Cursor, Codex CLI, OpenCode, Gemini CLI, Aider, OpenClaw, Hermes); listed on the MCP Registry as `dev.ctxfile/ctxfile`; the exported artifact follows the versioned `.ctxfile/context.json` convention any tool can read; the Sync relay is open source and self-hostable.
+Key facts: install with `npm install -g ctxfile`; works with any MCP client (Claude Code, Cursor, VS Code, Codex CLI, Gemini CLI, Claude Desktop, Windsurf, Zed, Cline, OpenCode, Warp, Goose, LM Studio, Kiro, JetBrains, Visual Studio, Amp, OpenClaw, Hermes), and `ctxfile connect` registers it in the ones on the machine; listed on the MCP Registry as `dev.ctxfile/ctxfile`; the exported artifact follows the versioned `.ctxfile/context.json` convention any tool can read; the Sync relay is open source and self-hostable.
 
 ## Docs
 
 - [Quickstart](https://ctxfile.dev/docs): install, connect a client, first snapshot
-- [Client setup](https://ctxfile.dev/docs/clients): per-client tabs for Claude Code, Cursor, Codex CLI, OpenCode, Gemini CLI, OpenClaw, Hermes, Claude Desktop, aider, plus generic MCP config
+- [Client setup](https://ctxfile.dev/docs/clients): `ctxfile connect`, one-click install links, and per-client tabs for 22 clients (Claude Code, Cursor, VS Code, Codex CLI, Gemini CLI, Claude Desktop, Windsurf, Zed, Cline, OpenCode, Warp, Copilot CLI, Goose, LM Studio, Kiro, JetBrains, Visual Studio, Amp, OpenClaw, Hermes, Mistral Vibe, aider)
+- [Agent setup instructions](https://ctxfile.dev/setup.md): step-by-step for an AI agent setting ctxfile up for its user
 - [Web chatbots](https://ctxfile.dev/docs/webchat): connect Grok, ChatGPT, Claude web, Perplexity via MCP connectors; export and paste for Gemini and any prompt box
 - [Local models](https://ctxfile.dev/docs/local-models): Ollama setup, local summaries and consult, a fully local agent with OpenCode, which models support tool calling
 - [Playbooks](https://ctxfile.dev/docs/playbooks): reusable prompts an AI distills from your own sessions (Pro)
@@ -22,15 +23,30 @@ Key facts: install with `npm install -g ctxfile`; works with any MCP client (Cla
 
 ## Supported clients (MCP server, `npm install -g ctxfile`)
 
-Each entry is the exact registration; run ctxfile from the project or pass an absolute `--root`.
+Fastest: `ctxfile connect` lists the MCP clients on the machine; `ctxfile connect <client>` or `ctxfile connect --all` registers ctxfile in them (merges JSON configs, keeps a backup, drives a client's own `mcp add` command where there is one). An agent asked to set ctxfile up should follow https://ctxfile.dev/setup.md.
 
-- Claude Code: `claude mcp add ctxfile -- ctxfile --root .` (verify: `claude mcp list`)
-- Cursor: `.cursor/mcp.json` -> `{"mcpServers":{"ctxfile":{"command":"ctxfile","args":["--root","."]}}}`
+Each entry is the exact registration. Clients that expand `${workspaceFolder}` (Cursor, VS Code, Hermes) or start servers in the project (Codex, Gemini CLI, OpenCode, Zed) serve the open project; desktop apps without either need an absolute `--root`. With no `--root`, ctxfile uses `CLAUDE_PROJECT_DIR` (set by Claude Code), then its working directory.
+
+- Claude Code: `claude mcp add --scope user ctxfile -- ctxfile` (one entry for every project; verify: `claude mcp list`)
+- Cursor: `~/.cursor/mcp.json` or `.cursor/mcp.json` -> `{"mcpServers":{"ctxfile":{"command":"ctxfile","args":["--root","${workspaceFolder}"]}}}`; one-click: `cursor://anysphere.cursor-deeplink/mcp/install?name=ctxfile&config=eyJjb21tYW5kIjoiY3R4ZmlsZSIsImFyZ3MiOlsiLS1yb290IiwiJHt3b3Jrc3BhY2VGb2xkZXJ9Il19`
+- VS Code (Copilot): `code --add-mcp '{"name":"ctxfile","type":"stdio","command":"ctxfile","args":["--root","${workspaceFolder}"]}'`, or `.vscode/mcp.json` `servers`; one-click: `vscode:mcp/install?<url-encoded same JSON>`
+- Windsurf: `~/.codeium/windsurf/mcp_config.json` `mcpServers` with an absolute `--root`
+- Zed: `context_servers` in `~/.config/zed/settings.json` or `.zed/settings.json`, `{"command":"ctxfile","args":["--root","."],"env":{}}`
+- Cline: `cline_mcp_settings.json` (MCP Servers panel, Configure) `mcpServers`, absolute `--root`
+- Warp: `.warp/.mcp.json` `mcpServers` (`--root .`), or `~/.warp/.mcp.json` with an absolute root
+- GitHub Copilot CLI: `copilot mcp add ctxfile -- ctxfile --root .`
+- Goose: `goose://extension?cmd=npx&arg=-y&arg=ctxfile&arg=--root&arg=<abs path>&id=ctxfile&name=ctxfile` or `~/.config/goose/config.yaml` `extensions`
+- LM Studio: `lmstudio://add_mcp?name=ctxfile&config=<url-encoded base64 of {"command":"ctxfile","args":["--root","<abs path>"]}>`
+- Kiro: `~/.kiro/settings/mcp.json` `mcpServers`, absolute root
+- JetBrains: AI Assistant, Settings, Tools, AI Assistant, MCP, Add (paste `mcpServers` JSON); Junie: `~/.junie/mcp/mcp.json`
+- Visual Studio: `%USERPROFILE%\.mcp.json` `servers` with `"type":"stdio"`, absolute root
+- Amp: `amp mcp add ctxfile -- ctxfile --root .`
+- Mistral Vibe: `~/.vibe/config.toml` `[[mcp_servers]]` with `transport = "stdio"`
 - Codex CLI: `codex mcp add ctxfile -- ctxfile --root .` (writes `~/.codex/config.toml` `[mcp_servers.ctxfile]`)
 - OpenCode: `opencode.json` -> `{"mcp":{"ctxfile":{"type":"local","command":["ctxfile","--root","."],"enabled":true}}}`
-- Gemini CLI: `gemini mcp add ctxfile ctxfile --root .` or `~/.gemini/settings.json` `mcpServers`
-- OpenClaw: `openclaw mcp add ctxfile --command ctxfile --arg --root --arg /abs/path` (config key is `mcp.servers`)
-- Hermes: `~/.hermes/config.yaml` `mcp_servers.ctxfile` command/args; tools register as `mcp_ctxfile_<tool>`
+- Gemini CLI: `gemini mcp add -s user ctxfile ctxfile --root .` or `~/.gemini/settings.json` `mcpServers` (local servers start only in a trusted folder)
+- OpenClaw: `openclaw mcp set ctxfile '{"command":"ctxfile","args":["--root","/abs/path"]}'` (verify: `openclaw mcp probe ctxfile`)
+- Hermes: `~/.hermes/config.yaml` `mcp_servers.ctxfile` with `args: ["--root", "${workspaceFolder}"]`; tools register as `mcp_ctxfile_<tool>`
 - Claude Desktop: install the `ctxfile.mcpb` extension, or `claude_desktop_config.json` `mcpServers`
 - Aider: no MCP client; use `ctxfile export` then `/read .ctxfile/context.json`
 - Any other MCP client: `{"command":"ctxfile","args":["--root","."]}` over stdio

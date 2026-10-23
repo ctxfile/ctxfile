@@ -3023,7 +3023,7 @@ footer {
   padding: 8px 14px;
   border-radius: var(--radius-lg);
   background: var(--accent);
-  color: #fff;
+  color: var(--text-on-accent);
   font-weight: 600;
   font-size: 14px;
   text-decoration: none;
@@ -3034,6 +3034,40 @@ footer {
   text-decoration: none;
 }
 
+.cs-install[data-disabled="true"] {
+  background: var(--surface-1);
+  color: var(--text-3);
+  border: 1px dashed var(--line);
+  cursor: not-allowed;
+}
+
+.cs-install-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.cs-root {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 18px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.cs-root input {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  padding: 9px 12px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--line);
+  background: var(--surface-solid);
+  color: var(--text);
+  width: 100%;
+  max-width: 560px;
+}
+
 .agent-setup {
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
@@ -3042,8 +3076,10 @@ footer {
   background: var(--surface-solid);
 }
 
-.agent-setup h2 {
+.prose .agent-setup h2 {
   margin-top: 0;
+  padding-top: 0;
+  border-top: none;
 }
 
 /* ---------- blog ---------- */

@@ -297,14 +297,27 @@ const CLIENT_LABELS: Record<string, string> = {
   grok: "Grok",
   perplexity: "Perplexity",
   vscode: "VS Code",
+  "visual-studio-code": "VS Code",
+  "visual-studio": "Visual Studio",
   windsurf: "Windsurf",
   zed: "Zed",
   cline: "Cline",
   goose: "Goose",
+  warp: "Warp",
+  "lm-studio": "LM Studio",
+  kiro: "Kiro",
+  junie: "Junie",
+  amp: "Amp",
+  "github-copilot": "GitHub Copilot",
+  "copilot-cli": "Copilot CLI",
+  "le-chat": "Le Chat",
 };
 
+/** A friendly name for a harness id; clients ctxfile has no id for arrive as
+    custom:<their name> and are labeled by that name. */
 export function clientLabel(harness: string): string {
-  return CLIENT_LABELS[harness] ?? (harness.startsWith("custom:") ? harness.slice("custom:".length) : harness);
+  const name = harness.startsWith("custom:") ? harness.slice("custom:".length) : harness;
+  return CLIENT_LABELS[harness] ?? CLIENT_LABELS[name] ?? name;
 }
 
 /** Every agent that has connected to ctxfile for this project, and when it

@@ -33,8 +33,9 @@ describe("ctxfile connect: JSON configs", () => {
   it("creates the config when there is none", () => {
     const result = connectClient(cursor, ctx);
     expect(result.action).toBe("added");
+    // One global entry serves whichever project is open: Cursor expands the placeholder.
     expect(JSON.parse(readFileSync(cursorGlobal(), "utf8"))).toEqual({
-      mcpServers: { ctxfile: { command: "ctxfile", args: ["--root", root] } },
+      mcpServers: { ctxfile: { command: "ctxfile", args: ["--root", "${workspaceFolder}"] } },
     });
   });
 
@@ -58,7 +59,7 @@ describe("ctxfile connect: JSON configs", () => {
     expect(connectClient(cursor, ctx).action).toBe("exists-different");
     expect(JSON.parse(readFileSync(cursorGlobal(), "utf8"))).toEqual(custom);
     expect(connectClient(cursor, ctx, { force: true }).action).toBe("added");
-    expect(JSON.parse(readFileSync(cursorGlobal(), "utf8")).mcpServers.ctxfile.args).toEqual(["--root", root]);
+    expect(JSON.parse(readFileSync(cursorGlobal(), "utf8")).mcpServers.ctxfile.args).toEqual(["--root", "${workspaceFolder}"]);
   });
 
   it("never rewrites a file that is not plain JSON", () => {
@@ -77,18 +78,47 @@ describe("ctxfile connect: JSON configs", () => {
     expect(existsSync(cursorGlobal())).toBe(false);
   });
 
-  it("keeps project configs portable: relative root, no machine paths", () => {
+  it("keeps project configs portable: no machine paths in a file that gets committed", () => {
     const machine: ConnectContext = {
       ...ctx,
       launch: { command: "/opt/node/bin/node", prefix: ["/opt/node/lib/ctxfile/cli.js"], why: "abs", portable: { command: "ctxfile", prefix: [] } },
     };
     connectClient(cursor, machine, { scope: "project" });
     const project = JSON.parse(readFileSync(path.join(root, ".cursor", "mcp.json"), "utf8"));
-    expect(project.mcpServers.ctxfile).toEqual({ command: "ctxfile", args: ["--root", "."] });
+    expect(project.mcpServers.ctxfile).toEqual({ command: "ctxfile", args: ["--root", "${workspaceFolder}"] });
     connectClient(cursor, machine, { scope: "global" });
     expect(JSON.parse(readFileSync(cursorGlobal(), "utf8")).mcpServers.ctxfile).toEqual({
       command: "/opt/node/bin/node",
-      args: ["/opt/node/lib/ctxfile/cli.js", "--root", root],
+      args: ["/opt/node/lib/ctxfile/cli.js", "--root", "${workspaceFolder}"],
+    });
+  });
+
+  it("passes each client the project the way that client can use it", () => {
+    const entryOf = (id: string, file: string, container: string[]): unknown => {
+      connectClient(findClient(id) as ClientSpec, ctx);
+      let value: unknown = JSON.parse(readFileSync(file, "utf8"));
+      for (const key of container) value = (value as Record<string, unknown>)[key];
+      return (value as Record<string, unknown>).ctxfile;
+    };
+    // No placeholder support and no project working directory: absolute.
+    expect(entryOf("windsurf", path.join(home, ".codeium", "windsurf", "mcp_config.json"), ["mcpServers"])).toEqual({
+      command: "ctxfile",
+      args: ["--root", root],
+    });
+    expect(entryOf("claude-desktop", path.join(home, ".config", "Claude", "claude_desktop_config.json"), ["mcpServers"])).toEqual({
+      command: "ctxfile",
+      args: ["--root", root],
+    });
+    // Started in the project: relative.
+    expect(entryOf("zed", path.join(home, ".config", "zed", "settings.json"), ["context_servers"])).toEqual({
+      command: "ctxfile",
+      args: ["--root", "."],
+      env: {},
+    });
+    expect(entryOf("opencode", path.join(home, ".config", "opencode", "opencode.json"), ["mcp"])).toEqual({
+      type: "local",
+      command: ["ctxfile", "--root", "."],
+      enabled: true,
     });
   });
 });
@@ -103,7 +133,8 @@ describe("ctxfile connect: clients with their own CLI", () => {
       },
     });
     expect(result.action).toBe("ran");
-    expect(calls).toEqual([["claude", ["mcp", "add", "--scope", "user", "ctxfile", "--", "ctxfile", "--root", root]]]);
+    // No --root: Claude Code sets CLAUDE_PROJECT_DIR for the servers it starts.
+    expect(calls).toEqual([["claude", ["mcp", "add", "--scope", "user", "ctxfile", "--", "ctxfile"]]]);
   });
 
   it("treats 'already exists' as done, and a missing CLI as a command to run by hand", () => {
@@ -113,7 +144,7 @@ describe("ctxfile connect: clients with their own CLI", () => {
     expect(exists.action).toBe("already");
     const missing = connectClient(claudeCode, ctx, { run: () => ({ status: null, stdout: "", stderr: "", missing: true }) });
     expect(missing.action).toBe("printed");
-    expect(missing.detail).toContain("claude mcp add --scope user ctxfile -- ctxfile --root");
+    expect(missing.detail).toContain("claude mcp add --scope user ctxfile -- ctxfile");
   });
 });
 
@@ -127,12 +158,37 @@ describe("ctxfile connect: launch and links", () => {
     const link = (cursor.installLink as (c: ConnectContext) => string)(ctx);
     expect(link.startsWith("cursor://anysphere.cursor-deeplink/mcp/install?name=ctxfile&config=")).toBe(true);
     const config = decodeURIComponent(new URL(link).searchParams.get("config") ?? "");
-    expect(JSON.parse(Buffer.from(config, "base64").toString("utf8"))).toEqual({ command: "ctxfile", args: ["--root", root] });
+    expect(JSON.parse(Buffer.from(config, "base64").toString("utf8"))).toEqual({ command: "ctxfile", args: ["--root", "${workspaceFolder}"] });
+  });
+
+  it("builds VS Code, LM Studio, and Goose links in each client's own format", () => {
+    const link = (id: string): string => ((findClient(id) as ClientSpec).installLink as (c: ConnectContext) => string)(ctx);
+    const vscode = link("vscode");
+    expect(vscode.startsWith("vscode:mcp/install?")).toBe(true);
+    expect(JSON.parse(decodeURIComponent(vscode.slice("vscode:mcp/install?".length)))).toEqual({
+      name: "ctxfile",
+      type: "stdio",
+      command: "ctxfile",
+      args: ["--root", "${workspaceFolder}"],
+    });
+    const lm = new URL(link("lm-studio"));
+    expect(JSON.parse(Buffer.from(lm.searchParams.get("config") ?? "", "base64").toString("utf8"))).toEqual({ command: "ctxfile", args: ["--root", root] });
+    // Goose only runs a short list of launchers from a link; npx is one.
+    const goose = new URL(link("goose"));
+    expect(goose.searchParams.get("cmd")).toBe("npx");
+    expect(goose.searchParams.getAll("arg")).toEqual(["-y", "ctxfile", "--root", root]);
+  });
+
+  it("gives the exact snippet, never a write, for clients configured only by hand", () => {
+    const result = connectClient(findClient("jetbrains-ai") as ClientSpec, ctx);
+    expect(result.action).toBe("printed");
+    expect(result.detail).toContain('"mcpServers"');
+    expect(result.detail).toContain(root);
   });
 
   it("knows every client by a unique id and gives each a docs link", () => {
     const ids = CLIENTS.map((c) => c.id);
     expect(new Set(ids).size).toBe(ids.length);
-    for (const spec of CLIENTS) expect(spec.docs).toMatch(/^https:\/\/ctxfile\.dev\/docs\/clients#/);
+    for (const spec of CLIENTS) expect(spec.docs).toMatch(/^https:\/\/ctxfile\.dev\/docs\/clients\?tab=[a-z-]+$/);
   });
 });

@@ -1,5 +1,6 @@
 export {
   loadConfig,
+  resolveRootDir,
   type ConsultProviderSpec,
   type LoadConfigOptions,
   type ResolvedConfig,

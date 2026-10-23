@@ -1,0 +1,22 @@
+{
+  "name": "ctxfile",
+  "owner": {
+    "name": "ctxfile",
+    "email": "hello@ctxfile.dev"
+  },
+  "metadata": {
+    "description": "ctxfile for Claude Code: one shared project context, threads, memory, and tasks across every AI tool you use."
+  },
+  "plugins": [
+    {
+      "name": "ctxfile",
+      "source": "./plugins/ctxfile",
+      "description": "Local-first MCP server: project context, cross-tool threads and handoffs, memory, and tasks between agents. Runs on your machine; no network calls unless you configure them.",
+      "homepage": "https://ctxfile.dev",
+      "repository": "https://github.com/ctxfile/ctxfile",
+      "license": "Apache-2.0",
+      "keywords": ["mcp", "context", "handoff", "memory", "local-first"],
+      "category": "productivity"
+    }
+  ]
+}
