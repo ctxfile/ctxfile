@@ -17,6 +17,17 @@ export function formatRelative(value: string | number | null | undefined, now = 
   return formatAge(delta);
 }
 
+/** Time left until an ISO/epoch timestamp: "in 6d", "in 3h", or "expired". */
+export function formatUntil(value: string | number, now = Date.now()): string {
+  const ts = typeof value === "number" ? value : Date.parse(value);
+  if (Number.isNaN(ts)) return "unknown";
+  const left = ts - now;
+  if (left <= 0) return "expired";
+  if (left < 3_600_000) return `in ${Math.max(1, Math.round(left / 60_000))}m`;
+  if (left < 86_400_000) return `in ${Math.round(left / 3_600_000)}h`;
+  return `in ${Math.round(left / 86_400_000)}d`;
+}
+
 /** Compact token counts: 950 → "950", 18 432 → "18.4k", 1 250 000 → "1.25M". */
 export function formatCompact(n: number): string {
   if (!Number.isFinite(n)) return "–";

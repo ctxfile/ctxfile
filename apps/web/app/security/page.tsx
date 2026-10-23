@@ -80,14 +80,18 @@ export default function Security() {
               </li>
             </ul>
             <p>
-              Key recovery is passphrase plus a printed recovery code. We cannot reset a Strict vault. Vault
-              deletion destroys its keys: crypto-shredding.
+              Key recovery is passphrase plus a printed recovery code. We cannot reset a Strict vault. On the
+              hosted relay, the master key that wraps Standard vaults&apos; data keys is a platform secret, kept
+              off the data volume and out of its snapshots; the relay refuses to start without it.{" "}
+              <code>ctxfile vault delete</code> removes a vault and its key wraps for every device, overwritten
+              in place. Platform backups taken before the deletion age out within days.
             </p>
 
             <h2>Enterprise controls (BYOK and federation)</h2>
             <ul>
               <li>
-                <strong>BYOK:</strong> serve-time data keys live in your KMS (AWS KMS, GCP KMS, Azure Key
+                <strong>BYOK (Enterprise, on request; not self-serve yet):</strong> the relay&apos;s key seam is
+                built for serve-time data keys to live in your KMS (AWS KMS, GCP KMS, Azure Key
                 Vault) under envelope encryption. ctxfile infrastructure never holds decryptable material for
                 BYOK orgs; revoking your CMK makes the data instantly unreadable.
               </li>

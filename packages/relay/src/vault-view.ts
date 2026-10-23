@@ -6,12 +6,15 @@ import {
   initialMemoryStatus,
   memoryId,
   parseSyncPayload,
+  parseTaskRecord,
   redactContent,
   type MemoryImportResult,
   type MemoryInput,
   type MemorySyncPayload,
   type SessionSyncPayload,
   type SyncPayload,
+  type TaskRecord,
+  type TaskSyncPayload,
   type ThreadSyncPayload,
   type VaultView,
 } from "ctxfile";
@@ -51,9 +54,43 @@ export async function loadVaultPayloads(db: RelayDb, dataKey: Uint8Array, vault:
   return payloads;
 }
 
-export async function loadView(db: RelayDb, keyring: KeyProvider, vault: VaultRow): Promise<VaultView> {
+/**
+ * A short-lived cache of decrypted payloads per vault. Inbox-on-load adds a
+ * list_tasks call to every session start, and decrypting a whole vault per
+ * call does not scale. Entries are keyed on a fingerprint of the vault's blob
+ * set (any write invalidates them), expire after a minute, and are bounded in
+ * number. Plaintext stays in process memory only, as before; it now lives
+ * for up to a minute instead of one request.
+ */
+const VIEW_CACHE_TTL_MS = 60_000;
+const VIEW_CACHE_MAX_VAULTS = 200;
+const viewCache = new Map<string, { fingerprint: string; at: number; payloads: SyncPayload[] }>();
+
+/** Drops cached plaintext: for one vault (after it is deleted), or all. */
+export function clearViewCache(vaultId?: string): void {
+  if (vaultId === undefined) viewCache.clear();
+  else viewCache.delete(vaultId);
+}
+
+async function cachedPayloads(db: RelayDb, keyring: KeyProvider, vault: VaultRow): Promise<SyncPayload[]> {
   const dataKey = unwrapDataKey(keyring, vault);
-  return buildVaultView(await loadVaultPayloads(db, dataKey, vault));
+  const fingerprint = db.blobFingerprint(vault.id);
+  const now = Date.now();
+  const hit = viewCache.get(vault.id);
+  if (hit && hit.fingerprint === fingerprint && now - hit.at < VIEW_CACHE_TTL_MS) return hit.payloads;
+  const payloads = await loadVaultPayloads(db, dataKey, vault);
+  viewCache.delete(vault.id);
+  viewCache.set(vault.id, { fingerprint, at: now, payloads });
+  while (viewCache.size > VIEW_CACHE_MAX_VAULTS) {
+    const oldest = viewCache.keys().next().value;
+    if (oldest === undefined) break;
+    viewCache.delete(oldest);
+  }
+  return payloads;
+}
+
+export async function loadView(db: RelayDb, keyring: KeyProvider, vault: VaultRow): Promise<VaultView> {
+  return buildVaultView(await cachedPayloads(db, keyring, vault));
 }
 
 const textEncoder = new TextEncoder();
@@ -249,4 +286,77 @@ export async function writeMemories(
     db.putBlob(vault.id, blobId, { id: blobId, version: payload.updated_at, deleted: false }, data);
   }
   return result;
+}
+
+
+// ---------------------------------------------------------------------------
+// Tasks. Relay-side writes serialize per vault (one async queue per vault, so
+// a read-modify-write cannot interleave with another on this process) and are
+// compare-and-set against the stored version (so a device push that lands in
+// between makes the relay write fail and retry, never clobber).
+// ---------------------------------------------------------------------------
+
+const vaultQueues = new Map<string, Promise<unknown>>();
+
+export function withVaultLock<T>(vaultId: string, fn: () => Promise<T>): Promise<T> {
+  const previous = vaultQueues.get(vaultId) ?? Promise.resolve();
+  const run = previous.then(fn, fn);
+  const tail = run.then(
+    () => undefined,
+    () => undefined
+  );
+  vaultQueues.set(vaultId, tail);
+  void tail.then(() => {
+    if (vaultQueues.get(vaultId) === tail) vaultQueues.delete(vaultId);
+  });
+  return run;
+}
+
+export async function taskBlobId(dataKey: Uint8Array, taskId: string): Promise<string> {
+  return deriveBlobId(dataKey, `task:${taskId}`);
+}
+
+/** One task straight from its blob (not the cache), with the version the
+    relay holds, for a compare-and-set write. */
+export async function readTask(
+  db: RelayDb,
+  keyring: KeyProvider,
+  vault: VaultRow,
+  taskId: string
+): Promise<{ task: TaskRecord; version: number } | null> {
+  const dataKey = unwrapDataKey(keyring, vault);
+  const blobId = await taskBlobId(dataKey, taskId);
+  const blob = db.getBlob(vault.id, blobId);
+  if (!blob) return null;
+  try {
+    const parsed = parseSyncPayload(await decryptBlob(dataKey, blob.data, blobId));
+    if (parsed?.kind !== "task") return null;
+    const task = parseTaskRecord(parsed);
+    return task ? { task, version: blob.meta.version } : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Writes a task blob. `expected` is the version the relay must still hold
+    (null for a new task). Returns false when another writer got there first. */
+export async function writeTask(
+  db: RelayDb,
+  keyring: KeyProvider,
+  vault: VaultRow,
+  task: TaskRecord,
+  expected: number | null
+): Promise<boolean> {
+  const dataKey = unwrapDataKey(keyring, vault);
+  const blobId = await taskBlobId(dataKey, task.task_id);
+  const payload: TaskSyncPayload = { kind: "task", ...task };
+  const data = await encryptBlob(dataKey, textEncoder.encode(JSON.stringify(payload)), blobId);
+  const result = db.putBlobIf(vault.id, blobId, { id: blobId, version: task.updated_at, deleted: task.deleted }, data, expected);
+  return result === "stored";
+}
+
+/** Creates (or touches) the thread a relay-posted task belongs to. */
+export async function touchThread(db: RelayDb, keyring: KeyProvider, vault: VaultRow, title: string, now: number): Promise<void> {
+  const dataKey = unwrapDataKey(keyring, vault);
+  await upsertThreadBlob(db, dataKey, vault, title, now);
 }

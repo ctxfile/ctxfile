@@ -56,8 +56,10 @@ export async function redeemFederatedGrant(options: RedeemOptions): Promise<{ th
 
   let imported = 0;
   for (const payload of result.payloads) {
-    // A grant is one thread; memory is never federated, even if a peer sends it.
-    if (payload.kind === "memory") continue;
+    // A grant is one thread and its sessions; memory and tasks (and task
+    // freezes) are never federated, even if a peer sends them (cross-org
+    // tasks are a Team-tier feature, not a side effect of a read grant).
+    if (payload.kind !== "thread" && payload.kind !== "session") continue;
     const naturalId =
       payload.kind === "thread" ? `thread:${payload.title.toLowerCase()}` : `session:${payload.harness}:${payload.session_id}`;
     const blobId = await deriveBlobId(dataKey, naturalId);

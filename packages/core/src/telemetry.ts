@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { ResolvedConfig } from "./config.js";
+import { IngestStore, type GateCounts } from "./storage/ingest-store.js";
 import { VERSION } from "./version.js";
 
 export type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
@@ -28,15 +29,32 @@ function loadState(filePath: string): TelemetryState {
   return { installId: randomUUID(), lastPingAt: null };
 }
 
+/** Reads the four gate counters from the local store, or null when there is
+    no store yet or it cannot be read. Whole numbers only. */
+export function readGateCounts(cacheDir: string, now = Date.now()): GateCounts | null {
+  const dbPath = path.join(cacheDir, "ingest.db");
+  if (!existsSync(dbPath)) return null;
+  let store: IngestStore | null = null;
+  try {
+    store = new IngestStore(dbPath);
+    return store.gateCounts(now);
+  } catch {
+    return null;
+  } finally {
+    store?.close();
+  }
+}
+
 /**
- * Sends the weekly opt-in anonymous ping: random install UUID, version, and
- * coarse OS — never code, paths, or content. No-op unless telemetry.enabled
- * is explicitly true. All failures are swallowed; telemetry must never
- * affect the server.
+ * Sends the weekly opt-in anonymous ping: random install UUID, version,
+ * coarse OS, and four whole-number usage counts (how often work crosses
+ * between AI tools) — never code, paths, titles, or content. No-op unless
+ * telemetry.enabled is explicitly true. All failures are swallowed;
+ * telemetry must never affect the server.
  */
 export async function sendPingIfDue(
   config: ResolvedConfig,
-  opts: { fetchImpl?: FetchLike; now?: Date; stateFilePath?: string } = {}
+  opts: { fetchImpl?: FetchLike; now?: Date; stateFilePath?: string; usage?: () => GateCounts | null } = {}
 ): Promise<boolean> {
   if (!config.telemetry.enabled) return false;
   const now = opts.now ?? new Date();
@@ -48,11 +66,17 @@ export async function sendPingIfDue(
   }
 
   const fetchImpl = opts.fetchImpl ?? ((url: string, init?: RequestInit) => globalThis.fetch(url, init));
+  let usage: GateCounts | null = null;
+  try {
+    usage = (opts.usage ?? (() => readGateCounts(config.cacheDir, now.getTime())))();
+  } catch {
+    usage = null;
+  }
   try {
     await fetchImpl(config.telemetry.endpoint, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ installId: state.installId, version: VERSION, os: process.platform }),
+      body: JSON.stringify({ installId: state.installId, version: VERSION, os: process.platform, ...(usage ? { usage } : {}) }),
       signal: AbortSignal.timeout(5_000),
     });
   } catch {

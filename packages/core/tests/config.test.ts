@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { loadConfig } from "../src/config.js";
+import { resolveRootDir, loadConfig } from "../src/config.js";
 
 describe("loadConfig", () => {
   let dir: string;
@@ -197,5 +197,32 @@ describe("vaults config", () => {
     } finally {
       spy.mockRestore();
     }
+  });
+});
+
+describe("resolveRootDir: forgiving about how clients start ctxfile", () => {
+  it("uses an explicit --root, relative to the working directory", () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), "ctxfile-root-"));
+    expect(resolveRootDir("sub", {}, dir)).toBe(path.join(dir, "sub"));
+    expect(resolveRootDir(dir, { CLAUDE_PROJECT_DIR: "/elsewhere" }, "/")).toBe(dir);
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("falls back to CLAUDE_PROJECT_DIR, then the working directory, when no root is given", () => {
+    const project = mkdtempSync(path.join(os.tmpdir(), "ctxfile-claude-project-"));
+    expect(resolveRootDir(undefined, { CLAUDE_PROJECT_DIR: project }, "/")).toBe(project);
+    expect(resolveRootDir(undefined, { CLAUDE_PROJECT_DIR: path.join(project, "missing") }, project)).toBe(project);
+    expect(resolveRootDir(undefined, {}, project)).toBe(project);
+    rmSync(project, { recursive: true, force: true });
+  });
+
+  it("ignores a placeholder the client did not expand, instead of serving a folder named after it", () => {
+    const project = mkdtempSync(path.join(os.tmpdir(), "ctxfile-placeholder-"));
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    expect(resolveRootDir("${workspaceFolder}", {}, project)).toBe(project);
+    expect(resolveRootDir("${CLAUDE_PROJECT_DIR:-.}", { CLAUDE_PROJECT_DIR: project }, "/")).toBe(project);
+    expect(error).toHaveBeenCalled();
+    error.mockRestore();
+    rmSync(project, { recursive: true, force: true });
   });
 });

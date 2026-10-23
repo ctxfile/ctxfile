@@ -4,3 +4,7 @@
   Content-Type: image/png
 /blog/*/opengraph-image
   Content-Type: image/png
+# Agent-readable setup instructions: serve as text so agents and browsers
+# read them instead of downloading a file.
+/setup.md
+  Content-Type: text/markdown; charset=utf-8

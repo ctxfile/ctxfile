@@ -66,6 +66,22 @@ export interface AuditRow {
   org_id: string | null;
 }
 
+/** Every scope a full device token carries. Tokens minted before tasks
+    existed hold only the first two; the relay treats read:context and
+    write:sessions as implying the task scopes for device tokens. */
+export const DEVICE_SCOPES = ["read:context", "write:sessions", "read:tasks", "write:tasks"] as const;
+
+/** Outcome of a (possibly conditional) blob write. */
+export type BlobPutResult = "stored" | "stale" | "conflict";
+
+export interface ApproverKeyRow {
+  vault_id: string;
+  key_id: string;
+  public_key_b64: string;
+  added_by: string;
+  added_at: number;
+}
+
 export function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
@@ -80,6 +96,9 @@ export class RelayDb {
   constructor(dataDir: string) {
     this.db = new Database(path.join(dataDir, "relay.db"));
     this.db.pragma("journal_mode = WAL");
+    // Deleted rows are overwritten, not just unlinked, so a deleted vault's
+    // ciphertext and key wraps do not linger in free pages of the file.
+    this.db.pragma("secure_delete = ON");
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS vaults (
         id TEXT PRIMARY KEY,
@@ -144,10 +163,41 @@ export class RelayDb {
         org_id TEXT
       );
       CREATE INDEX IF NOT EXISTS idx_audit_vault ON audit (vault_id, ts DESC);
+      CREATE TABLE IF NOT EXISTS approver_keys (
+        vault_id TEXT NOT NULL,
+        key_id TEXT NOT NULL,
+        public_key_b64 TEXT NOT NULL,
+        added_by TEXT NOT NULL,
+        added_at INTEGER NOT NULL,
+        PRIMARY KEY (vault_id, key_id)
+      );
     `);
   }
 
   // --- vaults ---------------------------------------------------------------
+
+  /** Deletes a vault and everything stored for it: blobs, key wraps, tokens,
+      grants, approver keys, and push targets with their queued events. The
+      audit trail keeps its rows (ids and counts only) plus one for the
+      deletion. Returns false if there was no such vault. */
+  deleteVault(vaultId: string, actor: string): boolean {
+    const existed = this.db.transaction(() => {
+      const row = this.db.prepare("SELECT id FROM vaults WHERE id = ?").get(vaultId);
+      if (!row) return false;
+      const tables = ["blobs", "tokens", "federation_grants", "approver_keys", "push_outbox", "push_targets"];
+      for (const table of tables) {
+        const present = this.db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(table);
+        if (present) this.db.prepare(`DELETE FROM ${table} WHERE vault_id = ?`).run(vaultId);
+      }
+      this.db.prepare("DELETE FROM vaults WHERE id = ?").run(vaultId);
+      this.audit({ vaultId, actor, action: "vault.delete" });
+      return true;
+    })();
+    // Fold the write-ahead log back into the main file so the old pages do
+    // not survive there either.
+    if (existed) this.db.pragma("wal_checkpoint(TRUNCATE)");
+    return existed;
+  }
 
   createVault(input: {
     name: string;
@@ -166,7 +216,7 @@ export class RelayDb {
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(id, input.name, input.mode, input.salt_b64, input.kdf_ops, input.kdf_mem, input.wrapped_passphrase_b64, input.wrapped_recovery_b64, now);
-    const token = this.createToken(id, "device-1", ["read:context", "write:sessions"]);
+    const token = this.createToken(id, "device-1", [...DEVICE_SCOPES]);
     return { vault: this.getVault(id) as VaultRow, token };
   }
 
@@ -269,18 +319,66 @@ export class RelayDb {
 
   /** LWW at the relay too: an older version never clobbers a newer one. */
   putBlob(vaultId: string, id: string, meta: SyncBlobMeta, data: Uint8Array): boolean {
-    const existing = this.db.prepare("SELECT version FROM blobs WHERE vault_id = ? AND id = ?").get(vaultId, id) as
-      | { version: number }
+    return this.putBlobIf(vaultId, id, meta, data) === "stored";
+  }
+
+  /** A blob write, optionally compare-and-set. `expected` is the version the
+      relay must currently hold (null: the blob must not exist); undefined
+      means plain last-write-wins. Runs as one transaction, so two writers
+      racing on the same blob cannot both pass the check. */
+  putBlobIf(vaultId: string, id: string, meta: SyncBlobMeta, data: Uint8Array, expected?: number | null): BlobPutResult {
+    return this.db.transaction((): BlobPutResult => {
+      const existing = this.db.prepare("SELECT version FROM blobs WHERE vault_id = ? AND id = ?").get(vaultId, id) as
+        | { version: number }
+        | undefined;
+      if (expected !== undefined && (existing?.version ?? null) !== expected) return "conflict";
+      if (existing && existing.version >= meta.version) return "stale";
+      this.db
+        .prepare(
+          `INSERT INTO blobs (vault_id, id, version, deleted, data, updated_at) VALUES (?, ?, ?, ?, ?, ?)
+           ON CONFLICT (vault_id, id) DO UPDATE SET version = excluded.version, deleted = excluded.deleted,
+             data = excluded.data, updated_at = excluded.updated_at`
+        )
+        .run(vaultId, id, meta.version, meta.deleted ? 1 : 0, Buffer.from(data), Date.now());
+      return "stored";
+    }).immediate();
+  }
+
+  getBlobMeta(vaultId: string, id: string): SyncBlobMeta | null {
+    const row = this.db.prepare("SELECT id, version, deleted FROM blobs WHERE vault_id = ? AND id = ?").get(vaultId, id) as
+      | { id: string; version: number; deleted: number }
       | undefined;
-    if (existing && existing.version >= meta.version) return false;
-    this.db
-      .prepare(
-        `INSERT INTO blobs (vault_id, id, version, deleted, data, updated_at) VALUES (?, ?, ?, ?, ?, ?)
-         ON CONFLICT (vault_id, id) DO UPDATE SET version = excluded.version, deleted = excluded.deleted,
-           data = excluded.data, updated_at = excluded.updated_at`
-      )
-      .run(vaultId, id, meta.version, meta.deleted ? 1 : 0, Buffer.from(data), Date.now());
-    return true;
+    return row ? { id: row.id, version: row.version, deleted: row.deleted === 1 } : null;
+  }
+
+  /** A cheap fingerprint of a vault's blob set: changes whenever any blob is
+      added, replaced, or deleted. Keys the decrypted-view cache. */
+  blobFingerprint(vaultId: string): string {
+    const row = this.db
+      .prepare("SELECT COUNT(*) AS n, COALESCE(MAX(updated_at), 0) AS t, COALESCE(SUM(version % 1000003), 0) AS s FROM blobs WHERE vault_id = ?")
+      .get(vaultId) as { n: number; t: number; s: number };
+    return `${row.n}:${row.t}:${row.s}`;
+  }
+
+  // --- approver keys (device approval public keys) ---------------------------
+
+  /** Enrolls a device's approval public key. Idempotent per key id. */
+  addApproverKey(vaultId: string, keyId: string, publicKeyB64: string, addedBy: string): boolean {
+    return (
+      this.db
+        .prepare(
+          "INSERT INTO approver_keys (vault_id, key_id, public_key_b64, added_by, added_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT (vault_id, key_id) DO NOTHING"
+        )
+        .run(vaultId, keyId, publicKeyB64, addedBy, Date.now()).changes > 0
+    );
+  }
+
+  listApproverKeys(vaultId: string): ApproverKeyRow[] {
+    return this.db.prepare("SELECT * FROM approver_keys WHERE vault_id = ? ORDER BY added_at").all(vaultId) as ApproverKeyRow[];
+  }
+
+  approverKeyIds(vaultId: string): Set<string> {
+    return new Set(this.listApproverKeys(vaultId).map((k) => k.key_id));
   }
 
   // --- federation grants ------------------------------------------------------
@@ -336,6 +434,14 @@ export class RelayDb {
     this.db
       .prepare("INSERT INTO audit (ts, vault_id, actor, action, detail, org_id) VALUES (?, ?, ?, ?, ?, ?)")
       .run(Date.now(), entry.vaultId ?? null, entry.actor, entry.action, JSON.stringify(entry.detail ?? {}), entry.orgId ?? null);
+  }
+
+  /** Audit rows of the given actions since `ts`, oldest first. */
+  auditSince(ts: number, actions: string[]): AuditRow[] {
+    const placeholders = actions.map(() => "?").join(", ");
+    return this.db
+      .prepare(`SELECT * FROM audit WHERE ts >= ? AND action IN (${placeholders}) ORDER BY id ASC`)
+      .all(ts, ...actions) as AuditRow[];
   }
 
   auditRows(vaultId?: string, limit = 200): AuditRow[] {

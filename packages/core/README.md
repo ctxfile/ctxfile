@@ -42,9 +42,13 @@ Or click: [Add to Cursor](cursor://anysphere.cursor-deeplink/mcp/install?name=ct
 | `list_threads` tool | The user's threads with session counts and last-active times |
 | `ingest_context` tool | Enveloped bulk door, same schema family — universal session capture for harnesses without a parser ([schema + prompt snippets](https://ctxfile.dev/docs/ingest)) |
 | `ingest_memory` tool | Import what an assistant knows about the user, at `global` or `project` scope; instructions and identity stay pending until approved ([memory import](https://ctxfile.dev/docs/memory)) |
+| `post_task` tool | Leave a task on a thread for another client (or `any`); agent-posted tasks are proposals until the user approves them ([tasks](https://ctxfile.dev/docs/tasks)) |
+| `list_tasks` tool | This client's inbox: open tasks waiting for it, or one task in full |
+| `update_task` tool | Claim, release, renew, request approval for a side effect, complete, fail, reject, or cancel a task |
 | `load-context` prompt | Injects the snapshot into the conversation |
 | `ctx-save` / `ctx-continue` prompts | One-tap save/resume on clients that surface MCP prompts |
 | `ctx-import-memory` prompt | Asks the assistant to export its memory of you through `ingest_memory` |
+| `ctx-tasks` prompt | Asks the assistant to check its ctxfile tasks and start nothing until you say so |
 
 The `ContextObject`:
 
@@ -68,7 +72,9 @@ On any *other* harness (or when a parser breaks), the free fallback is `ingest_c
 
 **Memory import** carries what your assistants already know about you. `ctxfile memory prompt` prints one prompt for ChatGPT, Grok, Claude or any other assistant; it exports one fact per entry through `ingest_memory` (or as a JSON block for `ctxfile memory import`). Two scopes: `global` (you; every project sees it) and `project`. Instructions and identity stay pending until `ctxfile memory approve`; duplicates from different assistants merge; a rejected entry stays rejected on re-import. Active entries ride every `get_context` in a `memory` block, and `ctxfile memory export` prints them back out as dated lines. Sessions can carry `user_directives`, which become pending project instructions. Free core.
 
-**Threads** make that portable across providers: save a session to a named thread ("Q3 campaign") from one agent, and `continue_thread` hands the merged, provenance-labeled history to the next one — different harness, different model provider, cold start. When the user hands work to another agent or person, `handoff: true` makes validation require the full takeover package (state, decisions with rationale, ordered open items, gotchas, artifacts with roles, a suggested first prompt), so any agent produces the same artifact. Pro also gets `ctxfile serve`: the same six tools over Streamable HTTP with scoped bearer tokens — the local door of the [Sync & roaming](https://ctxfile.dev/docs/sync) lane.
+**Threads** make that portable across providers: save a session to a named thread ("Q3 campaign") from one agent, and `continue_thread` hands the merged, provenance-labeled history to the next one — different harness, different model provider, cold start. When the user hands work to another agent or person, `handoff: true` makes validation require the full takeover package (state, decisions with rationale, ordered open items, gotchas, artifacts with roles, a suggested first prompt), so any agent produces the same artifact. Pro also gets `ctxfile serve`: the same nine tools over Streamable HTTP with scoped bearer tokens — the local door of the [Sync & roaming](https://ctxfile.dev/docs/sync) lane.
+
+**Tasks** let agents leave work for each other. One agent calls `post_task` on a thread for a named client ("have Cursor finish the refactor", "have ChatGPT draft the lead emails"); the assignee sees a one-line inbox hint on its next `get_context`, `continue_thread`, or `list_threads`, calls `list_tasks`, and asks the user before claiming it with `update_task`. Tasks an agent posts are proposals: only the dashboard (`ctxfile ui`, Tasks) and `ctxfile tasks approve` approve, and the CLI only on an interactive terminal, so an agent's shell tool cannot approve its own work by running the command (a speed bump, not a sandbox: a program with your full shell can do anything you can). Approvals bind to a hash of the task's content and are signed with a device Ed25519 key (`~/.ctxfile/approval-key.json`, mode 600, never synced). Side effects (`write:code`, `send:message`, `publish:external`, `spend:money`) need a separate yes on the exact effect via `request_approval`. Task text reaches the assignee as labeled data between nonce markers, never as instructions. A claim holds one agent for a 30-minute lease, atomic across processes. Limits: 3 posts a minute per connection, 10 open tasks per thread, 50 per project, 1 to 30 days of life (default 7). Kill switches: `ctxfile tasks off` and `ctxfile tasks freeze <thread>`. Free between your own tools on one machine; with [Sync](https://ctxfile.dev/docs/sync), tasks reach ChatGPT, Claude.ai, Grok, and Perplexity through the relay, and approved tasks can wake a Claude Code Routine or a signed webhook ([push](https://ctxfile.dev/docs/tasks#push)).
 
 ## Cloud agents: `ctxfile export`
 
@@ -98,7 +104,7 @@ A cockpit bound to `127.0.0.1` (token-gated URL, strict CSP, never network-expos
 - Secret-looking content (AWS keys, GitHub/Notion/Slack tokens, private keys, JWTs, quoted `password=`/`api_key=` assignments) is **redacted** before it enters the snapshot; `.env*`, key files, and credential files are **never read at all**.
 - The Notion connector activates only when you set `NOTION_TOKEN` **and** list page IDs in config.
 - Summarization activates only when you set `ollama.summarize: true`, and it talks to your **local** Ollama.
-- **No telemetry by default.** An anonymous weekly ping (random install UUID, version, OS platform name — never code, paths, or content) exists solely to count active installs, and only runs if you explicitly set `telemetry.enabled: true`.
+- **No telemetry by default.** An anonymous weekly ping (random install UUID, version, OS platform name, and four whole-number counts of how often work moves between AI tools: cross-vendor threads, handoffs saved, handoffs resumed by a different client, resumes with a suggested first prompt; never titles, ids, code, paths, or content) only runs if you explicitly set `telemetry.enabled: true`. See [privacy](https://ctxfile.dev/docs/privacy).
 
 ## Configuration
 
@@ -113,6 +119,7 @@ Optional `.ctxfile.json` in your project root:
   "notion": { "pageIds": ["<page-id>"] },   // requires NOTION_TOKEN env var
   "ollama": { "summarize": true, "model": "qwen3:4b" },  // OLLAMA_BASE_URL overrides endpoint
   "export": { "profile": "repo-safe" },     // default profile for `ctxfile export`
+  "tasks": { "proposals": "ask", "defaultTtlDays": 7 },  // "require_approval": proposals wait for the dashboard/CLI
   "telemetry": { "enabled": false }  // opt-in anonymous weekly install ping; off by default
 }
 ```
@@ -127,13 +134,16 @@ ctxfile export [--profile <p>] [--stdout]  # write the .ctxfile convention artif
 ctxfile hooks install|uninstall            # managed pre-commit export refresh
 ctxfile ingest list|rm <id>                # review agent-reported sessions
 ctxfile threads                            # list threads (durable, resumable work identities)
-ctxfile vault create|join|status           # encrypted Sync vault on a relay (passphrase via env)
+ctxfile connect [<client>...|--all|--print <client>]  # register ctxfile in your MCP clients (backups kept)
+ctxfile tasks [show|post|approve|reject|cancel|approve-effect|deny-effect|freeze|off|on|status]
+                                           # cross-agent tasks: review and approve what agents left
+ctxfile vault create|join|status|delete    # encrypted Sync vault on a relay (passphrase via env)
 ctxfile sync                               # push/pull sessions + threads through the vault
 ctxfile activate <license-key>             # store + verify a Pro license (offline)
 ctxfile --version | --help
 ```
 
-Sync is client-side encrypted (Argon2id key derivation, XChaCha20-Poly1305 per blob, opaque blob ids): the relay — hosted at sync.ctxfile.dev, or self-hosted from the open-source [`@ctxfile/relay`](https://ctxfile.dev/docs/sync) — stores ciphertext only. Standard-mode vaults let chat surfaces save and resume threads through the relay's MCP endpoint; Strict-mode vaults trade that roaming for true end-to-end encryption.
+Sync is client-side encrypted (Argon2id key derivation, XChaCha20-Poly1305 per blob, opaque blob ids): the relay — hosted at sync.ctxfile.dev, or self-hosted from the open-source [`@ctxfile/relay`](https://ctxfile.dev/docs/sync) — stores ciphertext only. Standard-mode vaults let chat surfaces save and resume threads, and post and pick up tasks, through the relay's MCP endpoint; Strict-mode vaults trade that roaming for true end-to-end encryption.
 
 Full reference: [ctxfile.dev/docs](https://ctxfile.dev/docs) (CLI, MCP surface, configuration, connectors, dashboard, privacy).
 
@@ -142,7 +152,7 @@ Full reference: [ctxfile.dev/docs](https://ctxfile.dev/docs) (CLI, MCP surface, 
 | Client | Status |
 |---|---|
 | Claude Code | ✅ tested |
-| Cursor | ✅ (2 core tools, 7 with full Pro — far under the 40-tool cap) |
+| Cursor | ✅ (9 core tools, 18 with full Pro — under the 40-tool cap) |
 | Claude Desktop | ✅ via `.mcpb` or JSON config |
 | Cline / Windsurf / custom SDK clients | ✅ generic stdio MCP |
 

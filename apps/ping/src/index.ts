@@ -4,7 +4,13 @@
  * The client (packages/core/src/telemetry.ts) POSTs here at most once a week,
  * and only when telemetry.enabled has been explicitly turned on:
  *
- *   { installId: <random uuid>, version: string, os: NodeJS.Platform }
+ *   { installId: <random uuid>, version: string, os: NodeJS.Platform,
+ *     usage?: { cross_vendor_threads_30d, handoffs_saved_30d,
+ *               handoffs_resumed_cross_vendor_30d, resumes_with_prompt_30d } }
+ *
+ * `usage` is four whole numbers from the install's local store (0.7.0+): how
+ * often work crosses between AI tools. Counts only, never titles, text, or
+ * ids. It decides whether cross-agent tasks are worth building further.
  *
  * ctxfile.dev also sends first-party interaction counters here (for example
  * "setup command copied", with the client tab as the only property), so the
@@ -39,6 +45,29 @@ interface InstallRecord {
   l: string;
   version: string;
   os: string;
+  /** Latest usage counts, in USAGE_KEYS order; absent from older clients. */
+  u?: number[];
+}
+
+/** The gate counters a ping may carry, in storage order. */
+const USAGE_KEYS = [
+  "cross_vendor_threads_30d",
+  "handoffs_saved_30d",
+  "handoffs_resumed_cross_vendor_30d",
+  "resumes_with_prompt_30d",
+] as const;
+
+/** Whole numbers in a sane range, or null when the field is absent or bad. */
+function readUsage(value: unknown): number[] | null {
+  if (typeof value !== "object" || value === null) return null;
+  const record = value as Record<string, unknown>;
+  const counts: number[] = [];
+  for (const key of USAGE_KEYS) {
+    const n = record[key];
+    if (typeof n !== "number" || !Number.isInteger(n) || n < 0 || n > 100_000) return null;
+    counts.push(n);
+  }
+  return counts;
 }
 
 /** An install that has not pinged in 90 days has stopped using ctxfile. */
@@ -97,11 +126,13 @@ async function handlePing(request: Request, env: Env): Promise<Response> {
   const today = new Date().toISOString().slice(0, 10);
   const key = `i:${installId}`;
   const existing = await env.PINGS.getWithMetadata<InstallRecord>(key, "text");
+  const usage = readUsage(payload.usage);
   const record: InstallRecord = {
     f: existing.metadata?.f ?? today,
     l: today,
     version,
     os,
+    ...(usage ? { u: usage } : {}),
   };
 
   // Empty value on purpose: everything lives in metadata (see InstallRecord).
@@ -168,6 +199,10 @@ async function handleStats(request: Request, env: Env): Promise<Response> {
   let cursor: string | undefined;
   let known = 0;
   let weekly = 0;
+  // Gate signals across weekly-active installs that report usage.
+  let reporting = 0;
+  let withCrossVendorThread = 0;
+  const usageTotals = USAGE_KEYS.map(() => 0);
 
   do {
     const page = await env.PINGS.list<InstallRecord>({ prefix: "i:", cursor });
@@ -179,12 +214,24 @@ async function handleStats(request: Request, env: Env): Promise<Response> {
       weekly += 1;
       byVersion[meta.version] = (byVersion[meta.version] ?? 0) + 1;
       byOs[meta.os] = (byOs[meta.os] ?? 0) + 1;
+      if (meta.u && meta.u.length === USAGE_KEYS.length) {
+        reporting += 1;
+        if ((meta.u[0] ?? 0) > 0) withCrossVendorThread += 1;
+        meta.u.forEach((n, i) => {
+          usageTotals[i] = (usageTotals[i] ?? 0) + n;
+        });
+      }
     }
     cursor = page.list_complete ? undefined : page.cursor;
   } while (cursor);
 
   const events = await collectEvents(env);
-  return Response.json({ weeklyActiveInstalls: weekly, knownInstalls: known, byVersion, byOs, siteEvents: events });
+  const gate = {
+    reportingInstalls: reporting,
+    installsWithCrossVendorThread: withCrossVendorThread,
+    totals: Object.fromEntries(USAGE_KEYS.map((key, i) => [key, usageTotals[i] ?? 0])),
+  };
+  return Response.json({ weeklyActiveInstalls: weekly, knownInstalls: known, byVersion, byOs, gate, siteEvents: events });
 }
 
 export default {

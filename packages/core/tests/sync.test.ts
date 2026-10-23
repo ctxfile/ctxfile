@@ -183,7 +183,7 @@ describe("sync client E2E (M2: two stores converge through a stub relay)", () =>
     storeA.ingest(rootA, input("cl-1", "Refined the campaign schedule.", "claude", "Q3 campaign"), 2_000, "save_session");
 
     const first = await clientA.sync();
-    expect(first).toEqual({ pushed: 3, applied: 0 }); // 2 sessions + 1 thread
+    expect(first).toEqual({ pushed: 3, applied: 0, conflicts: 0 }); // 2 sessions + 1 thread
 
     const applied = await clientB.pull();
     expect(applied).toBe(3);
@@ -229,8 +229,8 @@ describe("sync client E2E (M2: two stores converge through a stub relay)", () =>
   });
 
   it("re-syncing when nothing changed is a no-op", async () => {
-    expect(await clientA.sync()).toEqual({ pushed: 0, applied: 0 });
-    expect(await clientB.sync()).toEqual({ pushed: 0, applied: 0 });
+    expect(await clientA.sync()).toEqual({ pushed: 0, applied: 0, conflicts: 0 });
+    expect(await clientB.sync()).toEqual({ pushed: 0, applied: 0, conflicts: 0 });
   });
 
   it("a re-used title resurrects a tombstoned thread instead of leaving it invisible (M1)", () => {

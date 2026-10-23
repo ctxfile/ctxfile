@@ -262,6 +262,58 @@ export async function unlockVault(config: VaultConfig, passphrase: string, fetch
   return unlockWithMeta(meta, passphrase);
 }
 
+/** Enrolls this device's approval public key with the vault, so the relay
+    can tell real approvals (signed on one of the user's devices) from
+    anything else before it wakes an agent. Idempotent. Returns false when
+    the relay predates approver keys (404) instead of failing the sync. */
+export async function enrollApprovalKey(
+  config: VaultConfig,
+  key: { keyId: string; publicKey: string },
+  fetchImpl: typeof fetch = fetch
+): Promise<boolean> {
+  const response = await fetchImpl(`${config.relayUrl.replace(/\/+$/, "")}/v1/vaults/approver-keys`, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${config.token}` },
+    body: JSON.stringify({ key_id: key.keyId, public_key_b64: key.publicKey }),
+  });
+  if (response.status === 404) return false;
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+    throw new Error(`relay /v1/vaults/approver-keys failed: ${response.status} ${body.slice(0, 200)}`);
+  }
+  return true;
+}
+
+/** Key ids of the approval keys the vault's devices enrolled. A device trusts
+    approvals signed by these (and by its own key) and no others. Returns null
+    when the relay predates approver keys. */
+export async function fetchApproverKeyIds(config: VaultConfig, fetchImpl: typeof fetch = fetch): Promise<string[] | null> {
+  const response = await fetchImpl(`${config.relayUrl.replace(/\/+$/, "")}/v1/vaults/approver-keys`, {
+    headers: { authorization: `Bearer ${config.token}` },
+  });
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error(`relay /v1/vaults/approver-keys failed: ${response.status}`);
+  const body = (await response.json()) as { keys?: { key_id?: unknown }[] };
+  return (body.keys ?? []).map((k) => k.key_id).filter((id): id is string => typeof id === "string");
+}
+
+/** Deletes the vault on its relay: every blob, key wrap, token, grant and
+    push target goes, for every device. Local data on this machine is not
+    touched. Needs a full device token. Returns false when the relay predates
+    vault deletion (404 or 405). */
+export async function deleteVault(config: VaultConfig, fetchImpl: typeof fetch = fetch): Promise<boolean> {
+  const response = await fetchImpl(`${config.relayUrl.replace(/\/+$/, "")}/v1/vaults/me`, {
+    method: "DELETE",
+    headers: { authorization: `Bearer ${config.token}`, "x-ctxfile-confirm-delete": config.vaultId },
+  });
+  if (response.status === 404 || response.status === 405) return false;
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+    throw new Error(`relay /v1/vaults/me DELETE failed: ${response.status} ${body.slice(0, 200)}`);
+  }
+  return true;
+}
+
 /** Everything wired: unlock, point the local store at the relay, sync. */
 export async function openVaultSync(
   config: VaultConfig,

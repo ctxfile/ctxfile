@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "ctxfile": {
+      "command": "npx",
+      "args": ["-y", "ctxfile", "--root", "${CLAUDE_PROJECT_DIR}"]
+    }
+  }
+}

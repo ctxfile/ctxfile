@@ -59,6 +59,11 @@ export default function SyncDocs() {
         device and the approval syncs back. Handoff grants and federation never see memory.
       </p>
       <p>
+        <Link href="/docs/tasks">Tasks</Link> travel too. Grok can leave a task for ChatGPT on a thread; you
+        approve it on your own machine, and ChatGPT finds it in its inbox. Details below, under{" "}
+        <a href="#tasks">Tasks through the vault</a>.
+      </p>
+      <p>
         Remote MCP connectors are supported today by Claude (all tiers), ChatGPT (paid tiers, remote servers
         only, OAuth required), Grok (paid), Perplexity (Pro), and Mistral Le Chat. Nothing in this flow is
         speculative; it is the standard remote-connector pattern applied to context.
@@ -88,7 +93,9 @@ export default function SyncDocs() {
                 Everything is encrypted on your device before upload (XChaCha20-Poly1305; keys derived from
                 your passphrase via Argon2id). Storage holds ciphertext only. For a request from an authorized
                 client, a worker decrypts in memory, answers over TLS, and discards; plaintext is never
-                persisted, never logged, and keys live in a KMS, never in the datastore.
+                persisted or logged. The vault&apos;s data key is stored only wrapped (AES-256-GCM) under the
+                relay&apos;s master key, and on the hosted relay that master key is a platform secret: it is
+                never on the data volume or in its snapshots, so a copy of the disk holds nothing it can open.
               </td>
               <td>
                 Encrypted at rest and in transit, zero plaintext persistence. <strong>Not zero-knowledge</strong>;
@@ -122,15 +129,18 @@ export default function SyncDocs() {
       </div>
       <p>
         One rule of thumb: <strong>Strict follows your hardware; Standard follows you everywhere.</strong> Key
-        recovery is passphrase plus a printed recovery code; a Strict vault cannot be reset by us, and vault
-        deletion destroys its keys (crypto-shredding).
+        recovery is passphrase plus a printed recovery code; a Strict vault cannot be reset by us.{" "}
+        <code>ctxfile vault delete</code> (on a terminal, after you type the vault&apos;s name) removes the vault
+        from the relay for every device: its ciphertext, key wraps, tokens, grants, and push targets, overwritten
+        in the database rather than just unlinked. Backups the hosting platform took earlier still hold the
+        ciphertext until they expire (days, not months), and without the vault&apos;s keys it stays unreadable.
       </p>
 
       <h2>Auth and tokens</h2>
       <p>
         Today, and on the local HTTP door, the relay authenticates each client with a bearer token scoped to{" "}
-        <code>read:context write:sessions</code> for one vault, revocable and visible in the append-only audit
-        view. Hosted Sync adds OAuth 2.1 with dynamic client registration on top of that scope model (ChatGPT
+        <code>read:context write:sessions</code> (plus <code>read:tasks write:tasks</code> for the task tools)
+        for one vault, revocable and visible in the append-only audit view. Hosted Sync adds OAuth 2.1 with dynamic client registration on top of that scope model (ChatGPT
         rejects anything less); that layer ships with the hosted deployment. The scopes are the same either way:
         see <Link href="/docs/mcp">MCP surface</Link>.
       </p>
@@ -148,7 +158,7 @@ export default function SyncDocs() {
   }
 }`}</pre>
       <p>
-        Same engine, same six tools, over HTTP. Loopback-only by default; binding beyond loopback requires
+        Same engine, same nine tools, over HTTP. Loopback-only by default; binding beyond loopback requires
         bearer tokens (values live in env vars, never in the config file), and each MCP session is bound to
         the token that opened it. This is the same door the relay is built from. Pricing:{" "}
         <Link href="/pricing#sync">Sync is $6/month, or $15 bundled with Pro</Link>.
@@ -175,12 +185,64 @@ ctxfile sync
 #    device token: run where you have vault.json, or set CTXFILE_VAULT_TOKEN)
 export CTXFILE_VAULT_RECOVERY_CODE="ABCDE-FGHJK-..."   # the code shown at create
 export CTXFILE_VAULT_PASSPHRASE="a new long passphrase"
-ctxfile vault recover   # unwraps with the code, re-wraps, prints a fresh code`}</pre>
+ctxfile vault recover   # unwraps with the code, re-wraps, prints a fresh code
+
+# 6. Done with it? Delete the vault on the relay for every device (asks you
+#    to type its name; local data on this machine stays)
+ctxfile vault delete
+
+# Self-hosting for real: keep the relay's master key out of the data folder
+export CTXFILE_RELAY_MASTER_KEY="$(ctxfile-relay keyring new)"   # store it in your secret manager
+ctxfile-relay keyring status   # which key each stored wrap depends on`}</pre>
       <p>
-        Standard mode serves the six tools from the vault; Strict mode makes step 3 refuse by design while
-        step 4 keeps working. Handoff grants (<code>ctxfile-relay grants issue</code>), org-to-org federation
+        Standard mode serves the ctxfile tools from the vault (the nine core tools plus <code>search</code> and{" "}
+        <code>fetch</code>); Strict mode makes step 3 refuse by design while step 4 keeps working. Handoff grants (<code>ctxfile-relay grants issue</code>), org-to-org federation
         (<code>ctxfile-relay federation issue/redeem</code>), and the append-only audit trail
         (<code>ctxfile-relay audit tail|export</code>) are documented in the relay package README.
+      </p>
+
+      <h2 id="tasks">Tasks through the vault</h2>
+      <p>
+        Tasks sync as their own encrypted record kind, like sessions and memory. Their state cannot converge by
+        last-write-wins, because two devices must never both win a claim, so every task push is a
+        compare-and-set: the device sends <code>If-Match: &quot;&lt;version&gt;&quot;</code> naming the relay
+        version it last agreed with, or <code>If-None-Match: *</code> for a new task, and the relay answers{" "}
+        <code>409</code> when its copy has moved on. The first device to push a claim wins. The losing device
+        takes the relay&apos;s version, and <code>ctxfile sync</code> reports how many task changes lost a race.
+      </p>
+      <ul>
+        <li>
+          <strong>Chat apps.</strong> On Standard vaults the relay&apos;s <code>/mcp</code> serves{" "}
+          <code>post_task</code>, <code>list_tasks</code>, and <code>update_task</code>, so ChatGPT, Claude.ai,
+          Grok, and Perplexity can post and pick up tasks. Strict vaults refuse them, since the relay holds no
+          key. Thread-scoped handoff grants do not get task tools yet (Team tier, later).
+        </li>
+        <li>
+          <strong>Approver keys.</strong> Approvals are signed on your device with its approval key.{" "}
+          <code>ctxfile sync</code> enrolls that key&apos;s public half with the vault. The private half never
+          leaves the device.
+        </li>
+        <li>
+          <strong>Push.</strong> The relay is always on, so it can wake an agent the moment a task is approved
+          for it: a Claude Code Routine or a signed webhook (n8n, Zapier, Make, Hermes, OpenClaw). It only does
+          so for a task whose approval verifies against an enrolled key, and the payload carries a summary,
+          never the task text. See <Link href="/docs/tasks#push">Push</Link>.
+        </li>
+        <li>
+          <strong>Older devices.</strong> Devices on ctxfile 0.7 or later remember blobs of a kind they do not
+          understand and stop downloading them on every sync. Older devices ignore task blobs, but download
+          them again on every sync until they upgrade.
+        </li>
+      </ul>
+
+      <h2>What the relay operator can count</h2>
+      <p>
+        The relay&apos;s append-only audit log records each MCP call with the client that made it. For{" "}
+        <code>continue_thread</code>, that includes which client resumed the thread, so the operator of the
+        hosted relay can count how often work saved in one vendor&apos;s app is picked up in another&apos;s.{" "}
+        <code>ctxfile-relay stats</code> prints those counts in aggregate across vaults, and its output is counts
+        only. The audit rows themselves name the thread, as they always have, but never carry content; task rows
+        carry only task ids and states. On a relay you run yourself, you are the operator.
       </p>
 
       <h2>What never changes</h2>

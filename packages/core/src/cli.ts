@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -27,9 +27,13 @@ import {
 } from "./behavior.js";
 import { createRuntime } from "./runtime.js";
 import { createServer, startHttpServer, type ResolvedServeToken } from "./server.js";
+import { loadOrCreateApprovalKey } from "./approval-keys.js";
 import {
   createVault,
   DEFAULT_VAULT_CONFIG_PATH,
+  deleteVault,
+  enrollApprovalKey,
+  fetchApproverKeyIds,
   fetchVaultMeta,
   joinVault,
   loadVaultConfig,
@@ -40,6 +44,8 @@ import { sendPingIfDue } from "./telemetry.js";
 import { storeLicenseKey } from "./license-store.js";
 import { appendVaultToConfig, detectVaultNear, paraDefaultExcludes, tildeRelative } from "./vault-detect.js";
 import { MEMORY_USAGE, runIngestImport, runMemory } from "./cli-memory.js";
+import { runTasks, TASKS_USAGE } from "./cli-tasks.js";
+import { CONNECT_USAGE, runConnect } from "./cli-connect.js";
 import { generateToken } from "./ui/security.js";
 import { createUiServer, DEFAULT_UI_PORT, listenOnAvailablePort } from "./ui/server.js";
 import { VERSION } from "./version.js";
@@ -47,6 +53,7 @@ import { VERSION } from "./version.js";
 const USAGE = `ctxfile v${VERSION} — local-first MCP context server (stdio)
 
 Usage: ctxfile [options]
+       ctxfile connect [<client>...|--all|--print <client>] [options]
        ctxfile init [--yes|--no-auto|--uninstall|--print <harness>] [options]
        ctxfile pause | resume
        ctxfile serve [options]
@@ -56,7 +63,8 @@ Usage: ctxfile [options]
        ctxfile ingest list|rm <id>|import [options]
        ctxfile memory prompt|import|list|approve|reject|export [options]
        ctxfile threads [options]
-       ctxfile vault create|join|recover|status [options]
+       ctxfile tasks [list|show|post|approve|reject|cancel|approve-effect|deny-effect|freeze|off|on|status] [options]
+       ctxfile vault create|join|recover|status|delete [options]
        ctxfile sync [options]
        ctxfile activate <license-key>
 
@@ -88,6 +96,10 @@ ingest (agent-reported sessions via ingest_context / save_session):
   import            Import a session digest (ingest_context JSON) from stdin or --file
 
 ${MEMORY_USAGE}
+${TASKS_USAGE}
+connect (register ctxfile in your MCP clients):
+${CONNECT_USAGE.replace(/^/gm, "  ")}
+
 init (the behavior layer: agents checkpoint automatically, announced, never silent):
   --yes             Consent to auto-capture and install the skill for detected harnesses
   --no-auto         Record that auto-capture stays OFF (skills not installed)
@@ -246,6 +258,8 @@ async function runUi(args: CliArgs): Promise<void> {
     token,
     staticDir: existsSync(staticDir) ? staticDir : undefined,
     memory: runtime.ingest?.memory ?? null,
+    // Tasks and gate metrics: the same SQLite file the MCP server writes.
+    ingest: runtime.ingest ?? null,
   });
   const port = await listenOnAvailablePort(server, args.port ?? DEFAULT_UI_PORT);
   // Token travels in the URL FRAGMENT: fragments never appear in logs or Referer headers.
@@ -282,7 +296,7 @@ async function runServe(args: CliArgs): Promise<void> {
   if (!runtime.proActive) {
     throw new Error(
       "ctxfile serve requires an active Pro license ('ctxfile activate <key>', https://ctxfile.dev/pricing). " +
-        "All six tools, threads and memory included, stay free over stdio."
+        "Every tool, threads, memory and tasks included, stays free over stdio."
     );
   }
   const tokens: ResolvedServeToken[] = [];
@@ -307,7 +321,9 @@ async function runServe(args: CliArgs): Promise<void> {
       ? `  auth: bearer tokens (${tokens.map((t) => `${t.name}: ${t.scopes.join("+")}`).join("; ")})`
       : "  auth: none (loopback only; configure serve.tokens before exposing further)"
   );
-  console.error("  tools: get_context, save_session, continue_thread, list_threads, ingest_context, ingest_memory");
+  console.error(
+    "  tools: get_context, save_session, continue_thread, list_threads, ingest_context, ingest_memory, post_task, list_tasks, update_task"
+  );
   const shutdown = (): void => {
     void running.close().then(() => process.exit(0));
   };
@@ -560,7 +576,33 @@ async function runVault(argv: string[]): Promise<void> {
     }
     return;
   }
-  throw new Error('vault requires "create", "join", "recover", or "status" (see --help)');
+  if (sub === "delete") {
+    const config = loadVaultConfig();
+    if (!config) throw new Error("no vault configured on this device");
+    if (!process.stdin.isTTY || !process.stderr.isTTY) {
+      throw new Error("vault delete needs an interactive terminal: deleting a vault is for people, not scripts or agents");
+    }
+    console.error(`ctxfile: this deletes vault "${config.name}" [${config.vaultId}] on ${config.relayUrl} for EVERY device:`);
+    console.error("  all synced sessions, threads, memory and tasks, its key wraps, tokens, grants and push targets.");
+    console.error("  It cannot be undone. Data already on this machine stays here.");
+    const readline = await import("node:readline/promises");
+    const rl = readline.createInterface({ input: process.stdin, output: process.stderr });
+    let typed = "";
+    try {
+      typed = (await rl.question(`Type the vault name (${config.name}) to delete it: `)).trim();
+    } finally {
+      rl.close();
+    }
+    if (typed !== config.name) {
+      console.error("ctxfile: names did not match; nothing deleted");
+      return;
+    }
+    if (!(await deleteVault(config))) throw new Error("this relay does not support vault deletion yet (upgrade it)");
+    rmSync(DEFAULT_VAULT_CONFIG_PATH, { force: true });
+    console.error(`ctxfile: vault "${config.name}" deleted on the relay; removed ${DEFAULT_VAULT_CONFIG_PATH}`);
+    return;
+  }
+  throw new Error('vault requires "create", "join", "recover", "status", or "delete" (see --help)');
 }
 
 async function runSync(argv: string[]): Promise<void> {
@@ -571,11 +613,26 @@ async function runSync(argv: string[]): Promise<void> {
   const passphrase = requireVaultPassphrase();
   const store = new IngestStore(path.join(config.cacheDir, "ingest.db"));
   try {
+    // Approvals made on this device only count on the relay (and only wake
+    // agents) once its approval key is enrolled with the vault.
+    try {
+      await enrollApprovalKey(vault, loadOrCreateApprovalKey(config.cacheDir));
+      // Learn which devices' approvals to trust here.
+      const trusted = await fetchApproverKeyIds(vault);
+      if (trusted) store.setTrustedApproverKeys(trusted);
+    } catch (error) {
+      console.error(`ctxfile: could not exchange approval keys with the vault: ${error instanceof Error ? error.message : String(error)}`);
+    }
     const client = await openVaultSync(vault, passphrase, store, config.root);
     const result = await client.sync();
     console.error(
       `ctxfile: synced with vault "${vault.name}": pushed ${result.pushed}, applied ${result.applied} (client-side encrypted; the relay holds ciphertext only)`
     );
+    if (result.conflicts > 0) {
+      console.error(
+        `ctxfile: ${result.conflicts} task change${result.conflicts === 1 ? "" : "s"} lost a race to another device; that device's version now applies here`
+      );
+    }
   } finally {
     store.close();
   }
@@ -760,6 +817,14 @@ async function main(): Promise<void> {
   }
   if (argv[0] === "threads") {
     runThreads(argv.slice(1));
+    return;
+  }
+  if (argv[0] === "connect") {
+    await runConnect(argv.slice(1));
+    return;
+  }
+  if (argv[0] === "tasks") {
+    await runTasks(argv.slice(1));
     return;
   }
   if (argv[0] === "vault") {

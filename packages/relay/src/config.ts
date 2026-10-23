@@ -1,6 +1,7 @@
 import { mkdirSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import type { KeyringSettings } from "./keyring.js";
 
 /**
  * Relay configuration: environment first, flags override. Everything stateful
@@ -18,6 +19,12 @@ export interface RelayConfig {
       "closed": vault creation disabled (hosted mode gates it on subscription
       via out-of-band provisioning). */
   registration: "open" | "closed";
+  /** Push to http:// targets (self-hosted LANs and tests only; default off). */
+  pushAllowHttp: boolean;
+  /** Push to private/loopback addresses (self-hosted LANs and tests only; default off). */
+  pushAllowPrivate: boolean;
+  /** Where the master key comes from (see keyring.ts). Never logged. */
+  keyring: KeyringSettings;
 }
 
 export interface RelayConfigOverrides {
@@ -26,6 +33,9 @@ export interface RelayConfigOverrides {
   port?: number;
   orgId?: string;
   registration?: "open" | "closed";
+  pushAllowHttp?: boolean;
+  pushAllowPrivate?: boolean;
+  keyring?: Partial<KeyringSettings>;
 }
 
 export const DEFAULT_RELAY_PORT = 5959;
@@ -46,5 +56,17 @@ export function loadRelayConfig(overrides: RelayConfigOverrides = {}, env: NodeJ
     port: portRaw,
     orgId: overrides.orgId ?? env.CTXFILE_RELAY_ORG ?? "org-local",
     registration,
+    pushAllowHttp: overrides.pushAllowHttp ?? env.CTXFILE_RELAY_PUSH_ALLOW_HTTP === "1",
+    pushAllowPrivate: overrides.pushAllowPrivate ?? env.CTXFILE_RELAY_PUSH_ALLOW_PRIVATE === "1",
+    keyring: {
+      secret: overrides.keyring?.secret ?? (env.CTXFILE_RELAY_MASTER_KEY?.trim() || null),
+      previous:
+        overrides.keyring?.previous ??
+        (env.CTXFILE_RELAY_MASTER_KEY_PREVIOUS ?? "")
+          .split(",")
+          .map((v) => v.trim())
+          .filter((v) => v.length > 0),
+      requireSecret: overrides.keyring?.requireSecret ?? env.CTXFILE_RELAY_REQUIRE_SECRET_KEY === "1",
+    },
   };
 }

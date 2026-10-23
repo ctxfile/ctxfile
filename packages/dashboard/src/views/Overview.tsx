@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../lib/api";
-import { formatAge, formatCompact, formatDuration, percent, splitPath } from "../lib/format";
+import { formatAge, formatCompact, formatDuration, formatRelative, percent, splitPath } from "../lib/format";
 import { useNow, type LiveConnector, type LiveRun } from "../lib/hooks";
-import type { DashboardState, KeyFile } from "../lib/types";
+import type { ConnectedClient, DashboardState, HandoffStats, KeyFile } from "../lib/types";
 import { ConnectorRow } from "../components/ConnectorRow";
 import { EmptyState } from "../components/EmptyState";
 import { Icon } from "../components/Icon";
@@ -101,7 +101,7 @@ export function Overview({ state, run, onRunSnapshot, onOpenContext }: OverviewP
         <section className="grid-3">
           <Hint icon="context" title="Context, browsable" body="Every key file, the plan, and git state as one inspectable object." />
           <Hint icon="shield" title="Redacted before storage" body="Secrets and denied paths never reach the snapshot." />
-          <Hint icon="command" title="Keyboard first" body="Press ⌘K for the palette, R to snapshot, 1–8 to switch views." />
+          <Hint icon="command" title="Keyboard first" body="Press ⌘K for the palette, R to snapshot, 1–9 to switch views." />
         </section>
       </div>
     );
@@ -275,7 +275,148 @@ export function Overview({ state, run, onRunSnapshot, onOpenContext }: OverviewP
           )}
         </div>
       </section>
+
+      <ConnectedAgents />
+      <CrossingTools />
     </div>
+  );
+}
+
+const CLIENT_LABELS: Record<string, string> = {
+  "claude-code": "Claude Code",
+  "claude-desktop": "Claude Desktop",
+  "claude-ai": "Claude.ai",
+  cursor: "Cursor",
+  codex: "Codex",
+  "gemini-cli": "Gemini CLI",
+  gemini: "Gemini",
+  opencode: "OpenCode",
+  openclaw: "OpenClaw",
+  hermes: "Hermes",
+  chatgpt: "ChatGPT",
+  grok: "Grok",
+  perplexity: "Perplexity",
+  vscode: "VS Code",
+  "visual-studio-code": "VS Code",
+  "visual-studio": "Visual Studio",
+  windsurf: "Windsurf",
+  zed: "Zed",
+  cline: "Cline",
+  goose: "Goose",
+  warp: "Warp",
+  "lm-studio": "LM Studio",
+  kiro: "Kiro",
+  junie: "Junie",
+  amp: "Amp",
+  "github-copilot": "GitHub Copilot",
+  "copilot-cli": "Copilot CLI",
+  "le-chat": "Le Chat",
+};
+
+/** A friendly name for a harness id; clients ctxfile has no id for arrive as
+    custom:<their name> and are labeled by that name. */
+export function clientLabel(harness: string): string {
+  const name = harness.startsWith("custom:") ? harness.slice("custom:".length) : harness;
+  return CLIENT_LABELS[harness] ?? CLIENT_LABELS[name] ?? name;
+}
+
+/** Every agent that has connected to ctxfile for this project, and when it
+    last did: the proof that setup worked. Hidden when the store is off. */
+export function ConnectedAgents() {
+  const [clients, setClients] = useState<ConnectedClient[] | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .connectedClients()
+      .then((next) => {
+        if (!cancelled) setClients(next.clients);
+      })
+      .catch(() => {
+        // Store off or server gone: the card stays out of the way.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  if (clients === null) return null;
+  return (
+    <section className="panel agents-panel" aria-label="Connected agents">
+      <div className="panel-title">
+        Connected agents
+        <span className="panel-title-meta">this project · recorded on this machine</span>
+      </div>
+      {clients.length === 0 ? (
+        <EmptyState
+          compact
+          icon="command"
+          title="No agent has connected yet"
+          body="Add ctxfile to Claude Code, Cursor, Codex, VS Code, or any MCP client (ctxfile.dev/docs/clients); it shows up here the first time it connects."
+        />
+      ) : (
+        <ul className="agents-list">
+          {clients.map((client) => (
+            <li key={`${client.harness}|${client.client_name}|${client.surface}`} className="agent-row">
+              <span className="agent-name">{clientLabel(client.harness)}</span>
+              <span className="agent-client mono" title={client.client_name}>
+                {client.client_name}
+                {client.client_version ? ` ${client.client_version}` : ""}
+              </span>
+              <span className="chip">{client.surface === "http" ? "HTTP" : "local"}</span>
+              <span className="agent-seen num" title={`${client.connections.toLocaleString()} connections`}>
+                {formatRelative(client.last_seen)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+/** Phase 0 gate metrics, kept small: is work actually moving between tools?
+    Hidden when the local store is off (the route answers 503). */
+export function CrossingTools() {
+  const [stats, setStats] = useState<HandoffStats | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .handoffStats()
+      .then((next) => {
+        if (!cancelled) setStats(next);
+      })
+      .catch(() => {
+        // Store off or server gone: the card stays out of the way.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  if (stats === null) return null;
+  return (
+    <section className="panel crossing-panel" aria-label="Work crossing tools (30 days)">
+      <div className="panel-title">
+        Work crossing tools (30 days)
+        <span className="panel-title-meta">all projects · counted on this machine</span>
+      </div>
+      <div className="crossing-facts">
+        <Fact
+          label="Cross-vendor threads"
+          value={stats.cross_vendor_threads_30d.toLocaleString()}
+          hint="Threads that two or more different tools worked on"
+        />
+        <Fact label="Handoffs saved" value={stats.handoffs_saved_30d.toLocaleString()} hint="Handoff packages saved at the end of a session" />
+        <Fact
+          label="Picked up by another tool"
+          value={stats.handoffs_resumed_cross_vendor_30d.toLocaleString()}
+          hint="Handoffs resumed by a different tool within 7 days of being saved"
+        />
+        <Fact
+          label="Resumes with first prompt"
+          value={stats.resumes_with_prompt_30d.toLocaleString()}
+          hint="Resumes that came with the suggested first prompt"
+        />
+      </div>
+    </section>
   );
 }
 

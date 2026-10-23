@@ -39,10 +39,21 @@ you → ctxfile → the same context, in every agent
 
 ## 30-second quickstart
 
-**Claude Code**
+**Every client on your machine at once**
 
 ```bash
-claude mcp add ctxfile -- npx -y ctxfile
+npm install -g ctxfile
+ctxfile connect          # lists the MCP clients it found
+ctxfile connect --all    # adds ctxfile to each (backups kept, other servers untouched)
+```
+
+Or tell any coding agent: *"Set up ctxfile for me by following https://ctxfile.dev/setup.md"*.
+
+**Claude Code** (as a plugin, or one command)
+
+```bash
+/plugin install ctxfile --marketplace ctxfile/ctxfile
+claude mcp add --scope user ctxfile -- npx -y ctxfile
 ```
 
 **Cursor** (`.cursor/mcp.json` in your project, or `~/.cursor/mcp.json` globally)
@@ -50,7 +61,7 @@ claude mcp add ctxfile -- npx -y ctxfile
 ```json
 {
   "mcpServers": {
-    "ctxfile": { "command": "npx", "args": ["-y", "ctxfile"] }
+    "ctxfile": { "command": "npx", "args": ["-y", "ctxfile", "--root", "${workspaceFolder}"] }
   }
 }
 ```
@@ -63,7 +74,7 @@ codex mcp add ctxfile -- npx -y ctxfile --root .
 
 **Claude Desktop** (no terminal needed): download [`ctxfile-macos-arm64.mcpb`](https://github.com/ctxfile/ctxfile/releases/latest/download/ctxfile-macos-arm64.mcpb) and drag it into Settings → Extensions. The bundle carries a compiled native module, so it is macOS (Apple Silicon) only for now; on Windows or an Intel Mac, add the stdio JSON above to `claude_desktop_config.json` instead.
 
-**Every other client**: ctxfile is a standard stdio server, so `npx -y ctxfile` is the whole command. Copy-paste setup for **OpenCode, Gemini CLI, OpenClaw, Hermes, Aider**, and more is on the per-client tabs at [ctxfile.dev/docs/clients](https://ctxfile.dev/docs/clients).
+**Every other client**: ctxfile is a standard stdio server, so `npx -y ctxfile` is the whole command. One-click install links and copy-paste setup for **VS Code, Windsurf, Zed, Cline, Gemini CLI, OpenCode, Warp, Goose, LM Studio, Kiro, JetBrains, Visual Studio, Amp, OpenClaw, Hermes**, and more are on the per-client tabs at [ctxfile.dev/docs/clients](https://ctxfile.dev/docs/clients).
 
 Then, in your agent: *"load my context"* (or call `get_context`). Requires Node ≥ 20 (≥ 22 on Windows).
 
@@ -101,6 +112,7 @@ The full model, including what Pro and Sync add and what they can never see, is 
 | **Save and resume** | `save_session` stores an agent-written summary of the current conversation. `continue_thread` hands the merged, provenance-labeled history to the next agent. Different harness, different provider, cold start: it picks up where you left off. |
 | **Threads** | Durable identities for a piece of work ("Q3 campaign"), spanning agents and machines. `handoff: true` enforces a complete takeover package: state, decisions with rationale, ordered open items, gotchas. |
 | **Memory import** | `ingest_memory` moves what ChatGPT, Grok, Claude or any assistant knows about you into ctxfile: one prompt (`ctxfile memory prompt`), a strict schema, global or per-project scope. Instructions and identity wait for your approval; duplicates merge; rejections stick. Every agent then gets it in `get_context`. [Docs](https://ctxfile.dev/docs/memory). |
+| **Tasks** | `post_task`, `list_tasks`, `update_task`: one agent leaves work on a thread for another ("have ChatGPT draft the lead emails"), the assignee finds it in its inbox and asks you before starting. Agent-posted tasks are proposals until you approve them in the dashboard or CLI; approvals are signed on your device, and anything that sends, publishes, pushes code, or spends needs its own yes. [Docs](https://ctxfile.dev/docs/tasks). |
 | **Universal ingest** | `ingest_context` is the schema-enforced door for any harness without a native parser. The prompt is the adapter, so every MCP-speaking agent is supported, including ones that do not exist yet. |
 | **Cloud agents** | `ctxfile export` writes a static, repo-safe artifact for agents that never touch your machine (hosted coding agents, CI). The format is an open spec: [the .ctxfile convention](https://ctxfile.dev/convention). |
 | **Dashboard** | `ctxfile ui`: a local cockpit on 127.0.0.1. Run snapshots, watch connectors, browse context, inspect git state. |

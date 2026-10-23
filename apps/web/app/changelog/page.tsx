@@ -21,6 +21,80 @@ export default function Changelog() {
 
         <div className="log-list">
           <article className="log-entry">
+            <span className="log-date">2026-10-18</span>
+            <div className="log-body">
+              <span className="log-tag">v0.7.0 · relay 0.5.0</span>
+              <h2>Agents can leave work for each other</h2>
+              <p>
+                A handoff says where the work stands. A task asks another agent to do the next piece: Grok leaves
+                the lead emails for ChatGPT, Claude Code leaves a refactor for Cursor. You approve on your own
+                device, and anything that sends or spends asks you again. Free between your own tools; in chat
+                apps and with push, part of Sync.
+              </p>
+              <ul>
+                <li>
+                  Three new tools, <code>post_task</code>, <code>list_tasks</code>, and <code>update_task</code>,
+                  plus the <code>ctx-tasks</code> prompt. When tasks are waiting, <code>get_context</code>,{" "}
+                  <code>continue_thread</code>, and <code>list_threads</code> end with a one-line inbox hint.
+                </li>
+                <li>
+                  Tasks an agent posts are proposals. Only the dashboard Tasks view and{" "}
+                  <code>ctxfile tasks</code> approve, and the CLI only on an interactive terminal. Approvals bind
+                  to the task&apos;s content and are signed with a key that never leaves the device.
+                </li>
+                <li>
+                  Side effects (sending, publishing, pushing code, spending) need a yes on the exact effect, once.
+                  Task text reaches the assignee as labeled data, never as instructions.
+                </li>
+                <li>
+                  Limits and kill switches: 3 posts a minute per connection, 10 open tasks per thread, 50 per
+                  project, 1 to 30 days of life. <code>ctxfile tasks off</code> and{" "}
+                  <code>ctxfile tasks freeze &lt;thread&gt;</code>.
+                </li>
+                <li>
+                  Sync and relay: tasks sync end-to-end encrypted with compare-and-set, so two devices never both
+                  win a claim. The relay serves the task tools to ChatGPT, Claude.ai, Grok, and Perplexity on
+                  Standard vaults, and wakes Claude Code Routines or signed webhooks when a task is approved.
+                </li>
+                <li>
+                  Behavior pack B8 teaches agents to check their inbox, ask before starting, and never approve
+                  their own work. The HTTP door gains <code>read:tasks</code> and <code>write:tasks</code>{" "}
+                  scopes; tokens with an explicit scope list do not gain them.
+                </li>
+                <li>
+                  The opt-in telemetry ping now carries four whole-number counts of how often work moves between
+                  AI tools. Counts only; see <a href="/docs/privacy">Privacy</a>. Devices also stop
+                  re-downloading sync blobs of kinds they do not understand.
+                </li>
+                <li>
+                  Relay key hardening: the master key that wraps Standard vaults&apos; data keys now comes from a
+                  platform secret (<code>CTXFILE_RELAY_MASTER_KEY</code>), so it is never on the data volume or in
+                  its snapshots; the hosted relay refuses to start without it. New{" "}
+                  <code>ctxfile-relay keyring status|rewrap|retire-file|new</code> for rotation.
+                </li>
+                <li>
+                  <code>ctxfile vault delete</code> removes a vault from the relay for every device, ciphertext
+                  and key wraps overwritten in place.
+                </li>
+                <li>
+                  Connect to everything: <code>ctxfile connect</code> finds the MCP clients on your machine and
+                  registers ctxfile in them (22 clients, from Claude Code, Cursor, and VS Code to Zed, Goose, and
+                  JetBrains), keeping backups and every other server. The client setup page gains one-click install
+                  buttons, and <a href="/setup.md">ctxfile.dev/setup.md</a> lets any agent do the setup for you.
+                </li>
+                <li>
+                  The dashboard&apos;s Connected agents card shows every tool that has connected and when. With no{" "}
+                  <code>--root</code>, ctxfile now follows Claude Code&apos;s open project, and an unexpanded{" "}
+                  <code>{"${workspaceFolder}"}</code> falls back to the working directory instead of failing.
+                </li>
+              </ul>
+              <p>
+                <a href="/docs/tasks">Read the tasks guide</a>.
+              </p>
+            </div>
+          </article>
+
+          <article className="log-entry">
             <span className="log-date">2026-09-25</span>
             <div className="log-body">
               <span className="log-tag">v0.6.0 · relay 0.4.0</span>

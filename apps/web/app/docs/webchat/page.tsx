@@ -65,7 +65,7 @@ export default function WebChatbotsPage() {
       <p>
         This is the Sync path (<a href="/docs/sync">Sync &amp; roaming</a>): your machines push encrypted
         context to a relay, and chat surfaces read it back over MCP. The relay&apos;s <code>/mcp</code> door
-        serves the six remote tools plus a <code>search</code>/<code>fetch</code> pair built for web-chatbot
+        serves the nine remote tools plus a <code>search</code>/<code>fetch</code> pair built for web-chatbot
         connectors: the assistant searches your threads and pulls full session histories on demand.
       </p>
       <ol>
@@ -158,6 +158,17 @@ export default function WebChatbotsPage() {
         threads are what you resume by name from any surface. A save without one lands as a loose session,
         and the tool will remind you it can re-file it if you give a name. From a
         paste-only surface, ask the model for a handoff summary and hand it to any connected agent to save.
+      </p>
+
+      <h2>Leaving work for another assistant</h2>
+      <p>
+        On a connected surface, an assistant can leave a task for another one: &ldquo;have ChatGPT draft
+        follow-ups to these leads&rdquo; from Grok posts a task on the thread with <code>post_task</code>. It is
+        a proposal until you approve it on your own machine (<code>ctxfile ui</code>, Tasks). ChatGPT sees it
+        the next time you open a chat, asks you before starting, and asks again, through ctxfile, before it
+        sends anything. Hosted chat apps cannot be woken from outside, so they find tasks when you talk to
+        them, or on a scheduled check you set up there. See{" "}
+        <Link href="/docs/tasks">Tasks &amp; handoff between agents</Link>.
       </p>
 
       <h2>Bringing its memory along</h2>

@@ -5,6 +5,7 @@ import {
   formatDayLabel,
   formatDuration,
   formatRelative,
+  formatUntil,
   initials,
   percent,
   splitPath,
@@ -25,6 +26,15 @@ describe("format helpers", () => {
     expect(formatRelative("not a date")).toBe("unknown");
     expect(formatRelative(now + 5000, now)).toBe("just now");
     expect(formatRelative(now - 90_000, now)).toBe("2m ago");
+  });
+
+  it("formatUntil counts down and says when it has passed", () => {
+    const now = Date.UTC(2026, 0, 1, 12);
+    expect(formatUntil(now + 6 * 86_400_000, now)).toBe("in 6d");
+    expect(formatUntil(new Date(now + 3 * 3_600_000).toISOString(), now)).toBe("in 3h");
+    expect(formatUntil(now + 20_000, now)).toBe("in 1m");
+    expect(formatUntil(now - 1, now)).toBe("expired");
+    expect(formatUntil("not a date", now)).toBe("unknown");
   });
 
   it("formatCompact", () => {

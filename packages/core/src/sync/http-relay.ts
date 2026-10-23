@@ -1,5 +1,5 @@
 import { Buffer } from "node:buffer";
-import type { RelayStore, SyncBlobMeta } from "./client.js";
+import { RelayConflictError, type RelayPutOptions, type RelayStore, type SyncBlobMeta } from "./client.js";
 
 /**
  * RelayStore over HTTP: the client half of the relay's blob API. The wire
@@ -14,6 +14,7 @@ export interface HttpRelayStoreOptions {
 export class HttpRelayStore implements RelayStore {
   private readonly base: string;
   private readonly fetchImpl: typeof fetch;
+  private warnedNoCas = false;
 
   constructor(relayUrl: string, private readonly token: string, options: HttpRelayStoreOptions = {}) {
     this.base = relayUrl.replace(/\/+$/, "");
@@ -29,7 +30,7 @@ export class HttpRelayStore implements RelayStore {
         ...(init.headers ?? {}),
       },
     });
-    if (!response.ok && response.status !== 404) {
+    if (!response.ok && response.status !== 404 && response.status !== 409) {
       const body = await response.text().catch(() => "");
       throw new Error(`relay ${init.method ?? "GET"} ${path} failed: ${response.status} ${body.slice(0, 200)}`);
     }
@@ -50,14 +51,37 @@ export class HttpRelayStore implements RelayStore {
     return { meta: body.meta, data: new Uint8Array(Buffer.from(body.data_b64, "base64")) };
   }
 
-  async put(id: string, meta: SyncBlobMeta, data: Uint8Array): Promise<void> {
-    await this.request(`/v1/blobs/${id}`, {
+  async put(id: string, meta: SyncBlobMeta, data: Uint8Array, options: RelayPutOptions = {}): Promise<boolean> {
+    // Compare-and-set rides standard conditional headers: If-Match names the
+    // version the relay must still hold; If-None-Match: * means "must not
+    // exist yet". Relays that predate compare-and-set ignore both.
+    const conditional: Record<string, string> = {};
+    if (options.ifVersion !== undefined) {
+      if (options.ifVersion === null) conditional["if-none-match"] = "*";
+      else conditional["if-match"] = `"${options.ifVersion}"`;
+    }
+    const response = await this.request(`/v1/blobs/${id}`, {
       method: "PUT",
+      headers: conditional,
       body: JSON.stringify({
         version: meta.version,
         deleted: meta.deleted,
         data_b64: Buffer.from(data).toString("base64"),
       }),
     });
+    if (response.status === 409) {
+      const body = (await response.json().catch(() => ({}))) as { current?: SyncBlobMeta | null };
+      throw new RelayConflictError(id, body.current ?? null);
+    }
+    // A relay that honors compare-and-set says so. One that does not (older
+    // than 0.5.0) silently falls back to last-write-wins, so say so once.
+    if (options.ifVersion !== undefined && response.headers.get("x-ctxfile-cas") !== "1" && !this.warnedNoCas) {
+      this.warnedNoCas = true;
+      console.error(
+        "ctxfile sync: this relay ignores compare-and-set (upgrade it to @ctxfile/relay 0.5.0+); task claims across devices fall back to last-write-wins"
+      );
+    }
+    const body = (await response.json().catch(() => ({}))) as { stored?: boolean };
+    return body.stored !== false;
   }
 }

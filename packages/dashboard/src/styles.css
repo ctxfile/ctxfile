@@ -4229,6 +4229,470 @@ mark {
   color: var(--text-3);
 }
 
+/* ---------- cross-agent tasks (free) ---------- */
+
+.task-mode {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: -6px 0 0;
+  color: var(--text-3);
+  font-size: var(--fs-xs);
+}
+
+.task-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.task-count {
+  margin-left: 4px;
+  color: var(--text-3);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+}
+
+.task-none {
+  margin: 0;
+  color: var(--text-3);
+  font-size: var(--fs-sm);
+}
+
+.task-skeleton {
+  height: 120px;
+  border-radius: var(--radius-lg);
+}
+
+.task-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.task-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: var(--radius-lg);
+  background: var(--surface-1);
+  border: 1px solid var(--line);
+  box-shadow: var(--glass-edge), var(--shadow-sm);
+  min-width: 0;
+}
+
+.task-card.is-waiting {
+  border-color: rgba(255, 176, 46, 0.3);
+}
+
+.task-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.task-title {
+  margin: 0;
+  font-size: var(--fs-md);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.task-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.task-facts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px 16px;
+  margin: 0;
+}
+
+.task-facts > div {
+  min-width: 0;
+}
+
+.task-facts dt {
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  letter-spacing: var(--track-caps);
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.task-facts dd {
+  margin: 2px 0 0;
+  font-size: var(--fs-sm);
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-provenance,
+.task-note {
+  margin: 0;
+  color: var(--text-2);
+  font-size: var(--fs-xs);
+  overflow-wrap: anywhere;
+}
+
+.task-result {
+  color: var(--text);
+}
+
+.task-effect-strip {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+
+.task-effect-strip .icon {
+  margin-top: 3px;
+  flex: none;
+}
+
+.task-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.task-actions-main {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-left: auto;
+}
+
+/* Agent-written text: always plain, always fenced, always labeled. */
+.task-text,
+.task-effect {
+  margin: 0;
+  padding: 10px 12px 12px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--well);
+  min-width: 0;
+}
+
+.task-text-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  color: var(--text-3);
+  font-size: var(--fs-xs);
+}
+
+.task-text-title {
+  font-weight: 600;
+  font-size: var(--fs-sm);
+  margin-bottom: 4px;
+  overflow-wrap: anywhere;
+}
+
+.task-text-body {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-loose);
+  color: var(--text);
+  max-height: 260px;
+  overflow: auto;
+}
+
+.task-artifacts {
+  margin: 10px 0 0;
+  padding-left: 18px;
+  font-size: var(--fs-xs);
+  color: var(--text-2);
+}
+
+.task-effect-summary {
+  margin: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.task-effect-details {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-loose);
+  color: var(--code-text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 300px;
+  overflow: auto;
+}
+
+.task-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.task-sheet .sheet-actions {
+  margin-top: 4px;
+}
+
+.task-facts-sheet {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.task-caps {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.task-caps legend {
+  margin-bottom: 6px;
+  padding: 0;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: var(--track-caps);
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+
+.task-cap {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}
+
+.task-cap input {
+  margin-top: 3px;
+  accent-color: var(--accent);
+}
+
+.task-cap-text {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+}
+
+.task-cap-text code {
+  color: var(--text);
+}
+
+.task-cap-text > span {
+  color: var(--text-2);
+}
+
+.task-cap-text .task-cap-note {
+  flex-basis: 100%;
+  color: var(--warn);
+  font-size: var(--fs-xs);
+}
+
+.task-sign-note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: var(--fs-xs);
+}
+
+.task-reason {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: var(--fs-xs);
+  color: var(--text-2);
+}
+
+.task-thread-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.task-thread {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+}
+
+.task-thread:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.task-thread-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-sm);
+}
+
+.task-thread-meta {
+  color: var(--text-3);
+  font-size: var(--fs-xs);
+}
+
+.task-thread .btn {
+  margin-left: auto;
+}
+
+.task-finished-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  color: var(--text);
+}
+
+.task-finished-toggle:hover {
+  color: var(--accent);
+}
+
+.task-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 10px 0 6px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line-strong);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+}
+
+.task-switch:disabled {
+  opacity: 0.6;
+}
+
+.task-switch-track {
+  position: relative;
+  width: 30px;
+  height: 18px;
+  border-radius: var(--radius-pill);
+  background: var(--ok-soft);
+  border: 1px solid rgba(63, 215, 126, 0.4);
+  transition: background var(--dur-fast) var(--ease);
+}
+
+.task-switch-thumb {
+  position: absolute;
+  top: 2px;
+  left: 14px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--ok);
+  transition: left var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
+}
+
+.task-switch.is-off .task-switch-track {
+  background: var(--surface-1);
+  border-color: var(--line-strong);
+}
+
+.task-switch.is-off .task-switch-thumb {
+  left: 2px;
+  background: var(--text-3);
+}
+
+/* overview: connected agents */
+
+.agents-panel {
+  padding-bottom: 14px;
+}
+
+.agents-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.agent-row {
+  display: grid;
+  grid-template-columns: minmax(110px, auto) minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+}
+
+.agent-name {
+  font-weight: 600;
+}
+
+.agent-client {
+  color: var(--text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-seen {
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+@media (max-width: 560px) {
+  .agent-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .agent-client,
+  .agent-row .chip {
+    display: none;
+  }
+}
+
+/* overview: work crossing tools */
+
+.crossing-panel {
+  padding-bottom: 14px;
+}
+
+.crossing-facts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 820px) {
+  .task-facts,
+  .crossing-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 /* ---------- sheets & palette ---------- */
 
 .sheet-backdrop {

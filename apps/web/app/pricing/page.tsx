@@ -48,6 +48,7 @@ export default function Pricing() {
               <li>Snapshot engine: plan, key files, git state</li>
               <li>Any MCP client: Claude Code, Cursor, custom</li>
               <li>Threads, local: save_session, continue_thread, list_threads, handoff packages</li>
+              <li>Tasks between your own tools: one agent leaves work, another picks it up, you approve</li>
               <li>Secret redaction and denied paths</li>
               <li>SQLite cache and local dashboard</li>
               <li>Agent-assisted session ingest (any harness, one pasted prompt)</li>
@@ -90,6 +91,7 @@ export default function Pricing() {
               <li>Encrypted vault; your machine stays the source of truth</li>
               <li>Connectors for Claude, ChatGPT, Grok, Perplexity, Le Chat</li>
               <li>Cross-provider threads on your phone, the web, your desk</li>
+              <li>Tasks in ChatGPT, Claude, Grok, and Perplexity, plus push wake-ups for Claude Code Routines and webhooks</li>
               <li>Standard mode: ciphertext storage, zero plaintext persistence</li>
               <li>Strict mode: true end-to-end, your own devices only</li>
               <li>Revocable per-client tokens, every grant auditable</li>

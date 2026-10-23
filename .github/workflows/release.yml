@@ -1,0 +1,223 @@
+name: Release
+
+# The release checklist (CLAUDE.md) as a manually started job on main:
+# gate, versions, npm (core before relay), the relay's master-key secret and
+# deploy, the site, the MCP Registry, the tag, and live checks. Each step that
+# was already done for this version is skipped, so a re-run is safe.
+#
+# Repository secrets it uses (Settings, Secrets and variables, Actions):
+#   NPM_TOKEN                  npm automation token with publish rights on
+#                              ctxfile and @ctxfile/relay
+#   FLY_API_TOKEN              fly tokens create deploy -a ctxfile-relay
+#   CLOUDFLARE_API_TOKEN       Pages edit rights on the "ctxfile" project
+#   CLOUDFLARE_ACCOUNT_ID
+#   MCP_PUBLISHER_PRIVATE_KEY  the ctxfile.dev DNS key for the MCP Registry
+#                              (optional; the registry step is skipped without it)
+# The relay's CTXFILE_RELAY_MASTER_KEY is generated inside the job, straight
+# into Fly's secret store, the first time; it is never printed or kept here.
+
+on:
+  workflow_dispatch:
+    inputs:
+      npm:
+        description: Publish ctxfile and @ctxfile/relay to npm
+        type: boolean
+        default: true
+      relay:
+        description: Deploy the relay to Fly (sets the master-key secret if missing)
+        type: boolean
+        default: true
+      retire_key_file:
+        description: After the relay deploy, move wraps to the secret key and delete the old key file from the volume
+        type: boolean
+        default: true
+      site:
+        description: Deploy ctxfile.dev to Cloudflare Pages
+        type: boolean
+        default: true
+      registry:
+        description: Publish to the MCP Registry
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  FLY_APP: ctxfile-relay
+  RELAY_URL: https://ctxfile-relay.fly.dev
+  SITE_URL: https://ctxfile.dev
+
+jobs:
+  release:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          registry-url: https://registry.npmjs.org
+
+      - name: Versions move together
+        id: versions
+        run: |
+          node <<'EOF'
+          const fs = require("fs");
+          const read = (p) => JSON.parse(fs.readFileSync(p, "utf8"));
+          const tsVersion = (p) => fs.readFileSync(p, "utf8").match(/VERSION = "([^"]+)"/)[1];
+          const core = read("packages/core/package.json").version;
+          const relay = read("packages/relay/package.json").version;
+          const server = read("server.json");
+          const checks = [
+            ["packages/core/src/version.ts", tsVersion("packages/core/src/version.ts"), core],
+            ["server.json version", server.version, core],
+            ["server.json packages[0].version", server.packages[0].version, core],
+            ["plugins/ctxfile plugin.json", read("plugins/ctxfile/.claude-plugin/plugin.json").version, core],
+            ["packages/core/manifest.json", read("packages/core/manifest.json").version, core],
+            ["packages/relay/src/version.ts", tsVersion("packages/relay/src/version.ts"), relay],
+          ];
+          let bad = false;
+          for (const [name, got, want] of checks) {
+            console.log(`${got === want ? "ok " : "BAD"} ${name}: ${got} (want ${want})`);
+            if (got !== want) bad = true;
+          }
+          if (bad) process.exit(1);
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `core=${core}\nrelay=${relay}\n`);
+          EOF
+
+      - name: Gate
+        run: |
+          npm ci
+          npm run build
+          npm run typecheck
+          npm run lint
+          npm test
+          npm --prefix apps/web run build
+
+      - name: Publish ctxfile
+        if: inputs.npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          VERSION: ${{ steps.versions.outputs.core }}
+        run: |
+          if [ "$(npm view "ctxfile@$VERSION" version 2>/dev/null)" = "$VERSION" ]; then
+            echo "ctxfile@$VERSION is already on npm"
+          else
+            (cd packages/core && npm publish --access public)
+          fi
+          # The relay builds against the published core: wait until npm serves it.
+          for i in $(seq 1 30); do
+            [ "$(npm view "ctxfile@$VERSION" version 2>/dev/null)" = "$VERSION" ] && exit 0
+            sleep 10
+          done
+          echo "ctxfile@$VERSION did not appear on npm" >&2; exit 1
+
+      - name: Publish @ctxfile/relay
+        if: inputs.npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          VERSION: ${{ steps.versions.outputs.relay }}
+        run: |
+          if [ "$(npm view "@ctxfile/relay@$VERSION" version 2>/dev/null)" = "$VERSION" ]; then
+            echo "@ctxfile/relay@$VERSION is already on npm"
+          else
+            (cd packages/relay && npm publish --access public)
+          fi
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+        if: inputs.relay
+
+      - name: Relay master key secret
+        if: inputs.relay
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          if flyctl secrets list -a "$FLY_APP" | grep -q CTXFILE_RELAY_MASTER_KEY; then
+            echo "CTXFILE_RELAY_MASTER_KEY is already set on $FLY_APP"
+          else
+            # Generated here and piped straight into Fly's secret store (stdin,
+            # not argv; never echoed). It takes effect with the deploy below.
+            printf 'CTXFILE_RELAY_MASTER_KEY=%s\n' "$(openssl rand -base64 32)" | flyctl secrets import --stage -a "$FLY_APP" > /dev/null
+            echo "staged a new CTXFILE_RELAY_MASTER_KEY on $FLY_APP"
+          fi
+
+      - name: Deploy the relay
+        if: inputs.relay
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: flyctl deploy . --config packages/relay/fly.toml --dockerfile packages/relay/Dockerfile -a "$FLY_APP" --remote-only
+
+      - name: Move off the old key file
+        if: inputs.relay && inputs.retire_key_file
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          cli="node /app/packages/relay/dist/cli.js"
+          flyctl ssh console -a "$FLY_APP" -C "$cli keyring status"
+          flyctl ssh console -a "$FLY_APP" -C "$cli keyring rewrap"
+          # Refuses (and fails this step) if any wrap still depends on the file.
+          flyctl ssh console -a "$FLY_APP" -C "$cli keyring retire-file" || echo "no key file to retire, or it is still needed (see keyring status above)"
+          flyctl ssh console -a "$FLY_APP" -C "$cli keyring status"
+
+      - name: Deploy the site
+        if: inputs.site
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx -y wrangler@4 pages deploy apps/web/out --project-name ctxfile --branch main
+
+      - name: MCP Registry
+        if: inputs.registry
+        env:
+          MCP_KEY: ${{ secrets.MCP_PUBLISHER_PRIVATE_KEY }}
+        run: |
+          if [ -z "$MCP_KEY" ]; then
+            echo "MCP_PUBLISHER_PRIVATE_KEY is not set; skipping the registry"
+            exit 0
+          fi
+          curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_linux_amd64.tar.gz" | tar xz mcp-publisher
+          ./mcp-publisher login dns --domain ctxfile.dev --private-key "$MCP_KEY"
+          ./mcp-publisher publish
+
+      - name: Tag
+        env:
+          VERSION: ${{ steps.versions.outputs.core }}
+          RELAY: ${{ steps.versions.outputs.relay }}
+        run: |
+          git config user.name "ctxfile"
+          git config user.email "hello@ctxfile.dev"
+          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+            echo "tag v$VERSION exists"
+          else
+            git tag -a "v$VERSION" -m "ctxfile $VERSION, relay $RELAY"
+            git push origin "v$VERSION"
+          fi
+
+      - name: Verify live
+        env:
+          CORE: ${{ steps.versions.outputs.core }}
+          RELAY: ${{ steps.versions.outputs.relay }}
+        run: |
+          fail=0
+          [ "$(npm view ctxfile version)" = "$CORE" ] && echo "ok npm ctxfile@$CORE" || { echo "npm ctxfile is $(npm view ctxfile version)"; fail=1; }
+          [ "$(npm view @ctxfile/relay version)" = "$RELAY" ] && echo "ok npm @ctxfile/relay@$RELAY" || { echo "npm @ctxfile/relay is $(npm view @ctxfile/relay version)"; fail=1; }
+          health="$(curl -fsS "$RELAY_URL/healthz" || echo '{}')"
+          echo "relay /healthz: $health"
+          echo "$health" | grep -q "\"version\":\"$RELAY\"" || { echo "relay is not on $RELAY"; fail=1; }
+          echo "$health" | grep -q '"key_source":"secret"' || { echo "relay key_source is not secret"; fail=1; }
+          for page in /docs/tasks /docs/clients /setup.md /security; do
+            code="$(curl -s -o /dev/null -w '%{http_code}' "$SITE_URL$page")"
+            echo "$SITE_URL$page $code"
+            [ "$code" = "200" ] || fail=1
+          done
+          exit $fail

@@ -22,6 +22,7 @@ const VIEW_ICON: Record<ViewId, IconName> = {
   git: "git",
   sessions: "sessions",
   memory: "memory",
+  tasks: "tasks",
   playbooks: "playbooks",
   consult: "consult",
   settings: "settings",

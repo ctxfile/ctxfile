@@ -6,7 +6,7 @@ Guidance for AI coding agents and contributors working in this repository.
 
 **ctxfile** — a local-first MCP server (stdio + Streamable HTTP, MCP spec 2025-11-25, SDK v1.x) that snapshots a project's working state into a structured `ContextObject`, with cross-provider threads and an end-to-end encrypted Sync vault. This is the open-source repo:
 
-- `packages/core` — `ctxfile` (Apache-2.0, published to npm). MCP server (stdio + `ctxfile serve`), snapshot engine, file/git/Notion/Ollama connectors, SQLite cache, redaction, ingest/threads/handoff schema, Sync crypto + client, the Behavior Layer (`ctxfile init`), local dashboard (`ctxfile ui`), opt-in telemetry.
+- `packages/core` — `ctxfile` (Apache-2.0, published to npm). MCP server (stdio + `ctxfile serve`), snapshot engine, file/git/Notion/Ollama connectors, SQLite cache, redaction, ingest/threads/handoff schema, cross-agent tasks (`post_task`/`list_tasks`/`update_task`, signed device approvals), Sync crypto + client, the Behavior Layer (`ctxfile init`), local dashboard (`ctxfile ui`), opt-in telemetry.
 - `packages/relay` — `@ctxfile/relay` (Apache-2.0, self-hostable). Sync relay + Team/Enterprise hub: encrypted vaults, bearer-token auth, Standard-mode `/mcp`, thread-scoped handoff grants, Ed25519 org federation, append-only audit, Docker + Fly.
 - `packages/dashboard` + `packages/ui-kit` — the local instrument UI served by `ctxfile ui`.
 - `apps/web` — the ctxfile.dev marketing site and docs (Next.js).
@@ -32,19 +32,21 @@ See `CONTRIBUTING.md` for the contributor workflow.
 - `npm run mcpb:pack` — builds `ctxfile.mcpb` from `packages/core` (copies dist + ui-dist + behaviors; asserts them present)
 - `npm run behaviors:render` — regenerate the per-harness behavior files from `behaviors/canonical.md`
 - Local run: `node packages/core/dist/cli.js --root <dir>` (stdio); `ctxfile ui` (dashboard)
-- Sync vault: `ctxfile vault create|join|recover|status`, `ctxfile sync` (passphrase via `CTXFILE_VAULT_PASSPHRASE`, recovery code via `CTXFILE_VAULT_RECOVERY_CODE`; never on argv)
+- Connect clients: `ctxfile connect [<client>...|--all|--print <client>] [--project|--global] [--dry-run]` (client registry in `packages/core/src/connect.ts`; agent-readable steps at `apps/web/public/setup.md`)
+- Tasks: `ctxfile tasks [show|post|approve|reject|cancel|approve-effect|deny-effect|freeze|off|on|status]` (approvals, posting, `on`, and `freeze --off` need an interactive terminal; agents never run them)
+- Sync vault: `ctxfile vault create|join|recover|status|delete`, `ctxfile sync` (passphrase via `CTXFILE_VAULT_PASSPHRASE`, recovery code via `CTXFILE_VAULT_RECOVERY_CODE`; never on argv)
 - Relay/hub: `node packages/relay/dist/cli.js start` (or `ctxfile-relay ...`); config via `CTXFILE_RELAY_*` env
 - Inspect: `npx @modelcontextprotocol/inspector node packages/core/dist/cli.js`
 
 ## Release checklist (every ship, no step skipped)
 
-Run top to bottom whenever changes are pushed; skip only steps whose area is untouched.
+Run top to bottom whenever changes are pushed; skip only steps whose area is untouched. The **Release** GitHub Actions workflow (`.github/workflows/release.yml`, started by hand on `main`) runs steps 1 to 7 from the repository secrets it lists; `bash scripts/release.sh` does the same from the maintainer's machine, asking before each publish or deploy (`--verify` runs only step 6).
 
 1. **Gate:** `npm run lint && npm run typecheck && npm test` (all workspaces). If `apps/web` changed, also `npm --prefix apps/web run build`.
-2. **Versions move together.** Core bump = `packages/core/package.json` + `packages/core/src/version.ts` + BOTH `version` fields in `/server.json` + `packages/core/manifest.json` (the .mcpb shown in Claude Desktop; it silently lagged at 0.1.0 until 0.3.1). Relay bump = `packages/relay/package.json` + `packages/relay/src/version.ts`, and widen the relay's `ctxfile` dep when core bumped.
+2. **Versions move together.** Core bump = `packages/core/package.json` + `packages/core/src/version.ts` + BOTH `version` fields in `/server.json` + `plugins/ctxfile/.claude-plugin/plugin.json` (the Claude Code plugin) + `packages/core/manifest.json` (the .mcpb shown in Claude Desktop; it silently lagged at 0.1.0 until 0.3.1). Relay bump = `packages/relay/package.json` + `packages/relay/src/version.ts`, and widen the relay's `ctxfile` dep when core bumped.
 3. **Publish order:** `ctxfile` (from `packages/core`) BEFORE `@ctxfile/relay` — the relay builds against the published core.
 4. **Deploy what changed:**
-   - Relay code → `flyctl deploy . --config packages/relay/fly.toml --dockerfile packages/relay/Dockerfile -a ctxfile-relay` (repo root context).
+   - Relay code → `flyctl deploy . --config packages/relay/fly.toml --dockerfile packages/relay/Dockerfile -a ctxfile-relay` (repo root context). The hosted relay refuses to start without the `CTXFILE_RELAY_MASTER_KEY` Fly secret; the one-time setup and rotation steps are in `packages/relay/fly.toml`. Never put that key in Notion, chat, or a commit.
    - Site or docs → `npm --prefix apps/web run build && npx wrangler pages deploy apps/web/out --project-name ctxfile --branch main`.
 5. **MCP Registry:** whenever the core version was published, `mcp-publisher login dns` (maintainer holds the ctxfile.dev key) then `mcp-publisher publish` from the repo root.
 6. **Verify live, never assume:** relay `/healthz` reports the new version; a changed docs URL returns 200 with the new content; `npm view` shows the new versions.

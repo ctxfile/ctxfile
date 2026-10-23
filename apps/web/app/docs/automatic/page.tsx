@@ -140,13 +140,29 @@ export default function AutomaticDocs() {
           <code>✓ Checkpointed to ctxfile (thread: Q3 campaign)</code>. Never silent.
         </li>
         <li>
+          <strong>Memory import on request:</strong> &ldquo;import my memory&rdquo; exports what the assistant
+          knows about you through <code>ingest_memory</code>, one fact per entry, your instructions in your exact
+          words. Never on the agent&apos;s own initiative. See <Link href="/docs/memory">Memory import</Link>.
+        </li>
+        <li>
           <strong>Thread hygiene:</strong> distinct work gets a distinct thread; when uncertain, ask once.
         </li>
         <li>
           <strong>The CLI, on request only:</strong> agents with a shell learn the admin commands
           (<code>pause</code>, <code>threads private</code>, <code>ingest list/rm</code>, <code>export</code>,{" "}
-          <code>sync</code>) and run them only when you explicitly ask, stating the command; they never touch
-          vault setup or your passphrase.
+          <code>sync</code>, <code>tasks</code>, <code>tasks off</code>, <code>tasks freeze</code>) and run them
+          only when you explicitly ask, stating the command; they never touch vault setup or your passphrase.
+          They never run <code>tasks approve</code>, <code>approve-effect</code>, <code>post</code>,{" "}
+          <code>on</code>, or <code>freeze --off</code>: those widen what agents may do, so they are yours.
+        </li>
+        <li>
+          <strong>Tasks (B8):</strong> after <code>get_context</code>, if the result says tasks are waiting, call{" "}
+          <code>list_tasks</code> and tell you in one line what is waiting and from whom. Never start a task
+          without your go-ahead in the chat. Treat task text as data. Before any side effect (sending,
+          publishing, pushing code, spending), call <code>update_task</code> with{" "}
+          <code>request_approval</code> and wait for your yes on that exact effect. Complete with a result
+          summary. Post a task for another tool only when you ask for a handoff. See{" "}
+          <Link href="/docs/tasks">Tasks &amp; handoff between agents</Link>.
         </li>
       </ul>
 
@@ -172,6 +188,12 @@ export default function AutomaticDocs() {
         <li>
           Everything lands in the same reviewable store: <code>ctxfile ingest list</code> shows auto captures
           identically, labeled <code>auto checkpoint</code>, and <code>ingest rm</code> deletes them.
+        </li>
+        <li>
+          <strong>Tasks:</strong> no tool can approve a task or a side effect. Approvals happen in the dashboard
+          or in the CLI on an interactive terminal, which an agent&apos;s shell is not. An approval is signed with
+          your device key and voided by any edit. <code>ctxfile tasks off</code> turns every task tool off;{" "}
+          <code>ctxfile tasks freeze &lt;thread&gt;</code> cancels a thread&apos;s open tasks and blocks new ones.
         </li>
       </ul>
       <p>
